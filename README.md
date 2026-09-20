@@ -39,7 +39,34 @@ Or `Ctrl-C` if it is in the foreground. Do not start a second persist while one 
 
 **Profiles:** ordinary companies use `default`. REITs use `reit` (not industrial FCF or EV/EBITDA). MAYBANK, CIMB, and PBBANK use `bank`. Missing CSV lines stay unavailable — never invented.
 
-**Data lag:** fundamentals period vs last trade stay labelled. Do not invent FY2025/FY2026 filings.
+## Data (daily prices ≠ Cursor usage)
+
+Yahoo **end-of-day** prices for `config/universe.yaml` can refresh on this VM once a day. That loop is ordinary Node/bash on the machine. **It does not use Cursor usage.** Cursor usage is only when an agent/chat is running.
+
+This is **not** live/tick data. Default: run `npm run ingest:prices`, then sleep until **18:00 Malaysia time**, never sooner than **12 hours** after the last run (Bursa is closed by then; Yahoo EOD is usually on the tape). Missed symbols stay on the import report. **Prices are never invented.**
+
+```bash
+npm run ingest:prices          # one-off, same as always
+npm run ingest:prices:daily    # keep-alive loop on this VM
+```
+
+Confirm / stop the daily loop:
+
+```bash
+cat data/.prices-daily.pid
+cat data/logs/prices-daily.last.json
+kill "$(cat data/.prices-daily.pid)"
+```
+
+**Fundamentals stay CSV.** We will **not** auto-fill ~30 names’ full financials from Yahoo, scrape Bursa, or invent FY2025/FY2026 statements. Filing lag vs live prices stays labelled.
+
+Add coverage by hand:
+
+1. A `COMMON_STOCK` or `REIT` row in `config/universe.yaml` (`yahoo_ticker` like `1155.KL`).
+2. Annual (and optional interim) lines in `data/raw/fundamentals-sample.csv` or your own CSV — copy `data/raw/fundamentals-template.csv`. Empty cells stay unavailable.
+3. `npm run ingest:fundamentals -- path/to.csv` then `npm run ingest:prices` (or wait for the daily job).
+
+Announcements are the same pattern (`announcements-template.csv`). No in-app AI.
 
 ```bash
 npm test

@@ -42,6 +42,8 @@ next-env.d.ts
 
 # persist helper pid
 /data/.dev-persist.pid
+/data/.prices-daily.pid
+/data/logs/
 
 # local SQLite (keep the folder)
 /data/sqlite/*.db

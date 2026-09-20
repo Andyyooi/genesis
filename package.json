@@ -12,6 +12,7 @@
     "ingest:fundamentals": "tsx src/ingest/cli.ts fundamentals",
     "ingest:announcements": "tsx src/ingest/cli.ts announcements",
     "ingest:prices": "tsx src/ingest/cli.ts prices",
+    "ingest:prices:daily": "bash scripts/prices-daily.sh",
     "metrics": "tsx src/metrics/cli.ts",
     "scores": "tsx src/scoring/cli.ts",
     "alerts": "tsx src/alerts/cli.ts",

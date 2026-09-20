@@ -45,6 +45,12 @@ export default function IngestReportPage() {
           silently filled in. Re-run ingest after editing the CSV or universe mapping.
         </p>
         <p className="text-sm text-muted-foreground">
+          Daily Yahoo EOD (not live ticks) can run on this machine with{" "}
+          <code className="font-mono">npm run ingest:prices:daily</code>. That VM loop is not Cursor
+          usage. Missed symbols stay listed; prices are never invented. Fundamentals stay CSV — we
+          do not auto-fill filings from Yahoo.
+        </p>
+        <p className="text-sm text-muted-foreground">
           <code className="font-mono">npm run ingest:fundamentals -- data/raw/fundamentals-sample.csv</code>
           <br />
           <code className="font-mono">npm run ingest:announcements -- data/raw/announcements-sample.csv</code>
