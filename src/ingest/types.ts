@@ -33,6 +33,16 @@ export type PriceImportFailure = {
   reason: string;
 };
 
+export type EventsImportReport = {
+  kind: "events";
+  file: string;
+  startedAt: string;
+  finishedAt: string;
+  accepted: number;
+  upserted: number;
+  rejected: RejectedRow[];
+};
+
 export type PricesImportReport = {
   kind: "prices";
   startedAt: string;

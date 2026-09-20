@@ -1,6 +1,6 @@
 import type { LineItems } from "@/ingest/types";
 import { computeMetrics } from "@/metrics/compute";
-import type { PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
+import type { EventSnapshot, PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
 
 type PeriodRow = {
   periodEnd: string;
@@ -48,6 +48,8 @@ export function snapshotsToMetrics(args: {
   instrumentType: "COMMON_STOCK" | "REIT";
   periods: PeriodRow[];
   bars: BarRow[];
+  events?: EventSnapshot[];
+  asOf?: string;
 }) {
   const periods: StatementSnapshot[] = args.periods.map((row) => {
     let items = emptyItems();
@@ -75,9 +77,16 @@ export function snapshotsToMetrics(args: {
     low: bar.low,
   }));
 
+  const asOf = args.asOf ?? new Date().toISOString();
+  const events = (args.events ?? []).filter((event) => {
+    if (event.availableAt) return event.availableAt <= asOf;
+    return event.occurredAt <= asOf;
+  });
+
   return computeMetrics({
     instrumentType: args.instrumentType,
     periods,
     bars,
+    events,
   });
 }

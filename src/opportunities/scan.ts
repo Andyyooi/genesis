@@ -41,6 +41,19 @@ export function scanWatchlist(): OpportunityRow[] {
       distanceFrom52wHigh: dist?.available ? dist.value : null,
       distanceFrom52wHighAvailable: Boolean(dist?.available && dist.value !== null),
       persistedResearchScores: history.map((row) => row.researchScore),
+      catalystWatch: scored.events.some((event) => {
+        const c = event.classification;
+        return c === "Positive catalyst" || c === "Negative" || c === "Uncertain";
+      }),
+      catalystLabel: (() => {
+        const hit = scored.events.find(
+          (event) =>
+            event.classification === "Positive catalyst" ||
+            event.classification === "Negative" ||
+            event.classification === "Uncertain",
+        );
+        return hit ? `${hit.classification}: ${hit.headline}` : null;
+      })(),
       result: scored.result,
     });
   }

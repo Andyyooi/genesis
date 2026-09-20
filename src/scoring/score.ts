@@ -95,9 +95,15 @@ export function scoreFromMetrics(args: {
 
   if (args.config.unavailable_until_data.length) {
     notes.push(
-      `News/technical configured weights remain ${args.config.unavailable_until_data
+      `${args.config.unavailable_until_data
         .map((k) => `${k} ${args.config.category_weights[k]}%`)
-        .join(", ")} but are not in this live run.`,
+        .join(", ")} configured but not in this live run.`,
+    );
+  }
+  const newsCat = categories.find((c) => c.id === "news");
+  if (newsCat && !newsCat.inThisRun && !args.config.unavailable_until_data.includes("news")) {
+    notes.push(
+      "News 10% is omitted until stored announcements exist; it is not scored as a neutral 50.",
     );
   }
   if (args.config.concerns.apply_score_penalty) {

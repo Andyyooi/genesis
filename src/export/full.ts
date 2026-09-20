@@ -172,11 +172,30 @@ export function buildFullMarkdown(payload: ExportPayload): string {
   sections.push(
     "## News & announcements",
     "",
-    "Data unavailable — news ingest is not in this phase. The news category is configured but not in this live Research Score.",
-    "",
-    "Do not treat this document as a buy or sell instruction.",
+    "Headlines are not facts. Classification is rule-based. Not a buy or sell list.",
     "",
   );
+  if (payload.events.length === 0) {
+    sections.push(
+      "Data unavailable — no stored announcements. News weight is omitted from the Research Score (not scored as 50).",
+      "",
+    );
+  } else {
+    for (const event of payload.events) {
+      sections.push(
+        `### ${event.occurredAt} — ${event.headline}`,
+        "",
+        `- source: ${event.source}`,
+        `- source_url: ${unavailableLabel(event.sourceUrl)}`,
+        `- classification: ${event.classification}`,
+        `- available_at: ${unavailableLabel(event.availableAt)}`,
+        `- relevance: ${unavailableLabel(event.relevanceNote)}`,
+        `- excerpt: ${unavailableLabel(event.excerpt)}`,
+        "",
+      );
+    }
+  }
+  sections.push("Do not treat this document as a buy or sell instruction.", "");
 
   return sections.filter((line) => line !== undefined).join("\n");
 }

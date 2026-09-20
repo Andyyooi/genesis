@@ -86,7 +86,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   return (
     <main className="mx-auto flex w-full max-w-[96rem] flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <header className="flex flex-col gap-2">
-        <p className="text-sm text-muted-foreground">Phase 7 · local only · English · MYR</p>
+        <p className="text-sm text-muted-foreground">Phase 8 · local only · English · MYR</p>
         <h1 className="text-3xl font-semibold tracking-tight">Research dashboard</h1>
         <p className="max-w-3xl text-muted-foreground">
           Watchlist is the current universe. Named lists are research filters, not buy orders. REIT
@@ -139,7 +139,9 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         {visible.length === 0 ? (
           <p className="px-4 py-8 text-sm text-muted-foreground">
             {activeList.disabled
-              ? "Catalyst Watch is empty until news is ingested. Nothing is invented here."
+              ? activeList.disabledReason
+              : listId === "catalyst"
+                ? "No stored Positive catalyst, Negative, or Uncertain announcements. Import a CSV — nothing is invented."
               : listId === "improving"
                 ? "No name has two persisted score_runs with a higher latest Research Score. Repeating the same filings does not count as improvement."
                 : rows.length === 0
@@ -210,9 +212,9 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{fmtCoverage(row.coverage)}</TableCell>
                   <TableCell className="max-w-56 text-sm text-muted-foreground">
-                    {row.mainConcern
-                      ? `Concern: ${row.mainConcern}`
-                      : "Catalyst: Data unavailable"}
+                    {row.catalystLabel ? <span className="block">Catalyst: {row.catalystLabel}</span> : null}
+                    {row.mainConcern ? <span className="block">Concern: {row.mainConcern}</span> : null}
+                    {!row.catalystLabel && !row.mainConcern ? "Data unavailable" : null}
                   </TableCell>
                 </TableRow>
               ))}

@@ -8,10 +8,13 @@ export function scoreTicker(ticker: string, persist = true) {
   const data = loadInstrumentSnapshots(ticker);
   if (!data) return null;
   const instrumentType = data.instrument.instrumentType === "REIT" ? "REIT" : "COMMON_STOCK";
+  const asOf = new Date().toISOString();
   const metrics = snapshotsToMetrics({
     instrumentType,
     periods: data.periods,
     bars: data.bars,
+    events: data.events,
+    asOf,
   });
   const config = loadScoringConfig();
   const result = scoreFromMetrics({
@@ -19,6 +22,7 @@ export function scoreTicker(ticker: string, persist = true) {
     metrics,
     instrumentType,
     pn17: data.instrument.pn17,
+    asOf,
   });
   if (persist) {
     persistScoreRun({ instrumentId: data.instrument.id, result });
@@ -31,6 +35,7 @@ export function scoreTicker(ticker: string, persist = true) {
     instrument: data.instrument,
     periods: data.periods,
     bars: data.bars,
+    events: data.events,
     metrics,
     result,
   };

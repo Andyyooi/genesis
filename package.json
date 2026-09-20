@@ -9,6 +9,7 @@
     "lint": "eslint",
     "ingest": "tsx src/ingest/cli.ts all",
     "ingest:fundamentals": "tsx src/ingest/cli.ts fundamentals",
+    "ingest:announcements": "tsx src/ingest/cli.ts announcements",
     "ingest:prices": "tsx src/ingest/cli.ts prices",
     "metrics": "tsx src/metrics/cli.ts",
     "scores": "tsx src/scoring/cli.ts",

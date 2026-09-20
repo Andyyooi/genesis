@@ -43,6 +43,17 @@ export type StatementSnapshot = {
   interestExpense: number | null;
 };
 
+export type EventSnapshot = {
+  occurredAt: string;
+  availableAt: string | null;
+  source: string;
+  sourceUrl: string | null;
+  headline: string;
+  excerpt: string | null;
+  classification: string;
+  relevanceNote: string | null;
+};
+
 export type PriceBarSnapshot = {
   barDate: string;
   close: number | null;

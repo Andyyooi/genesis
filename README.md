@@ -1,6 +1,6 @@
-# Bursa research (Phase 7)
+# Bursa research (Phase 8)
 
-Personal Malaysian equity research tool for Andy Yooi. **Phase 7:** watchlist dashboard and thin opportunity filters. Not news ingest, alerts, in-app AI, or backtesting.
+Personal Malaysian equity research tool for Andy Yooi. **Phase 8:** CSV news/announcements ingest, research-page news, Catalyst Watch. Not alerts, in-app AI, or backtesting. Not Bursa scraping.
 
 ## Run locally
 
@@ -11,38 +11,22 @@ npm run dev
 
 Open [http://127.0.0.1:43147](http://127.0.0.1:43147).
 
-- Dashboard: [http://127.0.0.1:43147](http://127.0.0.1:43147)
-- Research lists: `/?list=undervalued`, `quality`, `quality-value`, `improving`, `discounted`, `catalyst`
-- [MAYBANK](http://127.0.0.1:43147/stock/MAYBANK) · [KLCC (REIT)](http://127.0.0.1:43147/stock/KLCC)
+Import announcements (same pattern as fundamentals):
 
-Click a dashboard row to open the research page. Lists are research filters, not buy orders.
+```bash
+npm run ingest:announcements -- data/raw/announcements-sample.csv
+```
 
-**Data lag:** stored sample fundamentals are FY2024. A score run dated 2026 does not mean FY2025/FY2026 numbers exist. The dashboard, research page, and exports show **fundamentals period** and **price as-of / last trade**.
+Template: `data/raw/announcements-template.csv`. Rejected rows (missing ticker, date, or headline) show on [Import report](http://127.0.0.1:43147/ingest).
 
-Export routes (unchanged): `/export/MAYBANK/quick|full|json|csv`.
+- Dashboard: [http://127.0.0.1:43147](http://127.0.0.1:43147) · Catalyst Watch: `/?list=catalyst`
+- [MAYBANK](http://127.0.0.1:43147/stock/MAYBANK) news section links to the original company URL
+- [KLCC](http://127.0.0.1:43147/stock/KLCC)
+
+News category weight (10%) **only enters the live Research Score when stored announcements exist**. Otherwise it stays omitted and remaining weights are renormalized — not filled with a fake 50. Technical is still unavailable.
+
+**Data lag:** FY2024 filings vs live prices stay labelled. Do not invent FY2025/FY2026 numbers.
 
 ```bash
 npm test
 ```
-
-## Raw JSON shape (future chatbot)
-
-`GET /export/{ticker}/json` is schema `bursa-research.score-export.v1`. A later in-app chatbot should consume the same `score` object (`ScoreResult`).
-
-```text
-{
-  schema, disclaimer,
-  instrument: { ticker, name, instrument_type (COMMON_STOCK | REIT), bursa_code, sector, pn17, currency },
-  dates: { score_as_of, last_trade_date, fundamentals_period, lag_note },
-  score: ScoreResult {
-    asOf, configHash, profile (default | reit),
-    researchScore, valuationScore,
-    categories: [{ id, configuredWeight, liveWeight, score, coverage, inThisRun, warning, factors: [evidence] }],
-    concerns, notes
-  },
-  metrics: [{ id, label, value | null, available, period, formula, … }],
-  financial_periods: [{ period_end, available_at, retrieved_at, statement_type, source, actual_or_estimate, line_items }]
-}
-```
-
-Nulls and `"Data unavailable"` mean the number was not stored. They are never filled from peers or invented. `instrument_type` selects `default` vs `reit` factor sets.

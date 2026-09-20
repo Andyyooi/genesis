@@ -81,19 +81,26 @@ export const financialPeriods = sqliteTable(
   ],
 );
 
-/** Announcements/news stub. Ingest comes in a later phase. */
-export const events = sqliteTable("events", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  instrumentId: integer("instrument_id").references(() => instruments.id),
-  occurredAt: text("occurred_at"),
-  availableAt: text("available_at"),
-  source: text("source"),
-  sourceUrl: text("source_url"),
-  headline: text("headline"),
-  excerpt: text("excerpt"),
-  classification: text("classification"),
-  createdAt: text("created_at").notNull(),
-});
+/** Announcements/news ingested from CSV (Phase 8). */
+export const events = sqliteTable(
+  "events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    instrumentId: integer("instrument_id").references(() => instruments.id),
+    occurredAt: text("occurred_at"),
+    availableAt: text("available_at"),
+    source: text("source"),
+    sourceUrl: text("source_url"),
+    headline: text("headline"),
+    excerpt: text("excerpt"),
+    classification: text("classification"),
+    relevanceNote: text("relevance_note"),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("events_unique").on(table.instrumentId, table.occurredAt, table.source, table.headline),
+  ],
+);
 
 /** Persisted score runs stub so history/backtests can attach later. */
 export const scoreRuns = sqliteTable("score_runs", {

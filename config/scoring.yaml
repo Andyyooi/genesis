@@ -11,10 +11,10 @@ category_weights:
   news: 10
   technical: 10
 
-# Live runs mark these unavailable and renormalize the other category weights.
-# Configured 10%+10% is still shown as "not in this run".
+# Live runs mark these unavailable and renormalize remaining weights.
+# Configured 10% technical is still shown as "not in this run".
+# News is omitted the same way when no stored announcements exist (not scored as 50).
 unavailable_until_data:
-  - news
   - technical
 
 min_category_coverage: 0.5
@@ -123,7 +123,14 @@ instrument_profiles:
           direction: higher_better
           worse: 0
           better: 0.12
-      news: []
+      news:
+        - id: news_tone
+          metric: news_tone
+          label: Stored announcement tone
+          weight: 100
+          direction: higher_better
+          worse: 0
+          better: 1
       technical: []
   reit:
     description: Real estate investment trusts — DPU/NAV/gearing later; not industrial FCF or EV/EBITDA
@@ -160,5 +167,12 @@ instrument_profiles:
           direction: higher_better
           worse: 0
           better: 0.08
-      news: []
+      news:
+        - id: news_tone
+          metric: news_tone
+          label: Stored announcement tone
+          weight: 100
+          direction: higher_better
+          worse: 0
+          better: 1
       technical: []

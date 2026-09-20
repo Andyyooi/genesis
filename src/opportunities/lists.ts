@@ -63,9 +63,9 @@ export const OPPORTUNITY_LISTS: OpportunityList[] = [
   {
     id: "catalyst",
     label: "Catalyst Watch",
-    description: "Needs announcement ingest. Not scored from headlines we do not have.",
-    disabled: true,
-    disabledReason: "Disabled until news ingest. The list is empty on purpose — not because there are no events in the market.",
+    description:
+      "Names with a stored Positive catalyst, Negative, or Uncertain announcement. Research list, not a buy list.",
+    disabled: false,
   },
 ];
 
@@ -88,6 +88,8 @@ export type OpportunityRow = {
   distanceFrom52wHighAvailable: boolean;
   /** Newest persisted research scores first. Live run is not prepended. */
   persistedResearchScores: (number | null)[];
+  catalystWatch: boolean;
+  catalystLabel: string | null;
   result: ScoreResult;
 };
 
@@ -100,9 +102,9 @@ export function categoryScore(result: ScoreResult, id: string): number | null {
   return result.categories.find((c) => c.id === id)?.score ?? null;
 }
 
-/** Mean factor coverage of categories that can be in a live run (news/technical excluded). */
+/** Mean factor coverage of categories that can be in a live run (technical still excluded). */
 export function liveCoverage(result: ScoreResult): number | null {
-  const liveSlots = result.categories.filter((c) => c.id !== "news" && c.id !== "technical");
+  const liveSlots = result.categories.filter((c) => c.id !== "technical");
   if (liveSlots.length === 0) return null;
   return liveSlots.reduce((sum, c) => sum + c.coverage, 0) / liveSlots.length;
 }
@@ -114,7 +116,7 @@ export function mainConcernLabel(result: ScoreResult): string | null {
 
 export function rowMatchesList(row: OpportunityRow, list: ListId): boolean {
   if (list === "watchlist") return true;
-  if (list === "catalyst") return false;
+  if (list === "catalyst") return row.catalystWatch;
   if (list === "undervalued") return (row.valuationScore ?? -1) >= 70;
   if (list === "quality") return (row.qualityScore ?? -1) >= 70;
   if (list === "quality-value") {

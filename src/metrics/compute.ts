@@ -1,15 +1,18 @@
+import { newsToneMetric } from "@/metrics/news";
 import { fundamentalMetrics } from "@/metrics/fundamentals";
 import { priceMetrics } from "@/metrics/prices";
 import { safeDivide } from "@/metrics/ratio";
-import type { MetricValue, PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
+import type { EventSnapshot, MetricValue, PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
 
 export function computeMetrics(args: {
   instrumentType: "COMMON_STOCK" | "REIT";
   periods: StatementSnapshot[];
   bars: PriceBarSnapshot[];
+  events?: EventSnapshot[];
 }): MetricValue[] {
   const fundamentals = fundamentalMetrics(args.periods, args.instrumentType);
   const prices = priceMetrics(args.bars);
+  const news = newsToneMetric(args.events ?? []);
 
   const latestAnnual = [...args.periods]
     .filter((row) => row.statementType === "annual")
@@ -57,5 +60,5 @@ export function computeMetrics(args: {
     pePeriod,
   );
 
-  return [...fundamentals, ...prices, pe, dividendYield];
+  return [...fundamentals, ...prices, pe, dividendYield, news];
 }

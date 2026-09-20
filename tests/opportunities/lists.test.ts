@@ -113,6 +113,8 @@ function row(over: Partial<OpportunityRow> = {}): OpportunityRow {
     distanceFrom52wHigh: 0.2,
     distanceFrom52wHighAvailable: true,
     persistedResearchScores: [],
+    catalystWatch: false,
+    catalystLabel: null,
     result: scored,
     ...over,
   };
@@ -155,11 +157,14 @@ describe("opportunity lists", () => {
     ).toBe(false);
   });
 
-  it("Catalyst Watch matches nobody until news exists", () => {
+  it("Catalyst Watch uses stored classified events, not a buy list", () => {
     expect(rowMatchesList(row(), "catalyst")).toBe(false);
+    expect(rowMatchesList(row({ catalystWatch: true, catalystLabel: "Positive catalyst: results" }), "catalyst")).toBe(
+      true,
+    );
   });
 
   it("coverage averages live categories and does not treat news as 100%", () => {
-    expect(liveCoverage(result())).toBeCloseTo(0.75);
+    expect(liveCoverage(result())).toBeCloseTo(0.6);
   });
 });

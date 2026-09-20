@@ -53,6 +53,7 @@ function wrap(
         "Stored annual fundamentals end 2024-12-31 (FY2024). Price as-of / last trade is 2026-09-18. Score run date is not a new filing year.",
     },
     metrics,
+    events: [],
     financial_periods: [
       {
         period_end: "2024-12-31",

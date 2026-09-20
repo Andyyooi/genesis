@@ -140,6 +140,30 @@ describe("scoring engine", () => {
     expect(result.notes.join(" ")).toMatch(/not in this live run/);
   });
 
+  it("lets news contribute only when a stored tone metric exists, never as a fake 50", () => {
+    const baseMetrics = [
+      m("price_to_earnings", 12),
+      m("dividend_yield", 0.05),
+      m("roe", 0.12),
+      m("net_margin", 0.12),
+      m("revenue_cagr", 0.06),
+      m("pat_cagr", 0.06),
+    ];
+    const without = scoreFromMetrics({ config, instrumentType: "COMMON_STOCK", metrics: baseMetrics });
+    expect(byCat(without, "news").inThisRun).toBe(false);
+    expect(byCat(without, "news").score).toBeNull();
+    expect(without.notes.join(" ")).toMatch(/not scored as a neutral 50/);
+
+    const withNews = scoreFromMetrics({
+      config,
+      instrumentType: "COMMON_STOCK",
+      metrics: [...baseMetrics, m("news_tone", 1)],
+    });
+    expect(byCat(withNews, "news").inThisRun).toBe(true);
+    expect(byCat(withNews, "news").score).toBe(100);
+    expect(withNews.researchScore).not.toBe(without.researchScore);
+  });
+
   it("changes results when YAML weights change", () => {
     const metrics = [
       m("price_to_earnings", 8),

@@ -378,10 +378,50 @@ export default async function ResearchPage({
       <section className="flex flex-col gap-3">
         <h2 className="text-xl font-semibold">News & announcements</h2>
         <p className="text-sm text-muted-foreground">
-          Placeholder until Phase 8 ingest. Each item would show date, source, headline,
-          classification, and a short note. Nothing is invented here.
+          Stored CSV rows only. Classification is keyword rules (or a label you typed). Headlines
+          are not facts and this is not a buy list. Open the original URL.
         </p>
-        <p className="text-sm">Data unavailable</p>
+        {scored.events.length === 0 ? (
+          <p className="text-sm">Data unavailable — import data/raw/announcements-sample.csv.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Source</TableHead>
+                <TableHead>Headline</TableHead>
+                <TableHead>Classification</TableHead>
+                <TableHead className="hidden md:table-cell">Relevance</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {scored.events.map((event, index) => (
+                <TableRow key={`${event.occurredAt}-${index}`}>
+                  <TableCell className="whitespace-nowrap">{event.occurredAt}</TableCell>
+                  <TableCell>{event.source}</TableCell>
+                  <TableCell>
+                    {event.sourceUrl ? (
+                      <a
+                        href={event.sourceUrl}
+                        className="underline underline-offset-4"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {event.headline}
+                      </a>
+                    ) : (
+                      event.headline
+                    )}
+                  </TableCell>
+                  <TableCell>{event.classification}</TableCell>
+                  <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
+                    {event.relevanceNote ?? "Data unavailable"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </section>
 
       <section className="flex flex-col gap-3">

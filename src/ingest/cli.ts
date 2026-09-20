@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { importAnnouncementsCsv } from "./import-announcements";
 import { importFundamentalsCsv } from "./import-fundamentals";
 import { importYahooPrices } from "./import-prices";
 
@@ -16,6 +17,12 @@ async function main() {
     return;
   }
 
+  if (action === "announcements" || action === "events") {
+    const file = arg ?? join(process.cwd(), "data/raw/announcements-sample.csv");
+    printReport(importAnnouncementsCsv(file));
+    return;
+  }
+
   if (action === "prices") {
     printReport(await importYahooPrices(arg));
     return;
@@ -24,11 +31,12 @@ async function main() {
   if (action === "all") {
     const file = arg ?? join(process.cwd(), "data/raw/fundamentals-sample.csv");
     printReport(importFundamentalsCsv(file));
+    printReport(importAnnouncementsCsv(join(process.cwd(), "data/raw/announcements-sample.csv")));
     printReport(await importYahooPrices());
     return;
   }
 
-  console.error("Usage: npm run ingest -- [all|fundamentals|prices] [file-or-ticker]");
+  console.error("Usage: npm run ingest -- [all|fundamentals|announcements|prices] [file-or-ticker]");
   process.exitCode = 1;
 }
 

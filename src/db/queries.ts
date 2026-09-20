@@ -1,7 +1,8 @@
 import { and, asc, count, desc, eq, max } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { financialPeriods, ingestReports, instruments, priceBars, scoreRuns } from "@/db/schema";
+import { events, financialPeriods, ingestReports, instruments, priceBars, scoreRuns } from "@/db/schema";
 import { seedUniverseFromYaml } from "@/db/seed";
+import type { EventSnapshot } from "@/metrics/types";
 
 export type WatchlistRow = {
   id: number;
@@ -103,7 +104,27 @@ export function loadInstrumentSnapshots(ticker: string) {
     .orderBy(desc(priceBars.barDate))
     .all();
 
-  return { instrument, periods, bars };
+  const eventRows = db
+    .select()
+    .from(events)
+    .where(eq(events.instrumentId, instrument.id))
+    .orderBy(desc(events.occurredAt))
+    .all();
+
+  const eventSnapshots: EventSnapshot[] = eventRows
+    .filter((row) => row.occurredAt && row.headline && row.source)
+    .map((row) => ({
+      occurredAt: row.occurredAt as string,
+      availableAt: row.availableAt,
+      source: row.source as string,
+      sourceUrl: row.sourceUrl,
+      headline: row.headline as string,
+      excerpt: row.excerpt,
+      classification: row.classification ?? "Uncertain",
+      relevanceNote: row.relevanceNote,
+    }));
+
+  return { instrument, periods, bars, events: eventSnapshots };
 }
 
 export function loadLatestIngestReports() {
@@ -120,7 +141,13 @@ export function loadLatestIngestReports() {
     .where(eq(ingestReports.kind, "prices"))
     .orderBy(desc(ingestReports.id))
     .get();
-  return { fundamentals, prices };
+  const announcements = db
+    .select()
+    .from(ingestReports)
+    .where(eq(ingestReports.kind, "events"))
+    .orderBy(desc(ingestReports.id))
+    .get();
+  return { fundamentals, prices, announcements };
 }
 
 export function loadScoreHistory(instrumentId: number, limit = 8) {

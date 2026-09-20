@@ -1,6 +1,6 @@
 import type { LineItems } from "@/ingest/types";
 import { buildSnapshotDates, latestAnnualPeriod, type SnapshotDates } from "@/lib/snapshot-dates";
-import type { MetricValue } from "@/metrics/types";
+import type { EventSnapshot, MetricValue } from "@/metrics/types";
 import type { ScoreResult } from "@/scoring/types";
 import { scoreTicker } from "@/scoring/run-ticker";
 
@@ -34,6 +34,7 @@ export type ExportPayload = {
   score: ScoreResult;
   metrics: MetricValue[];
   financial_periods: FinancialPeriodExport[];
+  events: EventSnapshot[];
 };
 
 export function unavailableLabel(value: unknown): string {
@@ -86,5 +87,6 @@ export function buildExportPayload(ticker: string): ExportPayload | null {
     score: scored.result,
     metrics: scored.metrics,
     financial_periods,
+    events: scored.events,
   };
 }

@@ -74,8 +74,11 @@ function ensureSchema(sqlite: Database.Database) {
       headline TEXT,
       excerpt TEXT,
       classification TEXT,
+      relevance_note TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE UNIQUE INDEX IF NOT EXISTS events_unique
+      ON events (instrument_id, occurred_at, source, headline);
 
     CREATE TABLE IF NOT EXISTS ingest_reports (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,6 +102,11 @@ function ensureSchema(sqlite: Database.Database) {
       created_at TEXT NOT NULL
     );
   `);
+
+  const eventCols = sqlite.pragma("table_info(events)") as { name: string }[];
+  if (eventCols.length && !eventCols.some((col) => col.name === "relevance_note")) {
+    sqlite.exec("ALTER TABLE events ADD COLUMN relevance_note TEXT");
+  }
 }
 
 export function getDb() {

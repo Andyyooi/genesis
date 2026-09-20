@@ -15,12 +15,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { loadLatestIngestReports } from "@/db/queries";
-import type { FundamentalsImportReport, PricesImportReport } from "@/ingest/types";
+import type { EventsImportReport, FundamentalsImportReport, PricesImportReport } from "@/ingest/types";
 
 export const dynamic = "force-dynamic";
 
 export default function IngestReportPage() {
   const reports = loadLatestIngestReports();
+  const announcements = reports.announcements
+    ? (JSON.parse(reports.announcements.summaryJson) as EventsImportReport)
+    : null;
   const fundamentals = reports.fundamentals
     ? (JSON.parse(reports.fundamentals.summaryJson) as FundamentalsImportReport)
     : null;
@@ -32,7 +35,7 @@ export default function IngestReportPage() {
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <p className="text-sm">
         <Link href="/" className="underline underline-offset-4">
-          Watchlist
+          Dashboard
         </Link>
       </p>
       <header className="flex flex-col gap-2">
@@ -43,6 +46,8 @@ export default function IngestReportPage() {
         </p>
         <p className="text-sm text-muted-foreground">
           <code className="font-mono">npm run ingest:fundamentals -- data/raw/fundamentals-sample.csv</code>
+          <br />
+          <code className="font-mono">npm run ingest:announcements -- data/raw/announcements-sample.csv</code>
           <br />
           <code className="font-mono">npm run ingest:prices</code>
         </p>
@@ -75,6 +80,45 @@ export default function IngestReportPage() {
               </TableHeader>
               <TableBody>
                 {fundamentals.rejected.map((row) => (
+                  <TableRow key={`${row.rowNumber}-${row.reason}`}>
+                    <TableCell className="tabular-nums">{row.rowNumber}</TableCell>
+                    <TableCell className="font-mono">{row.ticker ?? "—"}</TableCell>
+                    <TableCell>{row.reason}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Announcements CSV</CardTitle>
+          <CardDescription>
+            {announcements
+              ? `${announcements.file} · ${announcements.upserted} stored · ${announcements.rejected.length} rejected · ${announcements.finishedAt}`
+              : "No announcements import has been run yet."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!announcements || announcements.rejected.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {announcements
+                ? "No rejected rows in the last import."
+                : "Template: data/raw/announcements-template.csv"}
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>CSV row</TableHead>
+                  <TableHead>Ticker</TableHead>
+                  <TableHead>Why it was rejected</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {announcements.rejected.map((row) => (
                   <TableRow key={`${row.rowNumber}-${row.reason}`}>
                     <TableCell className="tabular-nums">{row.rowNumber}</TableCell>
                     <TableCell className="font-mono">{row.ticker ?? "—"}</TableCell>
