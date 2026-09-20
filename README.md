@@ -1,6 +1,6 @@
-# Bursa research (Phase 8)
+# Bursa research (Phase 9)
 
-Personal Malaysian equity research tool for Andy Yooi. **Phase 8:** CSV news/announcements ingest, research-page news, Catalyst Watch. Not alerts, in-app AI, or backtesting. Not Bursa scraping.
+Personal Malaysian equity research tool for Andy Yooi. **Phase 9:** in-app alerts (no email/push, no in-app AI, no backtesting).
 
 ## Run locally
 
@@ -11,21 +11,20 @@ npm run dev
 
 Open [http://127.0.0.1:43147](http://127.0.0.1:43147).
 
-Import announcements (same pattern as fundamentals):
+- [Dashboard](http://127.0.0.1:43147) — Recent alerts
+- [Alerts](http://127.0.0.1:43147/alerts)
+- [MAYBANK](http://127.0.0.1:43147/stock/MAYBANK)
+
+Evaluate after ingest:
 
 ```bash
 npm run ingest:announcements -- data/raw/announcements-sample.csv
+npm run alerts
 ```
 
-Template: `data/raw/announcements-template.csv`. Rejected rows (missing ticker, date, or headline) show on [Import report](http://127.0.0.1:43147/ingest).
+Alerts persist ticker, rule id, why (plain language + evidence), timestamps, and a link to `/stock/[ticker]`. If score history is thin or unchanged, a **documented demo prior score_run** is stored (same FY filings, not invented FY2025/FY2026 numbers) so a Research Score change can be shown.
 
-- Dashboard: [http://127.0.0.1:43147](http://127.0.0.1:43147) · Catalyst Watch: `/?list=catalyst`
-- [MAYBANK](http://127.0.0.1:43147/stock/MAYBANK) news section links to the original company URL
-- [KLCC](http://127.0.0.1:43147/stock/KLCC)
-
-News category weight (10%) **only enters the live Research Score when stored announcements exist**. Otherwise it stays omitted and remaining weights are renormalized — not filled with a fake 50. Technical is still unavailable.
-
-**Data lag:** FY2024 filings vs live prices stay labelled. Do not invent FY2025/FY2026 numbers.
+**Data lag:** fundamentals period vs last trade stay labelled.
 
 ```bash
 npm test

@@ -19,6 +19,13 @@ unavailable_until_data:
 
 min_category_coverage: 0.5
 
+# In-app alerts (Phase 9). Thresholds are research triggers, not trade signals.
+alerts:
+  score_delta: 5
+  price_move_1d: 0.05
+  price_move_5d: 0.08
+  health_delta: 8
+
 # Potential Concerns never change the Research Score unless this is true.
 concerns:
   apply_score_penalty: false

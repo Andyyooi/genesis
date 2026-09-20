@@ -101,6 +101,34 @@ function ensureSchema(sqlite: Database.Database) {
       evidence_json TEXT,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS alerts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      instrument_id INTEGER NOT NULL REFERENCES instruments(id),
+      ticker TEXT NOT NULL,
+      rule_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      why TEXT NOT NULL,
+      evidence_json TEXT NOT NULL,
+      href TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      triggered_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS alerts_unique
+      ON alerts (instrument_id, rule_id, fingerprint);
+
+    CREATE TABLE IF NOT EXISTS alert_state (
+      instrument_id INTEGER PRIMARY KEY REFERENCES instruments(id),
+      last_research_score REAL,
+      last_health_score REAL,
+      last_concern_ids_json TEXT NOT NULL DEFAULT '[]',
+      last_list_ids_json TEXT NOT NULL DEFAULT '[]',
+      last_event_keys_json TEXT NOT NULL DEFAULT '[]',
+      last_close REAL,
+      last_close_date TEXT,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   const eventCols = sqlite.pragma("table_info(events)") as { name: string }[];

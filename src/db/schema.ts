@@ -127,3 +127,39 @@ export const ingestReports = sqliteTable("ingest_reports", {
   finishedAt: text("finished_at").notNull(),
   summaryJson: text("summary_json").notNull(),
 });
+
+/** In-app research alerts (Phase 9). Not email, not a buy/sell signal. */
+export const alerts = sqliteTable(
+  "alerts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    instrumentId: integer("instrument_id")
+      .notNull()
+      .references(() => instruments.id),
+    ticker: text("ticker").notNull(),
+    ruleId: text("rule_id").notNull(),
+    title: text("title").notNull(),
+    why: text("why").notNull(),
+    evidenceJson: text("evidence_json").notNull(),
+    href: text("href").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    triggeredAt: text("triggered_at").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [uniqueIndex("alerts_unique").on(table.instrumentId, table.ruleId, table.fingerprint)],
+);
+
+export const alertState = sqliteTable("alert_state", {
+  instrumentId: integer("instrument_id")
+    .primaryKey()
+    .references(() => instruments.id),
+  lastResearchScore: real("last_research_score"),
+  lastHealthScore: real("last_health_score"),
+  lastConcernIdsJson: text("last_concern_ids_json").notNull().default("[]"),
+  lastListIdsJson: text("last_list_ids_json").notNull().default("[]"),
+  lastEventKeysJson: text("last_event_keys_json").notNull().default("[]"),
+  lastClose: real("last_close"),
+  lastCloseDate: text("last_close_date"),
+  updatedAt: text("updated_at").notNull(),
+});
+

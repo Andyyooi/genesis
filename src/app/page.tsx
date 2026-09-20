@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { cn } from "cn";
+import { loadRecentAlerts } from "@/alerts/refresh";
 import { loadScoringConfig } from "@/config/load-scoring";
 import { loadLatestIngestReports } from "@/db/queries";
+import { AlertsList } from "@/components/alerts/alerts-list";
 import { DataLagBanner } from "@/components/research/data-lag-banner";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -42,10 +44,12 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
 
   let rows;
   let reports;
+  let recentAlerts: ReturnType<typeof loadRecentAlerts> = [];
   try {
     loadScoringConfig();
     rows = scanWatchlist();
     reports = loadLatestIngestReports();
+    recentAlerts = loadRecentAlerts(6);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return (
@@ -86,13 +90,17 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   return (
     <main className="mx-auto flex w-full max-w-[96rem] flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <header className="flex flex-col gap-2">
-        <p className="text-sm text-muted-foreground">Phase 8 · local only · English · MYR</p>
+        <p className="text-sm text-muted-foreground">Phase 9 · local only · English · MYR</p>
         <h1 className="text-3xl font-semibold tracking-tight">Research dashboard</h1>
         <p className="max-w-3xl text-muted-foreground">
           Watchlist is the current universe. Named lists are research filters, not buy orders. REIT
           rows use the REIT scoring profile. Click a name to open its research page.
         </p>
         <p className="text-sm">
+          <Link href="/alerts" className="underline underline-offset-4">
+            Alerts
+          </Link>
+          {" · "}
           <Link href="/ingest" className="underline underline-offset-4">
             Import report
           </Link>
@@ -100,6 +108,19 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       </header>
 
       {lagDates ? <DataLagBanner dates={lagDates} /> : null}
+
+      <section className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-xl font-semibold">Recent alerts</h2>
+          <Link href="/alerts" className="text-sm underline underline-offset-4">
+            All alerts
+          </Link>
+        </div>
+        <AlertsList
+          rows={recentAlerts}
+          empty="No in-app alerts yet. Open All alerts to evaluate stored scores and announcements."
+        />
+      </section>
 
       {yahooFails.length > 0 ? (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">

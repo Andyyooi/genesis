@@ -61,6 +61,19 @@ const scoringSchema = z
     }),
     unavailable_until_data: z.array(z.enum(CATEGORY_KEYS)),
     min_category_coverage: z.number().min(0).max(1),
+    alerts: z
+      .object({
+        score_delta: z.number().positive(),
+        price_move_1d: z.number().positive(),
+        price_move_5d: z.number().positive(),
+        health_delta: z.number().positive(),
+      })
+      .default({
+        score_delta: 5,
+        price_move_1d: 0.05,
+        price_move_5d: 0.08,
+        health_delta: 8,
+      }),
     concerns: z.object({
       apply_score_penalty: z.boolean(),
       rules: z.array(concernRuleSchema),

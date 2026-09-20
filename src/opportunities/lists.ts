@@ -114,6 +114,21 @@ export function mainConcernLabel(result: ScoreResult): string | null {
   return hit ? hit.label : null;
 }
 
+export function researchListIds(
+  row: Pick<
+    OpportunityRow,
+    | "valuationScore"
+    | "qualityScore"
+    | "persistedResearchScores"
+    | "distanceFrom52wHigh"
+    | "distanceFrom52wHighAvailable"
+    | "catalystWatch"
+  >,
+): ListId[] {
+  const full = row as OpportunityRow;
+  return LIST_IDS.filter((id) => id !== "watchlist" && rowMatchesList(full, id));
+}
+
 export function rowMatchesList(row: OpportunityRow, list: ListId): boolean {
   if (list === "watchlist") return true;
   if (list === "catalyst") return row.catalystWatch;

@@ -1,3 +1,4 @@
+import { refreshAlertsForTicker } from "@/alerts/refresh";
 import { getDb } from "@/db/client";
 import { ingestReports, instruments, priceBars } from "@/db/schema";
 import { seedUniverseFromYaml } from "@/db/seed";
@@ -93,6 +94,10 @@ export async function importYahooPrices(onlyTicker?: string): Promise<PricesImpo
       summaryJson: JSON.stringify(report),
     })
     .run();
+
+  for (const ticker of succeeded) {
+    refreshAlertsForTicker(ticker);
+  }
 
   return report;
 }

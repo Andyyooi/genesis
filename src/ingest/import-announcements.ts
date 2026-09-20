@@ -1,3 +1,4 @@
+import { refreshAlertsForTicker } from "@/alerts/refresh";
 import { readFileSync } from "node:fs";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
@@ -72,6 +73,10 @@ export function importAnnouncementsCsv(filePath: string): EventsImportReport {
       summaryJson: JSON.stringify(report),
     })
     .run();
+
+  for (const ticker of [...new Set(parsed.accepted.map((row) => row.ticker))]) {
+    refreshAlertsForTicker(ticker);
+  }
 
   return report;
 }
