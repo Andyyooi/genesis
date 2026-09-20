@@ -33,11 +33,14 @@ export function scoreFromMetrics(args: {
   metrics: MetricValue[];
   instrumentType: "COMMON_STOCK" | "REIT";
   ticker?: string | null;
+  sector?: string | null;
+  industry?: string | null;
   pn17?: boolean;
   asOf?: string;
 }): ScoreResult {
-  const profile = getFactorProfile(args.config, args.instrumentType, args.ticker);
-  const name = profileName(args.instrumentType, args.ticker);
+  const hints = { sector: args.sector, industry: args.industry };
+  const profile = getFactorProfile(args.config, args.instrumentType, args.ticker, hints);
+  const name = profileName(args.instrumentType, args.ticker, hints);
   const asOf = args.asOf ?? new Date().toISOString();
   const notes: string[] = [];
 

@@ -5,6 +5,7 @@ export type YahooBar = {
   low: number | null;
   close: number | null;
   volume: number | null;
+  adjClose: number | null;
 };
 
 type ChartResponse = {
@@ -19,6 +20,7 @@ type ChartResponse = {
           close?: Array<number | null>;
           volume?: Array<number | null>;
         }>;
+        adjclose?: Array<{ adjclose?: Array<number | null> }>;
       };
     }>;
     error?: { description?: string; code?: string };
@@ -34,10 +36,10 @@ function utcDate(epochSec: number): string {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 }
 
-export async function fetchYahooDailyBars(yahooTicker: string): Promise<YahooBar[]> {
+export async function fetchYahooDailyBars(yahooTicker: string, range = "5y"): Promise<YahooBar[]> {
   const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}`);
   url.searchParams.set("interval", "1d");
-  url.searchParams.set("range", "5y");
+  url.searchParams.set("range", range);
   url.searchParams.set("events", "div,splits");
 
   const response = await fetch(url, {
@@ -72,6 +74,7 @@ export async function fetchYahooDailyBars(yahooTicker: string): Promise<YahooBar
   const result = body.chart?.result?.[0];
   const timestamps = result?.timestamp;
   const quote = result?.indicators?.quote?.[0];
+  const adjSeries = result?.indicators?.adjclose?.[0]?.adjclose;
   if (!timestamps?.length || !quote) {
     throw new Error(`Yahoo missed ${yahooTicker}: no daily bars returned`);
   }
@@ -87,6 +90,7 @@ export async function fetchYahooDailyBars(yahooTicker: string): Promise<YahooBar
       low: quote.low?.[i] ?? null,
       close,
       volume: quote.volume?.[i] ?? null,
+      adjClose: adjSeries?.[i] ?? null,
     });
   }
 

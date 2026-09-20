@@ -19,6 +19,10 @@ export const instruments = sqliteTable("instruments", {
   pn17: integer("pn17", { mode: "boolean" }).notNull().default(false),
   currency: text("currency").notNull().default("MYR"),
   shariahCompliant: integer("shariah_compliant", { mode: "boolean" }),
+  watchlist: integer("watchlist", { mode: "boolean" }).notNull().default(false),
+  listingStatus: text("listing_status").notNull().default("listed"),
+  universeSource: text("universe_source"),
+  universeSyncedAt: text("universe_synced_at"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
@@ -36,6 +40,7 @@ export const priceBars = sqliteTable(
     low: real("low"),
     close: real("close"),
     volume: real("volume"),
+    adjClose: real("adj_close"),
     asOf: text("as_of"),
     source: text("source").notNull(),
     adjusted: integer("adjusted", { mode: "boolean" }).notNull().default(false),
@@ -161,5 +166,33 @@ export const alertState = sqliteTable("alert_state", {
   lastClose: real("last_close"),
   lastCloseDate: text("last_close_date"),
   updatedAt: text("updated_at").notNull(),
+});
+
+export const ingestFailures = sqliteTable("ingest_failures", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  kind: text("kind").notNull(),
+  ticker: text("ticker"),
+  yahooTicker: text("yahoo_ticker"),
+  reason: text("reason").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const marketScanRuns = sqliteTable("market_scan_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  asOf: text("as_of").notNull(),
+  summaryJson: text("summary_json").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const marketScanRows = sqliteTable("market_scan_rows", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: integer("run_id")
+    .notNull()
+    .references(() => marketScanRuns.id),
+  instrumentId: integer("instrument_id")
+    .notNull()
+    .references(() => instruments.id),
+  ticker: text("ticker").notNull(),
+  payloadJson: text("payload_json").notNull(),
 });
 

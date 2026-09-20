@@ -12,6 +12,8 @@ export function scoreTicker(ticker: string, persist = true) {
   const metrics = snapshotsToMetrics({
     instrumentType,
     ticker: data.instrument.ticker,
+    sector: data.instrument.sector,
+    industry: data.instrument.industry,
     periods: data.periods,
     bars: data.bars,
     events: data.events,
@@ -24,6 +26,8 @@ export function scoreTicker(ticker: string, persist = true) {
     instrumentType,
     ticker: data.instrument.ticker,
     pn17: data.instrument.pn17,
+    sector: data.instrument.sector,
+    industry: data.instrument.industry,
     asOf,
   });
   if (persist) {

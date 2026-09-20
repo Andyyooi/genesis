@@ -127,9 +127,14 @@ export type ScoringProfileName = "default" | "reit" | "bank";
 export function resolveScoringProfile(
   instrumentType: "COMMON_STOCK" | "REIT",
   ticker?: string | null,
+  hints?: { sector?: string | null; industry?: string | null },
 ): ScoringProfileName {
   if (instrumentType === "REIT") return "reit";
   if (ticker && BANK_OVERLAY_TICKERS.has(ticker.toUpperCase())) return "bank";
+  const industry = (hints?.industry ?? "").toLowerCase();
+  const sector = (hints?.sector ?? "").toLowerCase();
+  if (industry.includes("bank")) return "bank";
+  if (sector.includes("financial") && industry.includes("bank")) return "bank";
   return "default";
 }
 
@@ -137,13 +142,15 @@ export function getFactorProfile(
   config: ScoringConfig,
   instrumentType: "COMMON_STOCK" | "REIT",
   ticker?: string | null,
+  hints?: { sector?: string | null; industry?: string | null },
 ) {
-  return config.instrument_profiles[resolveScoringProfile(instrumentType, ticker)];
+  return config.instrument_profiles[resolveScoringProfile(instrumentType, ticker, hints)];
 }
 
 export function profileName(
   instrumentType: "COMMON_STOCK" | "REIT",
   ticker?: string | null,
+  hints?: { sector?: string | null; industry?: string | null },
 ): ScoringProfileName {
-  return resolveScoringProfile(instrumentType, ticker);
+  return resolveScoringProfile(instrumentType, ticker, hints);
 }

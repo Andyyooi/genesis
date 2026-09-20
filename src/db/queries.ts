@@ -22,7 +22,12 @@ export type WatchlistRow = {
 export function loadWatchlist(): WatchlistRow[] {
   seedUniverseFromYaml();
   const db = getDb();
-  const list = db.select().from(instruments).orderBy(asc(instruments.ticker)).all();
+  const list = db
+    .select()
+    .from(instruments)
+    .where(eq(instruments.watchlist, true))
+    .orderBy(asc(instruments.ticker))
+    .all();
 
   const lastDates = db
     .select({

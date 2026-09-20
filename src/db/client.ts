@@ -129,11 +129,51 @@ function ensureSchema(sqlite: Database.Database) {
       last_close_date TEXT,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS ingest_failures (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      ticker TEXT,
+      yahoo_ticker TEXT,
+      reason TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS market_scan_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      as_of TEXT NOT NULL,
+      summary_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS market_scan_rows (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id INTEGER NOT NULL REFERENCES market_scan_runs(id),
+      instrument_id INTEGER NOT NULL REFERENCES instruments(id),
+      ticker TEXT NOT NULL,
+      payload_json TEXT NOT NULL
+    );
   `);
+
+  addColumn(sqlite, "instruments", "watchlist", "INTEGER NOT NULL DEFAULT 0");
+  addColumn(sqlite, "instruments", "listing_status", "TEXT NOT NULL DEFAULT 'listed'");
+  addColumn(sqlite, "instruments", "universe_source", "TEXT");
+  addColumn(sqlite, "instruments", "universe_synced_at", "TEXT");
+  addColumn(sqlite, "price_bars", "adj_close", "REAL");
+  sqlite.exec(
+    "UPDATE instruments SET watchlist = 1 WHERE watchlist IS NULL OR (watchlist = 0 AND universe_source IS NULL)",
+  );
 
   const eventCols = sqlite.pragma("table_info(events)") as { name: string }[];
   if (eventCols.length && !eventCols.some((col) => col.name === "relevance_note")) {
     sqlite.exec("ALTER TABLE events ADD COLUMN relevance_note TEXT");
+  }
+}
+
+function addColumn(sqlite: Database.Database, table: string, name: string, ddl: string) {
+  const cols = sqlite.pragma(`table_info(${table})`) as { name: string }[];
+  if (cols.length && !cols.some((col) => col.name === name)) {
+    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${ddl}`);
   }
 }
 

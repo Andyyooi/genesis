@@ -45,10 +45,11 @@ export function fundamentalMetrics(
   periods: StatementSnapshot[],
   instrumentType: "COMMON_STOCK" | "REIT",
   ticker?: string | null,
+  hints?: { sector?: string | null; industry?: string | null },
 ): MetricValue[] {
   const latest = latestAnnual(periods);
   const period = latest?.periodEnd ?? null;
-  const profile = resolveScoringProfile(instrumentType, ticker);
+  const profile = resolveScoringProfile(instrumentType, ticker, hints);
   const skipIndustrial = skipIndustrialReason(profile);
 
   const row = latest ?? {

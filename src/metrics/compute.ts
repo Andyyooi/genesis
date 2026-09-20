@@ -8,11 +8,16 @@ import type { EventSnapshot, MetricValue, PriceBarSnapshot, StatementSnapshot } 
 export function computeMetrics(args: {
   instrumentType: "COMMON_STOCK" | "REIT";
   ticker?: string | null;
+  sector?: string | null;
+  industry?: string | null;
   periods: StatementSnapshot[];
   bars: PriceBarSnapshot[];
   events?: EventSnapshot[];
 }): MetricValue[] {
-  const fundamentals = fundamentalMetrics(args.periods, args.instrumentType, args.ticker);
+  const fundamentals = fundamentalMetrics(args.periods, args.instrumentType, args.ticker, {
+    sector: args.sector,
+    industry: args.industry,
+  });
   const prices = priceMetrics(args.bars);
   const news = newsToneMetric(args.events ?? []);
 

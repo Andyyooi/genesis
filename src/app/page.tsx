@@ -114,13 +114,18 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         <p className="text-sm text-muted-foreground">Phase 10 · local only · English · MYR</p>
         <h1 className="text-3xl font-semibold tracking-tight">Research dashboard</h1>
         <p className="max-w-3xl text-muted-foreground">
-          Watchlist is the current universe. Named lists are research filters, not buy orders. REITs
-          use the REIT profile; MAYBANK, CIMB, and PBBANK use a bank overlay. Shariah and cap-size
-          are stored flags, not scored factors. Click a name to open its research page.
+          Watchlist is Andy’s YAML names, not the full Bursa tape. Named lists are research filters,
+          not buy orders. Open Market scan for the last universe-wide run. REITs use the REIT
+          profile; banks use a P/B+ROE overlay. Shariah and cap-size are stored flags, not scored
+          factors.
         </p>
         <p className="text-sm">
           <Link href="/alerts" className="underline underline-offset-4">
             Alerts
+          </Link>
+          {" · "}
+          <Link href="/market" className="underline underline-offset-4">
+            Market scan
           </Link>
           {" · "}
           <Link href="/ingest" className="underline underline-offset-4">

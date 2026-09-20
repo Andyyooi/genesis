@@ -34,6 +34,7 @@ Or `Ctrl-C` if it is in the foreground. Do not start a second persist while one 
 
 - [Dashboard](http://127.0.0.1:43147) — watchlists, Shariah/REIT/board/cap filters
 - [Alerts](http://127.0.0.1:43147/alerts)
+- [Market scan](http://127.0.0.1:43147/market) — last `npm run market:scan` (not a buy list)
 - [MAYBANK](http://127.0.0.1:43147/stock/MAYBANK) — bank overlay (P/B, ROE)
 - [KLCC](http://127.0.0.1:43147/stock/KLCC) — REIT profile (DPU / book NAV / gearing)
 
@@ -67,6 +68,14 @@ Add coverage by hand:
 3. `npm run ingest:fundamentals -- path/to.csv` then `npm run ingest:prices` (or wait for the daily job).
 
 Announcements are the same pattern (`announcements-template.csv`). No in-app AI.
+
+### Market-wide scan
+
+```bash
+npm run market:scan
+```
+
+Refreshes COMMON_STOCK + REIT from the **Yahoo Malaysia equity screener** (not a hand-typed Bursa list), pulls EOD prices (resumable, per-ticker failures), fills Yahoo annual statements where present, keeps CSV filings, scores everyone, writes data-quality + scanner lists to SQLite. Open `/market`. Slow (rate limits). **Not Cursor usage.** Warrants/ETFs excluded. PN17 only if already stored. Watchlist dashboard still uses `universe.yaml`. Daily `ingest:prices:daily` keeps running on whatever is in the DB.
 
 ```bash
 npm test

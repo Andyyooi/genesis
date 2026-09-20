@@ -49,6 +49,8 @@ function emptyItems(): LineItems & {
 export function snapshotsToMetrics(args: {
   instrumentType: "COMMON_STOCK" | "REIT";
   ticker?: string | null;
+  sector?: string | null;
+  industry?: string | null;
   periods: PeriodRow[];
   bars: BarRow[];
   events?: EventSnapshot[];
@@ -89,6 +91,8 @@ export function snapshotsToMetrics(args: {
   return computeMetrics({
     instrumentType: args.instrumentType,
     ticker: args.ticker,
+    sector: args.sector,
+    industry: args.industry,
     periods,
     bars,
     events,

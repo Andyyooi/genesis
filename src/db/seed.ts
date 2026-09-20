@@ -21,6 +21,8 @@ export function seedUniverseFromYaml() {
         pn17: row.pn17,
         currency: "MYR",
         shariahCompliant: row.shariah_compliant ?? null,
+        watchlist: true,
+        listingStatus: "listed",
         createdAt: now,
         updatedAt: now,
       })
@@ -37,6 +39,8 @@ export function seedUniverseFromYaml() {
           pn17: row.pn17,
           currency: "MYR",
           shariahCompliant: row.shariah_compliant ?? null,
+          watchlist: true,
+          listingStatus: "listed",
           updatedAt: now,
         },
       })
