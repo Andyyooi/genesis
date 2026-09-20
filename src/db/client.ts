@@ -77,6 +77,14 @@ function ensureSchema(sqlite: Database.Database) {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS ingest_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      finished_at TEXT NOT NULL,
+      summary_json TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS score_runs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       instrument_id INTEGER NOT NULL REFERENCES instruments(id),

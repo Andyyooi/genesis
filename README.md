@@ -1,6 +1,6 @@
-# Bursa research (Phase 1)
+# Bursa research (Phase 2)
 
-Personal Malaysian equity research tool for Andy Yooi. **Phase 1 only:** SQLite schema, YAML config, and a local ticker list. No scoring, ingest, research pages, news, alerts, AI, or export.
+Personal Malaysian equity research tool for Andy Yooi. **Phase 2:** watchlist, CSV fundamentals ingest, Yahoo EOD prices. No scoring, research pages, news, alerts, AI, or export.
 
 ## Run locally
 
@@ -13,24 +13,27 @@ npm run dev
 
 Open [http://127.0.0.1:43147](http://127.0.0.1:43147). SQLite is created at `data/sqlite/research.db` (gitignored).
 
-## What you should see
+## Import data
 
-A watchlist table seeded from `config/universe.yaml` (11 Bursa names: 8 common stocks, 3 REITs). Last price shows **Data unavailable** — prices are not invented. PN17 names would show a **higher-risk** badge; none are seeded.
+Template (empty row to copy): `data/raw/fundamentals-template.csv`
 
-Edit `config/universe.yaml` and refresh to upsert tickers. Allowed `instrument_type` values: `COMMON_STOCK` and `REIT`. Warrants and ETFs are rejected on load.
+Sample with several years of **MAYBANK** and **TENAGA** from published annual figures, plus rows that *should* be rejected: `data/raw/fundamentals-sample.csv`
 
-## Config hooks (scoring not implemented)
-
-- `config/scoring.yaml` — category weights (must sum to 100) and **instrument profiles** `default` and `reit`.
-- `getFactorProfile(instrument_type)` in `src/config/load-scoring.ts` selects the profile. REITs must not use the ordinary-company factor set later.
-
-## Layout
-
-```text
-config/           scoring.yaml, universe.yaml
-data/sqlite/      local database file
-src/app/          ticker list page
-src/config/       YAML load + validation
-src/db/           Drizzle schema and seed
-src/lib/          MYR formatting helper
+```bash
+npm run ingest:fundamentals -- data/raw/fundamentals-sample.csv
+npm run ingest:prices
 ```
+
+Or both: `npm run ingest`
+
+- CSV rows missing ticker or period_end are **rejected** (see `/ingest`). Numbers are never invented; blank cells stay unavailable.
+- Re-importing the same ticker + period_end + statement_type + source **updates** the row instead of duplicating it.
+- Prices come only from Yahoo (`XXXX.KL` in `config/universe.yaml`). A miss is listed on `/ingest` — no fake bars.
+- Open a ticker (try MAYBANK) to inspect stored periods and the latest price bars, including **last trade date**.
+
+`unit` in the CSV multiplies statement amounts (revenue, PAT, equity, debt, cash, OCF, capex) into MYR. EPS, dividend per share, and share count are not multiplied.
+
+## Config
+
+- `config/universe.yaml` — ~30 COMMON_STOCK + REIT names; Bursa code and Yahoo `.KL` mapping; optional `pn17` warning flag.
+- `config/scoring.yaml` — weights and `default` / `reit` profile stubs (scoring is still Phase 4).

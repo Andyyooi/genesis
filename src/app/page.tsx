@@ -1,5 +1,6 @@
-import { asc } from "drizzle-orm";
-import { getFactorProfile, loadScoringConfig } from "@/config/load-scoring";
+import Link from "next/link";
+import { loadScoringConfig } from "@/config/load-scoring";
+import { loadLatestIngestReports, loadWatchlist } from "@/db/queries";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -16,62 +17,73 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getDb } from "@/db/client";
-import { instruments } from "@/db/schema";
-import { seedUniverseFromYaml } from "@/db/seed";
+import type { PricesImportReport } from "@/ingest/types";
 import { formatMyr } from "@/lib/format-myr";
 
 export const dynamic = "force-dynamic";
 
-function loadPageData() {
-  const scoring = loadScoringConfig();
-  const universe = seedUniverseFromYaml();
-  const db = getDb();
-  const rows = db.select().from(instruments).orderBy(asc(instruments.ticker)).all();
-  return { scoring, universe, rows };
-}
-
 export default function HomePage() {
-  let data: ReturnType<typeof loadPageData>;
+  let rows;
+  let reports;
   try {
-    data = loadPageData();
+    loadScoringConfig();
+    rows = loadWatchlist();
+    reports = loadLatestIngestReports();
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return (
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
         <h1 className="text-2xl font-semibold tracking-tight">Watchlist failed to load</h1>
         <p className="text-muted-foreground">
           Check <code className="font-mono text-sm">config/universe.yaml</code> and{" "}
-          <code className="font-mono text-sm">config/scoring.yaml</code>. Warrants and
-          ETFs are not allowed.
+          <code className="font-mono text-sm">config/scoring.yaml</code>.
         </p>
         <pre className="overflow-x-auto rounded-lg border bg-muted p-4 text-sm">{message}</pre>
       </main>
     );
   }
 
-  const { scoring, universe, rows } = data;
   const reitCount = rows.filter((row) => row.instrumentType === "REIT").length;
   const pn17Count = rows.filter((row) => row.pn17).length;
-  const defaultProfile = getFactorProfile(scoring, "COMMON_STOCK");
-  const reitProfile = getFactorProfile(scoring, "REIT");
+  const priceReport: PricesImportReport | null = reports.prices
+    ? (JSON.parse(reports.prices.summaryJson) as PricesImportReport)
+    : null;
+  const yahooFails = priceReport?.failed ?? [];
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <header className="flex flex-col gap-2">
-        <p className="text-sm text-muted-foreground">Phase 1 · local only · English · MYR</p>
+        <p className="text-sm text-muted-foreground">Phase 2 · local only · English · MYR</p>
         <h1 className="text-3xl font-semibold tracking-tight">Bursa watchlist</h1>
         <p className="max-w-2xl text-muted-foreground">
-          Personal research universe for Andy Yooi. This page lists tickers only. There
-          are no scores, prices, or invented fundamentals yet.
+          Snapshots only — no scores. Import CSV fundamentals and Yahoo daily prices, then
+          open a ticker to inspect periods and the price series. Missing values stay{" "}
+          <span className="text-foreground">Data unavailable</span>.
+        </p>
+        <p className="text-sm">
+          <Link href="/ingest" className="underline underline-offset-4">
+            Import report
+          </Link>
+          <span className="text-muted-foreground">
+            {" "}
+            · npm run ingest (CSV + Yahoo)
+          </span>
         </p>
       </header>
+
+      {yahooFails.length > 0 ? (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+          Yahoo missed {yahooFails.length} ticker{yahooFails.length === 1 ? "" : "s"}:{" "}
+          {yahooFails.map((item) => item.ticker).join(", ")}. Details on the import report
+          page — no prices were invented.
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Names in SQLite</CardTitle>
-            <CardDescription>{universe.universe_name}</CardDescription>
+            <CardDescription>andy-watchlist</CardDescription>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">{rows.length}</CardContent>
         </Card>
@@ -95,8 +107,8 @@ export default function HomePage() {
         <CardHeader>
           <CardTitle>Tickers</CardTitle>
           <CardDescription>
-            Seeded from <code className="font-mono text-xs">config/universe.yaml</code>{" "}
-            into SQLite on load. Last price is unavailable until Phase 2 ingest.
+            Last trade date is from stored Yahoo bars. Open inspect to see every imported
+            period — wrong CSV rows are listed on the import report, not hidden.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -112,23 +124,26 @@ export default function HomePage() {
                   <TableHead>Ticker</TableHead>
                   <TableHead className="hidden sm:table-cell">Bursa</TableHead>
                   <TableHead>Name</TableHead>
-                  <TableHead className="hidden md:table-cell">Sector</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Last price</TableHead>
+                  <TableHead className="hidden md:table-cell">Last trade</TableHead>
+                  <TableHead className="hidden lg:table-cell text-right">Bars</TableHead>
+                  <TableHead className="hidden lg:table-cell text-right">Periods</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell className="font-mono font-medium">{row.ticker}</TableCell>
+                    <TableCell className="font-mono font-medium">
+                      <Link href={`/inspect/${row.ticker}`} className="underline underline-offset-4">
+                        {row.ticker}
+                      </Link>
+                    </TableCell>
                     <TableCell className="hidden font-mono text-muted-foreground sm:table-cell">
                       {row.bursaCode ?? "—"}
                     </TableCell>
                     <TableCell>{row.name}</TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">
-                      {row.sector ?? "—"}
-                    </TableCell>
                     <TableCell>
                       <Badge variant={row.instrumentType === "REIT" ? "secondary" : "outline"}>
                         {row.instrumentType === "REIT" ? "REIT" : "Common stock"}
@@ -141,8 +156,15 @@ export default function HomePage() {
                         <span className="text-sm text-muted-foreground">Listed</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {formatMyr(null)}
+                    <TableCell className="text-right">{formatMyr(row.lastClose)}</TableCell>
+                    <TableCell className="hidden text-muted-foreground md:table-cell">
+                      {row.lastTradeDate ?? "Data unavailable"}
+                    </TableCell>
+                    <TableCell className="hidden text-right tabular-nums lg:table-cell">
+                      {row.barCount}
+                    </TableCell>
+                    <TableCell className="hidden text-right tabular-nums lg:table-cell">
+                      {row.periodCount}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -151,15 +173,6 @@ export default function HomePage() {
           )}
         </CardContent>
       </Card>
-
-      <p className="text-sm text-muted-foreground">
-        Scoring config loaded: weights sum to 100. Factor profiles{" "}
-        <span className="font-medium text-foreground">default</span> (
-        {defaultProfile.description}) and{" "}
-        <span className="font-medium text-foreground">reit</span> ({reitProfile.description}
-        ). News and technical categories are listed for later unavailable/renormalize
-        handling. Fallback universe if the watchlist is not used: {universe.fallback}.
-      </p>
     </main>
   );
 }

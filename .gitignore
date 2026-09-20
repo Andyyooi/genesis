@@ -43,3 +43,8 @@ next-env.d.ts
 # local SQLite (keep the folder)
 /data/sqlite/*.db
 /data/sqlite/*.db-*
+
+# Andy's dropped CSVs (keep the template and sample)
+/data/raw/*
+!/data/raw/fundamentals-template.csv
+!/data/raw/fundamentals-sample.csv

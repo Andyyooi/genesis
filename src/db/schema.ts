@@ -111,3 +111,12 @@ export const scoreRuns = sqliteTable("score_runs", {
   evidenceJson: text("evidence_json"),
   createdAt: text("created_at").notNull(),
 });
+
+/** Last ingest run so rejected rows and Yahoo misses stay visible. */
+export const ingestReports = sqliteTable("ingest_reports", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  kind: text("kind").notNull(),
+  startedAt: text("started_at").notNull(),
+  finishedAt: text("finished_at").notNull(),
+  summaryJson: text("summary_json").notNull(),
+});

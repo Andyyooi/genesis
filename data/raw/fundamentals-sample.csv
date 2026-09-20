@@ -1,0 +1,14 @@
+ticker,bursa_code,period_end,available_at,fiscal_year,fiscal_quarter,statement_type,actual_or_estimate,source,unit,revenue,pat,eps,equity,total_debt,cash,ocf,capex,shares,dividend_per_share
+MAYBANK,1155,2020-12-31,,2020,,annual,actual,Maybank AR2024 five-year group summary (RM million),1000000,51031,6481,0.577,84437,,,,,,0.52
+MAYBANK,1155,2021-12-31,,2021,,annual,actual,Maybank AR2024 five-year group summary (RM million),1000000,45959,8096,0.697,85811,,,,,,0.58
+MAYBANK,1155,2022-12-31,,2022,,annual,actual,Maybank AR2024 five-year group summary (RM million),1000000,49416,7961,0.665,85746,,,,,,0.58
+MAYBANK,1155,2023-12-31,,2023,,annual,actual,Maybank AR2024 five-year group summary (RM million),1000000,63515,9350,0.776,94642,,,,,,0.60
+MAYBANK,1155,2024-12-31,,2024,,annual,actual,Maybank AR2024 five-year group summary (RM million),1000000,68943,10089,0.836,93971,,,,,,0.61
+TENAGA,5347,2022-12-31,,2022,,annual,actual,TNB Integrated Annual Report 2022 (RM million),1000000,50867.7,3463.3,0.6035,60966.2,63882.2,,,,,
+TENAGA,5347,2023-12-31,,2023,,annual,actual,TNB Integrated Annual Report 2023 (RM million),1000000,53066.9,2770.3,,,,,,,,,
+TENAGA,5347,2024-12-31,,2024,,annual,actual,TNB 4Q FY2024 analyst briefing (RM million),1000000,56737.1,4698.6,,,,,,,,,
+,1155,2023-12-31,,2023,,annual,actual,demo-rejected-missing-ticker,1000000,1,,,,,,,,,
+MAYBANK,1155,,,2023,,annual,actual,demo-rejected-missing-period,1000000,1,,,,,,,,,
+NOTALISTED,0000,2024-12-31,,2024,,annual,actual,demo-rejected-unknown-ticker,1000000,1,,,,,,,,,
+MAYBANK,1155,not-a-date,,2024,,annual,actual,demo-rejected-bad-date,1000000,1,,,,,,,,,
+MAYBANK,1155,2024-06-30,,2024,2,interim,actual,demo-rejected-bad-number,1000000,not-a-number,,,,,,,,,

@@ -1,0 +1,2 @@
+ticker,bursa_code,period_end,available_at,fiscal_year,fiscal_quarter,statement_type,actual_or_estimate,source,unit,revenue,pat,eps,equity,total_debt,cash,ocf,capex,shares,dividend_per_share
+MAYBANK,1155,YYYY-MM-DD,,2024,,annual,actual,your-source,1000000,,,,,,,,,,

@@ -14,8 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Bursa research — watchlist",
-  description:
-    "Personal Malaysian equity research tool. Phase 1: local ticker list only.",
+  description: "Personal Malaysian equity research tool. Phase 2: CSV and Yahoo ingest.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
