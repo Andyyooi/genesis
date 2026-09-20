@@ -1,0 +1,8 @@
+ticker,occurred_at,available_at,source,source_url,headline,excerpt,classification
+MAYBANK,2024-11-26,2024-11-26,Maybank IR,https://www.maybank.com/en/news/2024/11/26.page,Maybank’s 9M FY24 net profit rises 8.5% to RM7.56b,Company news release on 9M FY24 results. Classification is rule-based from the headline; the numbers in the article are not copied into the score.,
+MAYBANK,2024-05-24,2024-05-24,Maybank IR,https://www.maybank.com/en/news/2024/05/24.page,Maybank 1Q FY24 Net Profit up 9.8% to RM2.49b,Company news release on 1Q FY24 results. Open the URL for the original text.,
+MAYBANK,2024-11-26,2024-11-26,Maybank IR,https://www.maybank.com/en/investor-relations/financial-overview/quarterly-announcements.page,Notice of annual general meeting materials index,Index page for quarterly / AGM materials — administrative. Not a new earnings print.,Neutral
+KLCC,2024-08-20,2024-08-20,EXAMPLE (not a scraped Bursa PDF),https://www.bursamalaysia.com/trade/trading_resources/listing_directory/company-profile?stock_code=5235SS,KLCCP Stapled Group distribution / results (sample row — replace with a copied Bursa headline),Labelled example URL: Bursa company profile for 5235SS. Not a fabricated FY2025/2026 filing.,
+,2024-01-01,,,https://example.com/missing,Has a headline but no ticker,Should be rejected,
+MAYBANK,,2024-01-01,Maybank IR,https://www.maybank.com/en/news/2024/11/26.page,Missing occurred_at,Should be rejected,
+MAYBANK,2024-01-01,2024-01-01,Maybank IR,https://www.maybank.com/en/news/2024/11/26.page,,Should be rejected for missing headline,

@@ -48,3 +48,5 @@ next-env.d.ts
 /data/raw/*
 !/data/raw/fundamentals-template.csv
 !/data/raw/fundamentals-sample.csv
+!/data/raw/announcements-template.csv
+!/data/raw/announcements-sample.csv
