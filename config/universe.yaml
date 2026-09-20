@@ -15,6 +15,7 @@ instruments:
     listing_board: MAIN
     sector: Financial Services
     pn17: false
+    shariah_compliant: false
   - ticker: CIMB
     bursa_code: "1023"
     yahoo_ticker: "1023.KL"
@@ -23,6 +24,7 @@ instruments:
     listing_board: MAIN
     sector: Financial Services
     pn17: false
+    shariah_compliant: false
   - ticker: PBBANK
     bursa_code: "1295"
     yahoo_ticker: "1295.KL"
@@ -31,6 +33,7 @@ instruments:
     listing_board: MAIN
     sector: Financial Services
     pn17: false
+    shariah_compliant: false
   - ticker: HLBANK
     bursa_code: "5819"
     yahoo_ticker: "5819.KL"
@@ -39,6 +42,7 @@ instruments:
     listing_board: MAIN
     sector: Financial Services
     pn17: false
+    shariah_compliant: false
   - ticker: RHBBANK
     bursa_code: "1066"
     yahoo_ticker: "1066.KL"
@@ -47,6 +51,7 @@ instruments:
     listing_board: MAIN
     sector: Financial Services
     pn17: false
+    shariah_compliant: false
   - ticker: TENAGA
     bursa_code: "5347"
     yahoo_ticker: "5347.KL"
@@ -215,6 +220,7 @@ instruments:
     listing_board: MAIN
     sector: Real Estate
     pn17: false
+    shariah_compliant: true
   - ticker: IGBREIT
     bursa_code: "5227"
     yahoo_ticker: "5227.KL"
@@ -223,6 +229,7 @@ instruments:
     listing_board: MAIN
     sector: Real Estate
     pn17: false
+    shariah_compliant: true
   - ticker: AXISREIT
     bursa_code: "5106"
     yahoo_ticker: "5106.KL"
@@ -231,6 +238,7 @@ instruments:
     listing_board: MAIN
     sector: Real Estate
     pn17: false
+    shariah_compliant: true
   - ticker: SUNREIT
     bursa_code: "5176"
     yahoo_ticker: "5176.KL"
@@ -239,6 +247,7 @@ instruments:
     listing_board: MAIN
     sector: Real Estate
     pn17: false
+    shariah_compliant: true
   - ticker: PAVREIT
     bursa_code: "5212"
     yahoo_ticker: "5212.KL"
@@ -247,3 +256,4 @@ instruments:
     listing_board: MAIN
     sector: Real Estate
     pn17: false
+    shariah_compliant: true

@@ -21,7 +21,9 @@ import { formatScore100 } from "@/lib/research-copy";
 import { buildSnapshotDates } from "@/lib/snapshot-dates";
 import {
   OPPORTUNITY_LISTS,
+  parseDashboardFilters,
   parseListId,
+  rowMatchesFilters,
   rowMatchesList,
   type ListId,
 } from "@/opportunities/lists";
@@ -34,13 +36,31 @@ function fmtCoverage(value: number | null): string {
   return `${(value * 100).toFixed(0)}%`;
 }
 
-function listHref(id: ListId): string {
-  return id === "watchlist" ? "/" : `/?list=${id}`;
+function listHref(id: ListId, extra?: Record<string, string | undefined>): string {
+  const params = new URLSearchParams();
+  if (id !== "watchlist") params.set("list", id);
+  for (const [key, value] of Object.entries(extra ?? {})) {
+    if (value) params.set(key, value);
+  }
+  const qs = params.toString();
+  return qs ? `/?${qs}` : "/";
 }
 
 export default async function HomePage({ searchParams }: PageProps<"/">) {
   const params = await searchParams;
   const listId = parseListId(typeof params.list === "string" ? params.list : undefined);
+  const flagFilters = parseDashboardFilters({
+    type: typeof params.type === "string" ? params.type : undefined,
+    shariah: typeof params.shariah === "string" ? params.shariah : undefined,
+    board: typeof params.board === "string" ? params.board : undefined,
+    cap: typeof params.cap === "string" ? params.cap : undefined,
+  });
+  const filterQuery = {
+    type: flagFilters.instrumentType,
+    shariah: flagFilters.shariah ? "yes" : undefined,
+    board: flagFilters.board,
+    cap: flagFilters.cap,
+  };
 
   let rows;
   let reports;
@@ -65,7 +85,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   }
 
   const activeList = OPPORTUNITY_LISTS.find((item) => item.id === listId) ?? OPPORTUNITY_LISTS[0]!;
-  const visible = activeList.disabled ? [] : rows.filter((row) => rowMatchesList(row, listId));
+  const listed = activeList.disabled ? [] : rows.filter((row) => rowMatchesList(row, listId));
+  const visible = listed.filter((row) => rowMatchesFilters(row, flagFilters));
   const counts = Object.fromEntries(
     OPPORTUNITY_LISTS.map((item) => [
       item.id,
@@ -90,11 +111,12 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   return (
     <main className="mx-auto flex w-full max-w-[96rem] flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <header className="flex flex-col gap-2">
-        <p className="text-sm text-muted-foreground">Phase 9 · local only · English · MYR</p>
+        <p className="text-sm text-muted-foreground">Phase 10 · local only · English · MYR</p>
         <h1 className="text-3xl font-semibold tracking-tight">Research dashboard</h1>
         <p className="max-w-3xl text-muted-foreground">
-          Watchlist is the current universe. Named lists are research filters, not buy orders. REIT
-          rows use the REIT scoring profile. Click a name to open its research page.
+          Watchlist is the current universe. Named lists are research filters, not buy orders. REITs
+          use the REIT profile; MAYBANK, CIMB, and PBBANK use a bank overlay. Shariah and cap-size
+          are stored flags, not scored factors. Click a name to open its research page.
         </p>
         <p className="text-sm">
           <Link href="/alerts" className="underline underline-offset-4">
@@ -138,7 +160,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
             return (
               <Link
                 key={item.id}
-                href={item.disabled ? `/?list=${item.id}` : listHref(item.id)}
+                href={item.disabled ? listHref(item.id, filterQuery) : listHref(item.id, filterQuery)}
                 className={cn(
                   buttonVariants({ variant: selected ? "default" : "outline", size: "sm" }),
                   item.disabled && !selected ? "opacity-60" : "",
@@ -156,6 +178,83 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         ) : null}
       </nav>
 
+      <nav className="flex flex-col gap-2" aria-label="Stored flags">
+        <p className="text-sm font-medium">Stored flags (not scored)</p>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { label: "All types", type: undefined },
+              { label: "Common stock", type: "COMMON_STOCK" as const },
+              { label: "REIT", type: "REIT" as const },
+            ] as const
+          ).map((item) => (
+            <Link
+              key={item.label}
+              href={listHref(listId, { ...filterQuery, type: item.type })}
+              className={cn(
+                buttonVariants({
+                  variant: (flagFilters.instrumentType ?? undefined) === item.type ? "default" : "outline",
+                  size: "sm",
+                }),
+              )}
+            >
+              {item.label}
+            </Link>
+          ))}
+          <Link
+            href={listHref(listId, { ...filterQuery, shariah: flagFilters.shariah ? undefined : "yes" })}
+            className={cn(buttonVariants({ variant: flagFilters.shariah ? "default" : "outline", size: "sm" }))}
+          >
+            Shariah only
+          </Link>
+          {(
+            [
+              { label: "Any board", board: undefined },
+              { label: "Main", board: "MAIN" },
+              { label: "ACE", board: "ACE" },
+            ] as const
+          ).map((item) => (
+            <Link
+              key={item.label}
+              href={listHref(listId, { ...filterQuery, board: item.board })}
+              className={cn(
+                buttonVariants({
+                  variant: (flagFilters.board ?? undefined) === item.board ? "default" : "outline",
+                  size: "sm",
+                }),
+              )}
+            >
+              {item.label}
+            </Link>
+          ))}
+          {(
+            [
+              { label: "Any cap", cap: undefined },
+              { label: "Large", cap: "large" as const },
+              { label: "Mid", cap: "mid" as const },
+              { label: "Small", cap: "small" as const },
+            ] as const
+          ).map((item) => (
+            <Link
+              key={item.label}
+              href={listHref(listId, { ...filterQuery, cap: item.cap })}
+              className={cn(
+                buttonVariants({
+                  variant: (flagFilters.cap ?? undefined) === item.cap ? "default" : "outline",
+                  size: "sm",
+                }),
+              )}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Cap uses last close × shares when shares exist (large ≥ RM10bn, mid ≥ RM2bn). Missing
+          market cap is excluded from a cap filter — not filled in. ACE is empty on this watchlist.
+        </p>
+      </nav>
+
       <div className="overflow-x-auto rounded-lg border">
         {visible.length === 0 ? (
           <p className="px-4 py-8 text-sm text-muted-foreground">
@@ -167,6 +266,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
                 ? "No name has two persisted score_runs with a higher latest Research Score. Repeating the same filings does not count as improvement."
                 : rows.length === 0
                   ? "The universe is empty. Add COMMON_STOCK or REIT rows to config/universe.yaml."
+                  : listed.length > 0 && visible.length === 0
+                    ? "No names match these stored-flag filters. Clear Shariah, board, or cap — missing market cap is not invented."
                   : "No names match this research list on the stored snapshots."}
           </p>
         ) : (
@@ -200,6 +301,16 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
                     {row.instrumentType === "REIT" ? (
                       <Badge className="relative z-10 ml-1" variant="secondary">
                         REIT
+                      </Badge>
+                    ) : null}
+                    {row.result.profile === "bank" ? (
+                      <Badge className="relative z-10 ml-1" variant="outline">
+                        Bank
+                      </Badge>
+                    ) : null}
+                    {row.shariahCompliant === true ? (
+                      <Badge className="relative z-10 ml-1" variant="secondary">
+                        Shariah
                       </Badge>
                     ) : null}
                     {row.pn17 ? (

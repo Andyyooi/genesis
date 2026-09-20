@@ -81,6 +81,12 @@ export default async function ResearchPage({
   const sma200 = sma(closes, 200);
   const lastVolume = bars[0]?.volume ?? null;
   const isReit = scored.instrumentType === "REIT";
+  const isBank = result.profile === "bank";
+  const valuationIds = isReit
+    ? ["dividend_yield", "book_nav_premium", "price_to_book", "nav_per_share"]
+    : isBank
+      ? ["price_to_book", "dividend_yield", "price_to_earnings"]
+      : ["price_to_earnings", "dividend_yield", "price_to_book"];
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6">
@@ -98,6 +104,14 @@ export default async function ResearchPage({
             {isReit ? "REIT" : "Common stock"}
           </Badge>
           {instrument.pn17 ? <Badge variant="destructive">PN17 — higher risk</Badge> : null}
+          {instrument.shariahCompliant === true ? (
+            <Badge variant="secondary">Shariah (stored flag)</Badge>
+          ) : instrument.shariahCompliant === false ? (
+            <Badge variant="outline">Not Shariah (stored flag)</Badge>
+          ) : null}
+          {instrument.listingBoard ? (
+            <Badge variant="outline">{instrument.listingBoard}</Badge>
+          ) : null}
         </div>
         <p className="text-muted-foreground">
           Ticker {instrument.ticker}
@@ -114,8 +128,15 @@ export default async function ResearchPage({
         {isReit ? (
           <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
             Scored with the <span className="font-medium">REIT factor profile</span> (distribution
-            yield, DPU CAGR, gearing). Industrial FCF, net debt/EBITDA, and ordinary-company P/E are
-            not used.
+            yield, book NAV premium, DPU CAGR, gearing). Industrial FCF, net debt/EBITDA, EV/EBITDA,
+            and ordinary-company P/E are not used.
+          </p>
+        ) : null}
+        {isBank ? (
+          <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+            Scored with the <span className="font-medium">bank overlay</span> (P/B and ROE). Industrial
+            FCF and EV/EBITDA are not scoring factors. Health is omitted when those industrial
+            measures are the only configured health inputs.
           </p>
         ) : null}
         <ExportActions ticker={instrument.ticker} />
@@ -217,10 +238,7 @@ export default async function ResearchPage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(isReit
-              ? ["dividend_yield", "price_to_earnings"]
-              : ["price_to_earnings", "dividend_yield"]
-            ).map((id) => {
+            {valuationIds.map((id) => {
               const metric = metricById(metrics, id);
               return (
                 <TableRow key={id}>
@@ -279,6 +297,8 @@ export default async function ResearchPage({
                   ["OCF", "ocf"],
                   ["Capex", "capex"],
                   ["Dividend / share", "dividendPerShare"],
+                  ["NAV / unit (reported)", "navPerShare"],
+                  ["Total assets", "totalAssets"],
                 ] as const
               ).map(([label, key]) => (
                 <TableRow key={key}>
@@ -290,7 +310,7 @@ export default async function ResearchPage({
                       <TableCell key={row.id} className="text-right tabular-nums">
                         {value === null
                           ? "Data unavailable"
-                          : key === "eps" || key === "dividendPerShare"
+                          : key === "eps" || key === "dividendPerShare" || key === "navPerShare"
                             ? value.toFixed(3)
                             : formatMyr(value)}
                       </TableCell>

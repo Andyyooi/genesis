@@ -39,7 +39,7 @@ export type ConcernHit = {
 export type ScoreResult = {
   asOf: string;
   configHash: string;
-  profile: "default" | "reit";
+  profile: "default" | "reit" | "bank";
   researchScore: number | null;
   valuationScore: number | null;
   categories: CategoryScore[];

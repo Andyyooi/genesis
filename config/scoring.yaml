@@ -140,16 +140,23 @@ instrument_profiles:
           better: 1
       technical: []
   reit:
-    description: Real estate investment trusts — DPU/NAV/gearing later; not industrial FCF or EV/EBITDA
+    description: REITs — DPU yield, book NAV premium, DPU CAGR, debt/capital gearing. Not industrial FCF or EV/EBITDA.
     factor_sets:
       valuation:
         - id: dpu_yield
           metric: dividend_yield
-          label: Distribution yield (DPS / price)
-          weight: 100
+          label: Distribution yield (DPU / price)
+          weight: 55
           direction: higher_better
           worse: 0.03
           better: 0.07
+        - id: nav_premium
+          metric: book_nav_premium
+          label: Price vs book NAV
+          weight: 45
+          direction: lower_better
+          worse: 0.4
+          better: -0.1
       quality:
         - id: dpu_stability
           metric: dpu_cagr
@@ -161,7 +168,7 @@ instrument_profiles:
       financial_health:
         - id: gearing
           metric: reit_gearing
-          label: REIT gearing
+          label: REIT gearing (debt / capital)
           weight: 100
           direction: lower_better
           worse: 0.5
@@ -174,6 +181,58 @@ instrument_profiles:
           direction: higher_better
           worse: 0
           better: 0.08
+      news:
+        - id: news_tone
+          metric: news_tone
+          label: Stored announcement tone
+          weight: 100
+          direction: higher_better
+          worse: 0
+          better: 1
+      technical: []
+  # Overlay for MAYBANK, CIMB, PBBANK (COMMON_STOCK). Not a third universe.
+  bank:
+    description: Banks — prefer P/B and ROE. Skip industrial FCF and EV/EBITDA.
+    factor_sets:
+      valuation:
+        - id: pb
+          metric: price_to_book
+          label: Price / book
+          weight: 70
+          direction: lower_better
+          worse: 2.2
+          better: 0.9
+        - id: dividend_yield
+          metric: dividend_yield
+          label: Dividend yield
+          weight: 30
+          direction: higher_better
+          worse: 0.02
+          better: 0.06
+      quality:
+        - id: roe
+          metric: roe
+          label: ROE
+          weight: 100
+          direction: higher_better
+          worse: 0.05
+          better: 0.18
+      financial_health: []
+      growth:
+        - id: revenue_cagr
+          metric: revenue_cagr
+          label: Revenue CAGR
+          weight: 50
+          direction: higher_better
+          worse: 0
+          better: 0.12
+        - id: pat_cagr
+          metric: pat_cagr
+          label: PAT CAGR
+          weight: 50
+          direction: higher_better
+          worse: 0
+          better: 0.12
       news:
         - id: news_tone
           metric: news_tone

@@ -9,6 +9,10 @@ export type LineItems = {
   capex: number | null;
   shares: number | null;
   dividendPerShare: number | null;
+  /** Reported NAV / unit. Missing stays null — never invented. */
+  navPerShare: number | null;
+  /** Total assets for SC-style REIT gearing. Missing stays null. */
+  totalAssets: number | null;
 };
 
 export type RejectedRow = {

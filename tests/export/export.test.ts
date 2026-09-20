@@ -73,6 +73,8 @@ function wrap(
           capex: -5,
           shares: 100,
           dividendPerShare: 0.1,
+          navPerShare: null,
+          totalAssets: null,
         },
       },
     ],

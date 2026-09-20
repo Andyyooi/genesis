@@ -52,8 +52,10 @@ export function scoreNarrative(result: ScoreResult): string {
           : "historical growth is relatively weak";
   const profileBit =
     result.profile === "reit"
-      ? "This name is scored with the REIT factor profile (distribution yield, DPU, gearing) — not industrial FCF or EV/EBITDA."
-      : "This name is scored with the ordinary-company factor profile.";
+      ? "This name is scored with the REIT factor profile (distribution yield, book NAV, DPU CAGR, gearing) — not industrial FCF or EV/EBITDA."
+      : result.profile === "bank"
+        ? "This name is scored with the bank overlay (P/B and ROE). Industrial FCF and EV/EBITDA are not scoring factors."
+        : "This name is scored with the ordinary-company factor profile.";
   return `${profileBit} ${qualityBit[0].toUpperCase()}${qualityBit.slice(1)}; ${valueBit}; ${growthBit}. These are research observations, not a buy or sell.`;
 }
 

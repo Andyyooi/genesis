@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Bursa research — dashboard",
-  description: "Personal Malaysian equity research. Phase 9: in-app alerts.",
+  description: "Personal Malaysian equity research. Phase 10: REIT and bank scoring profiles.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -22,8 +22,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+      <body className="min-h-full flex flex-col bg-background text-foreground" suppressHydrationWarning>
         {children}
       </body>
     </html>

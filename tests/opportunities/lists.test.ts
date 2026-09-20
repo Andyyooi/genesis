@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ScoreResult } from "@/scoring/types";
 import {
   liveCoverage,
+  rowMatchesFilters,
   rowMatchesList,
   type OpportunityRow,
 } from "@/opportunities/lists";
@@ -100,6 +101,9 @@ function row(over: Partial<OpportunityRow> = {}): OpportunityRow {
     name: "Test",
     instrumentType: "COMMON_STOCK",
     pn17: false,
+    shariahCompliant: null,
+    listingBoard: "MAIN",
+    marketCap: null,
     price: 10,
     lastTradeDate: "2026-09-18",
     fundamentalsPeriod: "2024-12-31",
@@ -166,5 +170,15 @@ describe("opportunity lists", () => {
 
   it("coverage averages live categories and does not treat news as 100%", () => {
     expect(liveCoverage(result())).toBeCloseTo(0.6);
+  });
+
+  it("Shariah and cap-size filters are flags, not scored factors", () => {
+    expect(rowMatchesFilters(row({ shariahCompliant: true }), { shariah: true })).toBe(true);
+    expect(rowMatchesFilters(row({ shariahCompliant: false }), { shariah: true })).toBe(false);
+    expect(rowMatchesFilters(row({ shariahCompliant: null }), { shariah: true })).toBe(false);
+    expect(rowMatchesFilters(row({ marketCap: 12_000_000_000 }), { cap: "large" })).toBe(true);
+    expect(rowMatchesFilters(row({ marketCap: null }), { cap: "large" })).toBe(false);
+    expect(rowMatchesFilters(row({ instrumentType: "REIT" }), { instrumentType: "REIT" })).toBe(true);
+    expect(rowMatchesFilters(row({ listingBoard: "MAIN" }), { board: "MAIN" })).toBe(true);
   });
 });

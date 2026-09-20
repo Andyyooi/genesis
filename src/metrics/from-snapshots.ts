@@ -36,6 +36,8 @@ function emptyItems(): LineItems & {
     capex: null,
     shares: null,
     dividendPerShare: null,
+    navPerShare: null,
+    totalAssets: null,
     grossProfit: null,
     operatingProfit: null,
     ebitda: null,
@@ -46,6 +48,7 @@ function emptyItems(): LineItems & {
 
 export function snapshotsToMetrics(args: {
   instrumentType: "COMMON_STOCK" | "REIT";
+  ticker?: string | null;
   periods: PeriodRow[];
   bars: BarRow[];
   events?: EventSnapshot[];
@@ -85,6 +88,7 @@ export function snapshotsToMetrics(args: {
 
   return computeMetrics({
     instrumentType: args.instrumentType,
+    ticker: args.ticker,
     periods,
     bars,
     events,

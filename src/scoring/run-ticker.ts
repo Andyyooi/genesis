@@ -11,6 +11,7 @@ export function scoreTicker(ticker: string, persist = true) {
   const asOf = new Date().toISOString();
   const metrics = snapshotsToMetrics({
     instrumentType,
+    ticker: data.instrument.ticker,
     periods: data.periods,
     bars: data.bars,
     events: data.events,
@@ -21,6 +22,7 @@ export function scoreTicker(ticker: string, persist = true) {
     config,
     metrics,
     instrumentType,
+    ticker: data.instrument.ticker,
     pn17: data.instrument.pn17,
     asOf,
   });

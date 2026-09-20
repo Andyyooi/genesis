@@ -105,6 +105,11 @@ describe("scoring engine", () => {
     expect(reitMetrics).not.toContain("net_debt_to_ebitda");
     expect(reitMetrics).not.toContain("debt_to_equity");
     expect(reitMetrics).not.toContain("price_to_earnings");
+    expect(reitMetrics).not.toContain("ev_ebitda");
+    expect(reitMetrics).toContain("dividend_yield");
+    expect(reitMetrics).toContain("book_nav_premium");
+    expect(reitMetrics).toContain("dpu_cagr");
+    expect(reitMetrics).toContain("reit_gearing");
 
     const scored = scoreFromMetrics({
       config,
@@ -116,6 +121,49 @@ describe("scoring engine", () => {
     expect(factorIds).not.toContain("fcf");
     expect(factorIds).not.toContain("debt_to_equity");
     expect(factorIds).toContain("dpu_yield");
+    expect(factorIds).toContain("nav_premium");
+  });
+
+  it("applies a bank overlay on MAYBANK/CIMB/PBBANK and skips industrial FCF and EV/EBITDA", () => {
+    const bank = getFactorProfile(config, "COMMON_STOCK", "MAYBANK");
+    const def = getFactorProfile(config, "COMMON_STOCK", "TENAGA");
+    const bankMetrics = [
+      ...bank.factor_sets.valuation,
+      ...bank.factor_sets.quality,
+      ...bank.factor_sets.financial_health,
+    ].map((f) => f.metric);
+    const defaultHealth = def.factor_sets.financial_health.map((f) => f.metric);
+
+    expect(defaultHealth).toContain("fcf");
+    expect(bankMetrics).toContain("price_to_book");
+    expect(bankMetrics).toContain("roe");
+    expect(bankMetrics).not.toContain("fcf");
+    expect(bankMetrics).not.toContain("ev_ebitda");
+    expect(bankMetrics).not.toContain("net_debt_to_ebitda");
+    expect(bank.factor_sets.financial_health).toHaveLength(0);
+
+    const scored = scoreFromMetrics({
+      config,
+      instrumentType: "COMMON_STOCK",
+      ticker: "CIMB",
+      metrics: [
+        m("price_to_book", 1.1),
+        m("roe", 0.12),
+        m("fcf", 1e9),
+        m("ev_ebitda", 8),
+        m("net_debt_to_ebitda", 1),
+        m("dividend_yield", 0.05),
+        m("revenue_cagr", 0.04),
+        m("pat_cagr", 0.04),
+      ],
+    });
+    expect(scored.profile).toBe("bank");
+    const factorIds = scored.categories.flatMap((c) => c.factors.map((f) => f.id));
+    expect(factorIds).toContain("pb");
+    expect(factorIds).toContain("roe");
+    expect(factorIds).not.toContain("fcf");
+    expect(factorIds).not.toContain("ev_ebitda");
+    expect(byCat(scored, "financial_health").inThisRun).toBe(false);
   });
 
   it("marks news and technical as not in this run and renormalizes", () => {

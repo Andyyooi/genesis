@@ -37,7 +37,12 @@ export function buildFullMarkdown(payload: ExportPayload): string {
 
   if (score.profile === "reit") {
     sections.push(
-      "This export uses the **REIT** factor profile (distribution yield, DPU CAGR, gearing). Industrial FCF, net debt/EBITDA, and ordinary-company P/E are not scoring factors.",
+      "This export uses the **REIT** factor profile (distribution yield, book NAV premium, DPU CAGR, gearing). Industrial FCF, net debt/EBITDA, EV/EBITDA, and ordinary-company P/E are not scoring factors.",
+      "",
+    );
+  } else if (score.profile === "bank") {
+    sections.push(
+      "This export uses the **bank** overlay (P/B and ROE). Industrial FCF, net debt/EBITDA, and EV/EBITDA are not scoring factors.",
       "",
     );
   }

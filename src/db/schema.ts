@@ -13,7 +13,7 @@ export const instruments = sqliteTable("instruments", {
   sector: text("sector"),
   industry: text("industry"),
   listingBoard: text("listing_board"),
-  /** Phase 4 scoring selects factor profile default vs reit from this field. */
+  /** Phase 4/10 scoring selects default, reit, or bank overlay from this field plus ticker. */
   instrumentType: text("instrument_type", { enum: INSTRUMENT_TYPES }).notNull(),
   /** PN17/GN3-style status: warning in the UI, never a silent score deduction. */
   pn17: integer("pn17", { mode: "boolean" }).notNull().default(false),

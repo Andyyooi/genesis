@@ -36,6 +36,8 @@ export type StatementSnapshot = {
   capex: number | null;
   shares: number | null;
   dividendPerShare: number | null;
+  navPerShare: number | null;
+  totalAssets: number | null;
   grossProfit: number | null;
   operatingProfit: number | null;
   ebitda: number | null;

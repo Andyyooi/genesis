@@ -74,6 +74,9 @@ export type OpportunityRow = {
   name: string;
   instrumentType: "COMMON_STOCK" | "REIT";
   pn17: boolean;
+  shariahCompliant: boolean | null;
+  listingBoard: string | null;
+  marketCap: number | null;
   price: number | null;
   lastTradeDate: string | null;
   fundamentalsPeriod: string | null;
@@ -92,6 +95,45 @@ export type OpportunityRow = {
   catalystLabel: string | null;
   result: ScoreResult;
 };
+
+export type DashboardFlagFilter = {
+  instrumentType?: "COMMON_STOCK" | "REIT";
+  shariah?: boolean;
+  board?: string;
+  cap?: "large" | "mid" | "small";
+};
+
+/** Cap buckets in MYR. Not a scored factor. Missing market cap is excluded when a cap filter is on. */
+export function capBucket(marketCapMyr: number): "large" | "mid" | "small" {
+  if (marketCapMyr >= 10_000_000_000) return "large";
+  if (marketCapMyr >= 2_000_000_000) return "mid";
+  return "small";
+}
+
+export function parseDashboardFilters(params: {
+  type?: string;
+  shariah?: string;
+  board?: string;
+  cap?: string;
+}): DashboardFlagFilter {
+  const filters: DashboardFlagFilter = {};
+  if (params.type === "REIT" || params.type === "COMMON_STOCK") filters.instrumentType = params.type;
+  if (params.shariah === "yes") filters.shariah = true;
+  if (params.board && params.board.trim()) filters.board = params.board.trim().toUpperCase();
+  if (params.cap === "large" || params.cap === "mid" || params.cap === "small") filters.cap = params.cap;
+  return filters;
+}
+
+export function rowMatchesFilters(row: OpportunityRow, filters: DashboardFlagFilter): boolean {
+  if (filters.instrumentType && row.instrumentType !== filters.instrumentType) return false;
+  if (filters.shariah && row.shariahCompliant !== true) return false;
+  if (filters.board && (row.listingBoard ?? "").toUpperCase() !== filters.board) return false;
+  if (filters.cap) {
+    if (row.marketCap === null) return false;
+    if (capBucket(row.marketCap) !== filters.cap) return false;
+  }
+  return true;
+}
 
 export function parseListId(value: string | undefined): ListId {
   if (value && (LIST_IDS as readonly string[]).includes(value)) return value as ListId;

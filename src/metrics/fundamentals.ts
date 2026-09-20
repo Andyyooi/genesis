@@ -1,3 +1,4 @@
+import { resolveScoringProfile, type ScoringProfileName } from "@/config/load-scoring";
 import { cagr } from "@/metrics/cagr";
 import { safeDivide } from "@/metrics/ratio";
 import { unavailable, type MetricValue, type StatementSnapshot } from "@/metrics/types";
@@ -30,16 +31,25 @@ const INDUSTRIAL_ONLY = new Set([
   "debt_to_equity",
 ]);
 
+function skipIndustrialReason(profile: ScoringProfileName): string | undefined {
+  if (profile === "reit") {
+    return "REIT: industrial FCF / EV-EBITDA / cash-leverage not applied. Inputs are not forced through this formula.";
+  }
+  if (profile === "bank") {
+    return "Bank overlay: industrial FCF / EV-EBITDA / cash-leverage not applied. Inputs are not forced through this formula.";
+  }
+  return undefined;
+}
+
 export function fundamentalMetrics(
   periods: StatementSnapshot[],
   instrumentType: "COMMON_STOCK" | "REIT",
+  ticker?: string | null,
 ): MetricValue[] {
   const latest = latestAnnual(periods);
   const period = latest?.periodEnd ?? null;
-  const skipIndustrial =
-    instrumentType === "REIT"
-      ? "REIT: industrial metric not applied (REIT factor set is later). Inputs are not forced through this formula."
-      : undefined;
+  const profile = resolveScoringProfile(instrumentType, ticker);
+  const skipIndustrial = skipIndustrialReason(profile);
 
   const row = latest ?? {
     periodEnd: "",
@@ -52,6 +62,10 @@ export function fundamentalMetrics(
     cash: null,
     ocf: null,
     capex: null,
+    shares: null,
+    dividendPerShare: null,
+    navPerShare: null,
+    totalAssets: null,
     grossProfit: null,
     operatingProfit: null,
     ebitda: null,
@@ -341,6 +355,103 @@ export function fundamentalMetrics(
           formula: "reported EPS (negative EPS is kept; not coerced to zero)",
         };
 
+  const dpuCagr = cagr(
+    "dpu_cagr",
+    "DPU CAGR",
+    oldest?.dividendPerShare ?? null,
+    newest?.dividendPerShare ?? null,
+    span,
+    "(latest DPU / earliest DPU)^(1/years) − 1 (DPU uses stored dividend_per_share)",
+    [
+      { name: "dpuStart", value: oldest?.dividendPerShare ?? null, period: oldest?.periodEnd },
+      { name: "dpuEnd", value: newest?.dividendPerShare ?? null, period: newest?.periodEnd },
+      { name: "years", value: span || null },
+    ],
+    cagrPeriod,
+  );
+
+  const bookNav = safeDivide(
+    "book_nav_per_share",
+    "Book NAV per share",
+    row.equity ?? null,
+    row.shares ?? null,
+    "equity / shares (book NAV; not reported unit NAV)",
+    [
+      { name: "equity", value: row.equity ?? null, period: p },
+      { name: "shares", value: row.shares ?? null, period: p },
+    ],
+    p,
+    "myr",
+  );
+
+  const officialNav =
+    row.navPerShare === null || !latest
+      ? unavailable(
+          "nav_per_share",
+          "Reported NAV per unit",
+          "reported NAV / unit from CSV",
+          "Reported NAV per unit is not in the CSV (no nav_per_share line) — not invented",
+          [{ name: "navPerShare", value: null, period: p }],
+          p,
+          "myr",
+        )
+      : {
+          id: "nav_per_share",
+          label: "Reported NAV per unit",
+          value: row.navPerShare,
+          unit: "myr" as const,
+          available: true,
+          reason: null,
+          period: p,
+          inputs: [{ name: "navPerShare", value: row.navPerShare, period: p }],
+          formula: "reported NAV / unit from CSV",
+        };
+
+  const gearingInputs = [
+    { name: "totalDebt", value: row.totalDebt ?? null, period: p },
+    { name: "equity", value: row.equity ?? null, period: p },
+    { name: "totalAssets", value: row.totalAssets ?? null, period: p },
+  ];
+  const reitGearing =
+    row.totalDebt !== null && row.totalAssets !== null
+      ? safeDivide(
+          "reit_gearing",
+          "REIT gearing",
+          row.totalDebt,
+          row.totalAssets,
+          "total debt / total assets (SC-style when total_assets is stored)",
+          gearingInputs,
+          p,
+        )
+      : row.totalDebt !== null && row.equity !== null
+        ? safeDivide(
+            "reit_gearing",
+            "REIT gearing",
+            row.totalDebt,
+            row.totalDebt + row.equity,
+            "total debt / (total debt + equity). SC gearing vs total assets needs a total_assets line (not invented)",
+            gearingInputs,
+            p,
+          )
+        : unavailable(
+            "reit_gearing",
+            "REIT gearing",
+            "total debt / total assets, or total debt / (total debt + equity) if total_assets is missing",
+            "CSV has no total_assets line and debt or equity is missing — gearing is not invented",
+            gearingInputs,
+            p,
+          );
+
+  const evEbitda = unavailable(
+    "ev_ebitda",
+    "EV / EBITDA",
+    "enterprise value / EBITDA",
+    skipIndustrial ??
+      "EV/EBITDA is not computed (no enterprise-value line in the CSV) — not invented",
+    [{ name: "ebitda", value: row.ebitda ?? null, period: p }],
+    p,
+  );
+
   return [
     grossMargin,
     operatingMargin,
@@ -353,6 +464,11 @@ export function fundamentalMetrics(
     fcf,
     revenueCagr,
     patCagr,
+    dpuCagr,
+    bookNav,
+    officialNav,
+    reitGearing,
+    evEbitda,
     ttmRevenueMetric,
     ttmPatMetric,
     epsMetric,

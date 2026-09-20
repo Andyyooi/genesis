@@ -10,8 +10,9 @@ function main() {
     return;
   }
 
-  const metrics = snapshotsToMetrics({
+    const metrics = snapshotsToMetrics({
     instrumentType: data.instrument.instrumentType === "REIT" ? "REIT" : "COMMON_STOCK",
+    ticker: data.instrument.ticker,
     periods: data.periods,
     bars: data.bars,
   });

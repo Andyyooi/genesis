@@ -81,6 +81,7 @@ const scoringSchema = z
     instrument_profiles: z.object({
       default: instrumentProfileSchema,
       reit: instrumentProfileSchema,
+      bank: instrumentProfileSchema,
     }),
   })
   .superRefine((value, ctx) => {
@@ -92,7 +93,7 @@ const scoringSchema = z
         path: ["category_weights"],
       });
     }
-    for (const profileName of ["default", "reit"] as const) {
+    for (const profileName of ["default", "reit", "bank"] as const) {
       const sets = value.instrument_profiles[profileName].factor_sets;
       for (const key of CATEGORY_KEYS) {
         const factors = sets[key];
@@ -119,15 +120,30 @@ export function loadScoringConfig(rootDir = process.cwd()): ScoringConfig {
   return scoringSchema.parse(raw);
 }
 
+export const BANK_OVERLAY_TICKERS = new Set(["MAYBANK", "CIMB", "PBBANK"]);
+
+export type ScoringProfileName = "default" | "reit" | "bank";
+
+export function resolveScoringProfile(
+  instrumentType: "COMMON_STOCK" | "REIT",
+  ticker?: string | null,
+): ScoringProfileName {
+  if (instrumentType === "REIT") return "reit";
+  if (ticker && BANK_OVERLAY_TICKERS.has(ticker.toUpperCase())) return "bank";
+  return "default";
+}
+
 export function getFactorProfile(
   config: ScoringConfig,
   instrumentType: "COMMON_STOCK" | "REIT",
+  ticker?: string | null,
 ) {
-  return instrumentType === "REIT"
-    ? config.instrument_profiles.reit
-    : config.instrument_profiles.default;
+  return config.instrument_profiles[resolveScoringProfile(instrumentType, ticker)];
 }
 
-export function profileName(instrumentType: "COMMON_STOCK" | "REIT"): "default" | "reit" {
-  return instrumentType === "REIT" ? "reit" : "default";
+export function profileName(
+  instrumentType: "COMMON_STOCK" | "REIT",
+  ticker?: string | null,
+): ScoringProfileName {
+  return resolveScoringProfile(instrumentType, ticker);
 }

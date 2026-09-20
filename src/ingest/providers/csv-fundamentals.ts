@@ -144,6 +144,11 @@ export function parseFundamentalsCsv(csvText: string): {
           capex: statementFields.capex,
           shares: parseNumber(record.shares, "shares", rowNumber),
           dividendPerShare: perShare.dividend_per_share,
+          navPerShare: parseNumber(record.nav_per_share, "nav_per_share", rowNumber),
+          totalAssets: (() => {
+            const value = parseNumber(record.total_assets, "total_assets", rowNumber);
+            return value === null ? null : value * unit;
+          })(),
         },
       });
     } catch (error) {

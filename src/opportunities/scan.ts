@@ -28,6 +28,11 @@ export function scanWatchlist(): OpportunityRow[] {
       name: scored.instrument.name,
       instrumentType: scored.instrumentType === "REIT" ? "REIT" : "COMMON_STOCK",
       pn17: scored.instrument.pn17,
+      shariahCompliant: scored.instrument.shariahCompliant ?? null,
+      listingBoard: scored.instrument.listingBoard ?? null,
+      marketCap: metric(scored.metrics, "market_cap")?.available
+        ? (metric(scored.metrics, "market_cap")?.value ?? null)
+        : null,
       price: lastClose?.available ? lastClose.value : null,
       lastTradeDate: lastTrade?.period ?? item.lastTradeDate,
       fundamentalsPeriod: latestAnnualPeriod(scored.periods),

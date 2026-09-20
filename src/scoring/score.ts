@@ -32,11 +32,12 @@ export function scoreFromMetrics(args: {
   config: ScoringConfig;
   metrics: MetricValue[];
   instrumentType: "COMMON_STOCK" | "REIT";
+  ticker?: string | null;
   pn17?: boolean;
   asOf?: string;
 }): ScoreResult {
-  const profile = getFactorProfile(args.config, args.instrumentType);
-  const name = profileName(args.instrumentType);
+  const profile = getFactorProfile(args.config, args.instrumentType, args.ticker);
+  const name = profileName(args.instrumentType, args.ticker);
   const asOf = args.asOf ?? new Date().toISOString();
   const notes: string[] = [];
 
