@@ -53,6 +53,10 @@ export default async function InspectPage({
           Watchlist
         </Link>
         <span className="text-muted-foreground"> · inspect snapshots (not a research page)</span>
+        {" · "}
+        <Link href={`/metrics/${instrument.ticker}`} className="underline underline-offset-4">
+          Metrics debug
+        </Link>
       </p>
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">

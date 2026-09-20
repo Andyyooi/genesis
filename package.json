@@ -9,7 +9,9 @@
     "lint": "eslint",
     "ingest": "tsx src/ingest/cli.ts all",
     "ingest:fundamentals": "tsx src/ingest/cli.ts fundamentals",
-    "ingest:prices": "tsx src/ingest/cli.ts prices"
+    "ingest:prices": "tsx src/ingest/cli.ts prices",
+    "metrics": "tsx src/metrics/cli.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -38,6 +40,8 @@
     "eslint-config-next": "16.3.5",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^3.2.7"
   }
 }

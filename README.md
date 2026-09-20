@@ -1,39 +1,30 @@
-# Bursa research (Phase 2)
+# Bursa research (Phase 3)
 
-Personal Malaysian equity research tool for Andy Yooi. **Phase 2:** watchlist, CSV fundamentals ingest, Yahoo EOD prices. No scoring, research pages, news, alerts, AI, or export.
+Personal Malaysian equity research tool for Andy Yooi. **Phase 3:** snapshot metrics (no scores). No opportunity scanner, research-page product UI, news, alerts, AI, or export.
 
 ## Run locally
-
-Requires Node.js 22+.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://127.0.0.1:43147](http://127.0.0.1:43147). SQLite is created at `data/sqlite/research.db` (gitignored).
+Open [http://127.0.0.1:43147](http://127.0.0.1:43147).
 
-## Import data
+## Metrics (Phase 3)
 
-Template (empty row to copy): `data/raw/fundamentals-template.csv`
+```bash
+npm test
+npm run metrics -- MAYBANK
+```
 
-Sample with several years of **MAYBANK** and **TENAGA** from published annual figures, plus rows that *should* be rejected: `data/raw/fundamentals-sample.csv`
+Debug page: [/metrics/MAYBANK](http://127.0.0.1:43147/metrics/MAYBANK)
+
+Functions live in `src/metrics/` and only read stored SQLite snapshots. Missing inputs stay **Data unavailable** (never zero). REITs skip industrial FCF/leverage formulas.
+
+## Import data (Phase 2)
 
 ```bash
 npm run ingest:fundamentals -- data/raw/fundamentals-sample.csv
 npm run ingest:prices
 ```
-
-Or both: `npm run ingest`
-
-- CSV rows missing ticker or period_end are **rejected** (see `/ingest`). Numbers are never invented; blank cells stay unavailable.
-- Re-importing the same ticker + period_end + statement_type + source **updates** the row instead of duplicating it.
-- Prices come only from Yahoo using Bursa stock code + `.KL` (e.g. MAYBANK → `1155.KL`). A miss is listed on `/ingest` — no fake bars.
-- Open a ticker (try MAYBANK) to inspect stored periods and the latest price bars, including **last trade date**.
-
-`unit` in the CSV multiplies statement amounts (revenue, PAT, equity, debt, cash, OCF, capex) into MYR. EPS, dividend per share, and share count are not multiplied.
-
-## Config
-
-- `config/universe.yaml` — ~30 COMMON_STOCK + REIT names; Bursa code and Yahoo `.KL` mapping; optional `pn17` warning flag.
-- `config/scoring.yaml` — weights and `default` / `reit` profile stubs (scoring is still Phase 4).
