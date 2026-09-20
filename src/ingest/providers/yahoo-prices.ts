@@ -42,13 +42,24 @@ export async function fetchYahooDailyBars(yahooTicker: string): Promise<YahooBar
 
   const response = await fetch(url, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; bursa-research-local/0.1)",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
       Accept: "application/json",
     },
   });
 
   if (!response.ok) {
-    throw new Error(`Yahoo HTTP ${response.status} for ${yahooTicker}`);
+    let detail = `Yahoo HTTP ${response.status} for ${yahooTicker}`;
+    try {
+      const errBody = (await response.json()) as ChartResponse;
+      const description = errBody.chart?.error?.description;
+      if (description) {
+        detail = `Yahoo missed ${yahooTicker}: ${description}`;
+      }
+    } catch {
+      /* keep HTTP status */
+    }
+    throw new Error(detail);
   }
 
   const body = (await response.json()) as ChartResponse;

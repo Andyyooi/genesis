@@ -27,7 +27,9 @@ export async function importYahooPrices(onlyTicker?: string): Promise<PricesImpo
   const retrievedAt = new Date().toISOString();
 
   for (const [index, instrument] of targets.entries()) {
-    const yahooTicker = instrument.yahooTicker ?? `${instrument.ticker}.KL`;
+    const yahooTicker =
+      instrument.yahooTicker ??
+      (instrument.bursaCode ? `${instrument.bursaCode}.KL` : `${instrument.ticker}.KL`);
     try {
       const bars = await fetchYahooDailyBars(yahooTicker);
       for (const bar of bars) {

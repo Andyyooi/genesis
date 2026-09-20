@@ -28,7 +28,7 @@ Or both: `npm run ingest`
 
 - CSV rows missing ticker or period_end are **rejected** (see `/ingest`). Numbers are never invented; blank cells stay unavailable.
 - Re-importing the same ticker + period_end + statement_type + source **updates** the row instead of duplicating it.
-- Prices come only from Yahoo (`XXXX.KL` in `config/universe.yaml`). A miss is listed on `/ingest` — no fake bars.
+- Prices come only from Yahoo using Bursa stock code + `.KL` (e.g. MAYBANK → `1155.KL`). A miss is listed on `/ingest` — no fake bars.
 - Open a ticker (try MAYBANK) to inspect stored periods and the latest price bars, including **last trade date**.
 
 `unit` in the CSV multiplies statement amounts (revenue, PAT, equity, debt, cash, OCF, capex) into MYR. EPS, dividend per share, and share count are not multiplied.

@@ -1,6 +1,6 @@
 # Andy's research universe (~30 names). Fallback if this list is dropped: FBM KLCI 30.
 # Only COMMON_STOCK and REIT. Warrants and ETFs are rejected on load.
-# yahoo_ticker is the Yahoo Finance symbol (XXXX.KL). pn17 is a visible status flag.
+# yahoo_ticker is the Yahoo Finance symbol (Bursa stock code + .KL).
 
 universe_name: andy-watchlist
 fallback: fbm-klci-30
@@ -9,7 +9,7 @@ currency: MYR
 instruments:
   - ticker: MAYBANK
     bursa_code: "1155"
-    yahoo_ticker: MAYBANK.KL
+    yahoo_ticker: "1155.KL"
     name: Malayan Banking Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -17,7 +17,7 @@ instruments:
     pn17: false
   - ticker: CIMB
     bursa_code: "1023"
-    yahoo_ticker: CIMB.KL
+    yahoo_ticker: "1023.KL"
     name: CIMB Group Holdings Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -25,7 +25,7 @@ instruments:
     pn17: false
   - ticker: PBBANK
     bursa_code: "1295"
-    yahoo_ticker: PBBANK.KL
+    yahoo_ticker: "1295.KL"
     name: Public Bank Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -33,7 +33,7 @@ instruments:
     pn17: false
   - ticker: HLBANK
     bursa_code: "5819"
-    yahoo_ticker: HLBANK.KL
+    yahoo_ticker: "5819.KL"
     name: Hong Leong Bank Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -41,7 +41,7 @@ instruments:
     pn17: false
   - ticker: RHBBANK
     bursa_code: "1066"
-    yahoo_ticker: RHBBANK.KL
+    yahoo_ticker: "1066.KL"
     name: RHB Bank Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -49,7 +49,7 @@ instruments:
     pn17: false
   - ticker: TENAGA
     bursa_code: "5347"
-    yahoo_ticker: TENAGA.KL
+    yahoo_ticker: "5347.KL"
     name: Tenaga Nasional Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -57,7 +57,7 @@ instruments:
     pn17: false
   - ticker: PCHEM
     bursa_code: "5183"
-    yahoo_ticker: PCHEM.KL
+    yahoo_ticker: "5183.KL"
     name: Petronas Chemicals Group Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -65,7 +65,7 @@ instruments:
     pn17: false
   - ticker: PETGAS
     bursa_code: "6033"
-    yahoo_ticker: PETGAS.KL
+    yahoo_ticker: "6033.KL"
     name: Petronas Gas Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -73,7 +73,7 @@ instruments:
     pn17: false
   - ticker: PETDAG
     bursa_code: "5681"
-    yahoo_ticker: PETDAG.KL
+    yahoo_ticker: "5681.KL"
     name: Petronas Dagangan Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -81,7 +81,7 @@ instruments:
     pn17: false
   - ticker: IHH
     bursa_code: "5225"
-    yahoo_ticker: IHH.KL
+    yahoo_ticker: "5225.KL"
     name: IHH Healthcare Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -89,7 +89,7 @@ instruments:
     pn17: false
   - ticker: NESTLE
     bursa_code: "4707"
-    yahoo_ticker: NESTLE.KL
+    yahoo_ticker: "4707.KL"
     name: Nestlé (Malaysia) Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -97,7 +97,7 @@ instruments:
     pn17: false
   - ticker: PMETAL
     bursa_code: "8869"
-    yahoo_ticker: PMETAL.KL
+    yahoo_ticker: "8869.KL"
     name: Press Metal Aluminium Holdings Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -105,7 +105,7 @@ instruments:
     pn17: false
   - ticker: GAMUDA
     bursa_code: "5398"
-    yahoo_ticker: GAMUDA.KL
+    yahoo_ticker: "5398.KL"
     name: Gamuda Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -113,7 +113,7 @@ instruments:
     pn17: false
   - ticker: SIME
     bursa_code: "4197"
-    yahoo_ticker: SIME.KL
+    yahoo_ticker: "4197.KL"
     name: Sime Darby Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -121,7 +121,7 @@ instruments:
     pn17: false
   - ticker: IOICORP
     bursa_code: "1961"
-    yahoo_ticker: IOICORP.KL
+    yahoo_ticker: "1961.KL"
     name: IOI Corporation Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -129,7 +129,7 @@ instruments:
     pn17: false
   - ticker: KLK
     bursa_code: "2445"
-    yahoo_ticker: KLK.KL
+    yahoo_ticker: "2445.KL"
     name: Kuala Lumpur Kepong Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -137,7 +137,7 @@ instruments:
     pn17: false
   - ticker: SDG
     bursa_code: "5285"
-    yahoo_ticker: SDG.KL
+    yahoo_ticker: "5285.KL"
     name: SD Guthrie Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -145,7 +145,7 @@ instruments:
     pn17: false
   - ticker: MISC
     bursa_code: "3816"
-    yahoo_ticker: MISC.KL
+    yahoo_ticker: "3816.KL"
     name: MISC Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -153,7 +153,7 @@ instruments:
     pn17: false
   - ticker: AXIATA
     bursa_code: "6888"
-    yahoo_ticker: AXIATA.KL
+    yahoo_ticker: "6888.KL"
     name: Axiata Group Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -161,7 +161,7 @@ instruments:
     pn17: false
   - ticker: MAXIS
     bursa_code: "6012"
-    yahoo_ticker: MAXIS.KL
+    yahoo_ticker: "6012.KL"
     name: Maxis Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -169,7 +169,7 @@ instruments:
     pn17: false
   - ticker: CDB
     bursa_code: "2836"
-    yahoo_ticker: CDB.KL
+    yahoo_ticker: "2836.KL"
     name: CelcomDigi Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -177,7 +177,7 @@ instruments:
     pn17: false
   - ticker: TM
     bursa_code: "4863"
-    yahoo_ticker: TM.KL
+    yahoo_ticker: "4863.KL"
     name: Telekom Malaysia Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -185,7 +185,7 @@ instruments:
     pn17: false
   - ticker: YTLPOWR
     bursa_code: "6742"
-    yahoo_ticker: YTLPOWR.KL
+    yahoo_ticker: "6742.KL"
     name: YTL Power International Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -193,7 +193,7 @@ instruments:
     pn17: false
   - ticker: QL
     bursa_code: "7084"
-    yahoo_ticker: QL.KL
+    yahoo_ticker: "7084.KL"
     name: QL Resources Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -201,7 +201,7 @@ instruments:
     pn17: false
   - ticker: MRDIY
     bursa_code: "5296"
-    yahoo_ticker: MRDIY.KL
+    yahoo_ticker: "5296.KL"
     name: Mr D.I.Y. Group (M) Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
@@ -209,7 +209,7 @@ instruments:
     pn17: false
   - ticker: KLCC
     bursa_code: "5235SS"
-    yahoo_ticker: KLCC.KL
+    yahoo_ticker: "5235SS.KL"
     name: KLCC Property Holdings Berhad
     instrument_type: REIT
     listing_board: MAIN
@@ -217,7 +217,7 @@ instruments:
     pn17: false
   - ticker: IGBREIT
     bursa_code: "5227"
-    yahoo_ticker: IGBREIT.KL
+    yahoo_ticker: "5227.KL"
     name: IGB Real Estate Investment Trust
     instrument_type: REIT
     listing_board: MAIN
@@ -225,7 +225,7 @@ instruments:
     pn17: false
   - ticker: AXISREIT
     bursa_code: "5106"
-    yahoo_ticker: AXISREIT.KL
+    yahoo_ticker: "5106.KL"
     name: Axis Real Estate Investment Trust
     instrument_type: REIT
     listing_board: MAIN
@@ -233,7 +233,7 @@ instruments:
     pn17: false
   - ticker: SUNREIT
     bursa_code: "5176"
-    yahoo_ticker: SUNREIT.KL
+    yahoo_ticker: "5176.KL"
     name: Sunway Real Estate Investment Trust
     instrument_type: REIT
     listing_board: MAIN
@@ -241,7 +241,7 @@ instruments:
     pn17: false
   - ticker: PAVREIT
     bursa_code: "5212"
-    yahoo_ticker: PAVREIT.KL
+    yahoo_ticker: "5212.KL"
     name: Pavilion Real Estate Investment Trust
     instrument_type: REIT
     listing_board: MAIN
