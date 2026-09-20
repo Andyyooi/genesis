@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CategoryDisclosure } from "@/components/research/category-disclosure";
+import { ExportActions } from "@/components/research/export-actions";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -109,6 +110,7 @@ export default async function ResearchPage({
             not used.
           </p>
         ) : null}
+        <ExportActions ticker={instrument.ticker} />
       </header>
 
       <section className="grid gap-3 sm:grid-cols-2">
