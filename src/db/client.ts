@@ -1,0 +1,106 @@
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import * as schema from "@/db/schema";
+
+const globalForDb = globalThis as unknown as {
+  sqlite?: Database.Database;
+};
+
+function sqlitePath() {
+  return join(process.cwd(), "data", "sqlite", "research.db");
+}
+
+function ensureSchema(sqlite: Database.Database) {
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS instruments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticker TEXT NOT NULL UNIQUE,
+      bursa_code TEXT,
+      yahoo_ticker TEXT,
+      name TEXT NOT NULL,
+      sector TEXT,
+      industry TEXT,
+      listing_board TEXT,
+      instrument_type TEXT NOT NULL,
+      pn17 INTEGER NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'MYR',
+      shariah_compliant INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS price_bars (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      instrument_id INTEGER NOT NULL REFERENCES instruments(id),
+      bar_date TEXT NOT NULL,
+      open REAL,
+      high REAL,
+      low REAL,
+      close REAL,
+      volume REAL,
+      as_of TEXT,
+      source TEXT NOT NULL,
+      adjusted INTEGER NOT NULL DEFAULT 0,
+      retrieved_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS price_bars_instrument_date_source
+      ON price_bars (instrument_id, bar_date, source);
+
+    CREATE TABLE IF NOT EXISTS financial_periods (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      instrument_id INTEGER NOT NULL REFERENCES instruments(id),
+      fiscal_year INTEGER,
+      fiscal_quarter INTEGER,
+      period_end TEXT NOT NULL,
+      available_at TEXT,
+      retrieved_at TEXT NOT NULL,
+      statement_type TEXT NOT NULL,
+      source TEXT NOT NULL,
+      actual_or_estimate TEXT NOT NULL DEFAULT 'actual',
+      line_items_json TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS financial_periods_unique
+      ON financial_periods (instrument_id, period_end, statement_type, source);
+
+    CREATE TABLE IF NOT EXISTS events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      instrument_id INTEGER REFERENCES instruments(id),
+      occurred_at TEXT,
+      available_at TEXT,
+      source TEXT,
+      source_url TEXT,
+      headline TEXT,
+      excerpt TEXT,
+      classification TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS score_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      instrument_id INTEGER NOT NULL REFERENCES instruments(id),
+      as_of TEXT NOT NULL,
+      config_hash TEXT,
+      instrument_profile TEXT,
+      research_score REAL,
+      valuation_score REAL,
+      category_scores_json TEXT,
+      coverage_json TEXT,
+      evidence_json TEXT,
+      created_at TEXT NOT NULL
+    );
+  `);
+}
+
+export function getDb() {
+  if (!globalForDb.sqlite) {
+    mkdirSync(join(process.cwd(), "data", "sqlite"), { recursive: true });
+    const sqlite = new Database(sqlitePath());
+    sqlite.pragma("journal_mode = WAL");
+    sqlite.pragma("foreign_keys = ON");
+    ensureSchema(sqlite);
+    globalForDb.sqlite = sqlite;
+  }
+  return drizzle(globalForDb.sqlite, { schema });
+}

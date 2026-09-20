@@ -1,0 +1,97 @@
+# Andy's research universe. Target size ~20–50 names; FBM KLCI 30 is the fallback.
+# Only COMMON_STOCK and REIT are allowed. Warrants and ETFs are rejected on load.
+# pn17 is a visible status/warning, never a silent score penalty.
+
+universe_name: andy-watchlist
+fallback: fbm-klci-30
+currency: MYR
+
+instruments:
+  - ticker: MAYBANK
+    bursa_code: "1155"
+    yahoo_ticker: MAYBANK.KL
+    name: Malayan Banking Berhad
+    instrument_type: COMMON_STOCK
+    listing_board: MAIN
+    sector: Financial Services
+    pn17: false
+  - ticker: CIMB
+    bursa_code: "1023"
+    yahoo_ticker: CIMB.KL
+    name: CIMB Group Holdings Berhad
+    instrument_type: COMMON_STOCK
+    listing_board: MAIN
+    sector: Financial Services
+    pn17: false
+  - ticker: PBBANK
+    bursa_code: "1295"
+    yahoo_ticker: PBBANK.KL
+    name: Public Bank Berhad
+    instrument_type: COMMON_STOCK
+    listing_board: MAIN
+    sector: Financial Services
+    pn17: false
+  - ticker: TENAGA
+    bursa_code: "5347"
+    yahoo_ticker: TENAGA.KL
+    name: Tenaga Nasional Berhad
+    instrument_type: COMMON_STOCK
+    listing_board: MAIN
+    sector: Utilities
+    pn17: false
+  - ticker: PCHEM
+    bursa_code: "5183"
+    yahoo_ticker: PCHEM.KL
+    name: Petronas Chemicals Group Berhad
+    instrument_type: COMMON_STOCK
+    listing_board: MAIN
+    sector: Energy
+    pn17: false
+  - ticker: IHH
+    bursa_code: "5225"
+    yahoo_ticker: IHH.KL
+    name: IHH Healthcare Berhad
+    instrument_type: COMMON_STOCK
+    listing_board: MAIN
+    sector: Health Care
+    pn17: false
+  - ticker: NESTLE
+    bursa_code: "4707"
+    yahoo_ticker: NESTLE.KL
+    name: Nestlé (Malaysia) Berhad
+    instrument_type: COMMON_STOCK
+    listing_board: MAIN
+    sector: Consumer Products
+    pn17: false
+  - ticker: PMETAL
+    bursa_code: "8869"
+    yahoo_ticker: PMETAL.KL
+    name: Press Metal Aluminium Holdings Berhad
+    instrument_type: COMMON_STOCK
+    listing_board: MAIN
+    sector: Industrial Products
+    pn17: false
+  - ticker: KLCC
+    bursa_code: "5235SS"
+    yahoo_ticker: KLCC.KL
+    name: KLCC Property Holdings Berhad
+    instrument_type: REIT
+    listing_board: MAIN
+    sector: Real Estate
+    pn17: false
+  - ticker: IGBREIT
+    bursa_code: "5227"
+    yahoo_ticker: IGBREIT.KL
+    name: IGB Real Estate Investment Trust
+    instrument_type: REIT
+    listing_board: MAIN
+    sector: Real Estate
+    pn17: false
+  - ticker: AXISREIT
+    bursa_code: "5106"
+    yahoo_ticker: AXISREIT.KL
+    name: Axis Real Estate Investment Trust
+    instrument_type: REIT
+    listing_board: MAIN
+    sector: Real Estate
+    pn17: false

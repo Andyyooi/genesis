@@ -1,0 +1,43 @@
+# Category and factor weights. Scoring is not implemented in Phase 1.
+# Phase 4 will load this file and fail if category weights do not sum to 100.
+
+version: 1
+currency: MYR
+
+category_weights:
+  valuation: 25
+  quality: 25
+  financial_health: 15
+  growth: 15
+  news: 10
+  technical: 10
+
+# When Phase 4 scores a live run without news/technicals data, those categories
+# are marked unavailable and remaining weights are renormalized. Not Phase 1.
+unavailable_until_data:
+  - news
+  - technical
+
+min_category_coverage: 0.5
+
+# Scoring engine later: getFactorProfile(instrument_type) → default | reit.
+# REITs must never be scored with the ordinary-company factor set.
+instrument_profiles:
+  default:
+    description: Ordinary companies (industrial, consumer, financials, etc.)
+    factor_sets:
+      valuation: []
+      quality: []
+      financial_health: []
+      growth: []
+      news: []
+      technical: []
+  reit:
+    description: Real estate investment trusts — later DPU, NAV, gearing; not industrial EV/EBITDA
+    factor_sets:
+      valuation: []
+      quality: []
+      financial_health: []
+      growth: []
+      news: []
+      technical: []
