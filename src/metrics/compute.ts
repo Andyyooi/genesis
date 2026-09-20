@@ -42,5 +42,20 @@ export function computeMetrics(args: {
     peReason,
   );
 
-  return [...fundamentals, ...prices, pe];
+  const dps = latestAnnual?.dividendPerShare ?? null;
+  const lastCloseValue = lastClose?.available ? lastClose.value : null;
+  const dividendYield = safeDivide(
+    "dividend_yield",
+    "Dividend yield",
+    dps,
+    lastCloseValue !== null && lastCloseValue > 0 ? lastCloseValue : lastCloseValue === 0 ? 0 : null,
+    "latest annual DPS / last close",
+    [
+      { name: "dividendPerShare", value: dps, period: latestAnnual?.periodEnd },
+      { name: "lastClose", value: lastCloseValue, period: lastClose?.period },
+    ],
+    pePeriod,
+  );
+
+  return [...fundamentals, ...prices, pe, dividendYield];
 }

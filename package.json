@@ -11,6 +11,7 @@
     "ingest:fundamentals": "tsx src/ingest/cli.ts fundamentals",
     "ingest:prices": "tsx src/ingest/cli.ts prices",
     "metrics": "tsx src/metrics/cli.ts",
+    "scores": "tsx src/scoring/cli.ts",
     "test": "vitest run"
   },
   "dependencies": {

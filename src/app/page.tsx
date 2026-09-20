@@ -53,11 +53,11 @@ export default function HomePage() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <header className="flex flex-col gap-2">
-        <p className="text-sm text-muted-foreground">Phase 3 · local only · English · MYR</p>
+        <p className="text-sm text-muted-foreground">Phase 4 · local only · English · MYR</p>
         <h1 className="text-3xl font-semibold tracking-tight">Bursa watchlist</h1>
         <p className="max-w-2xl text-muted-foreground">
-          Snapshots plus debug metrics — no scores. Open a ticker to inspect periods, or open
-          metrics debug (MAYBANK is the fixture). Missing inputs stay{" "}
+          Config-driven scores from snapshots. Research Score and Valuation Score are separate.
+          Open MAYBANK scores to inspect evidence. Missing inputs stay{" "}
           <span className="text-foreground">Data unavailable</span>.
         </p>
         <p className="text-sm">
@@ -68,7 +68,11 @@ export default function HomePage() {
           <Link href="/metrics/MAYBANK" className="underline underline-offset-4">
             MAYBANK metrics
           </Link>
-          <span className="text-muted-foreground"> · npm run metrics -- MAYBANK</span>
+          {" · "}
+          <Link href="/scores/MAYBANK" className="underline underline-offset-4">
+            MAYBANK scores
+          </Link>
+          <span className="text-muted-foreground"> · npm run scores -- MAYBANK</span>
         </p>
       </header>
 
@@ -143,6 +147,10 @@ export default function HomePage() {
                       <span className="mt-1 block text-xs font-sans font-normal">
                         <Link href={`/metrics/${row.ticker}`} className="text-muted-foreground underline underline-offset-4">
                           metrics
+                        </Link>
+                        {" · "}
+                        <Link href={`/scores/${row.ticker}`} className="text-muted-foreground underline underline-offset-4">
+                          scores
                         </Link>
                       </span>
                     </TableCell>

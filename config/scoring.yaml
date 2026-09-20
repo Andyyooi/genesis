@@ -1,5 +1,4 @@
-# Category and factor weights. Scoring is not implemented in Phase 1.
-# Phase 4 will load this file and fail if category weights do not sum to 100.
+# Category, factor weights, and thresholds. Scoring reads this file — not the UI.
 
 version: 1
 currency: MYR
@@ -12,32 +11,154 @@ category_weights:
   news: 10
   technical: 10
 
-# When Phase 4 scores a live run without news/technicals data, those categories
-# are marked unavailable and remaining weights are renormalized. Not Phase 1.
+# Live runs mark these unavailable and renormalize the other category weights.
+# Configured 10%+10% is still shown as "not in this run".
 unavailable_until_data:
   - news
   - technical
 
 min_category_coverage: 0.5
 
-# Scoring engine later: getFactorProfile(instrument_type) → default | reit.
-# REITs must never be scored with the ordinary-company factor set.
+# Potential Concerns never change the Research Score unless this is true.
+concerns:
+  apply_score_penalty: false
+  rules:
+    - id: falling_revenue
+      label: Falling revenue
+      metric: revenue_cagr
+      when: value_lt
+      threshold: 0
+      message: Revenue CAGR over the stored annual window is negative.
+    - id: falling_earnings
+      label: Falling earnings
+      metric: pat_cagr
+      when: value_lt
+      threshold: 0
+      message: PAT CAGR over the stored annual window is negative.
+    - id: expensive_pe
+      label: Demanding P/E
+      metric: price_to_earnings
+      when: value_gt
+      threshold: 22
+      message: Price / EPS is above the configured expensive threshold.
+    - id: weak_fcf
+      label: Weak free cash flow
+      metric: fcf
+      when: value_lt
+      threshold: 0
+      message: Latest annual FCF is negative. Missing FCF does not trigger this.
+    - id: pn17
+      label: PN17 / higher risk status
+      when: instrument_pn17
+      message: This name is flagged PN17 in the universe (status warning, not a score penalty).
+
 instrument_profiles:
   default:
     description: Ordinary companies (industrial, consumer, financials, etc.)
     factor_sets:
-      valuation: []
-      quality: []
-      financial_health: []
-      growth: []
+      valuation:
+        - id: pe
+          metric: price_to_earnings
+          label: Price / EPS
+          weight: 60
+          direction: lower_better
+          worse: 25
+          better: 8
+        - id: dividend_yield
+          metric: dividend_yield
+          label: Dividend yield
+          weight: 40
+          direction: higher_better
+          worse: 0.02
+          better: 0.06
+      quality:
+        - id: roe
+          metric: roe
+          label: ROE
+          weight: 55
+          direction: higher_better
+          worse: 0.05
+          better: 0.18
+        - id: net_margin
+          metric: net_margin
+          label: Net margin
+          weight: 45
+          direction: higher_better
+          worse: 0.05
+          better: 0.25
+      financial_health:
+        - id: debt_to_equity
+          metric: debt_to_equity
+          label: Debt / equity
+          weight: 40
+          direction: lower_better
+          worse: 2
+          better: 0.3
+        - id: fcf
+          metric: fcf
+          label: Free cash flow
+          weight: 35
+          direction: higher_better
+          worse: 0
+          better: 1
+        - id: net_debt_to_ebitda
+          metric: net_debt_to_ebitda
+          label: Net debt / EBITDA
+          weight: 25
+          direction: lower_better
+          worse: 4
+          better: 1
+      growth:
+        - id: revenue_cagr
+          metric: revenue_cagr
+          label: Revenue CAGR
+          weight: 50
+          direction: higher_better
+          worse: 0
+          better: 0.12
+        - id: pat_cagr
+          metric: pat_cagr
+          label: PAT CAGR
+          weight: 50
+          direction: higher_better
+          worse: 0
+          better: 0.12
       news: []
       technical: []
   reit:
-    description: Real estate investment trusts — later DPU, NAV, gearing; not industrial EV/EBITDA
+    description: Real estate investment trusts — DPU/NAV/gearing later; not industrial FCF or EV/EBITDA
     factor_sets:
-      valuation: []
-      quality: []
-      financial_health: []
-      growth: []
+      valuation:
+        - id: dpu_yield
+          metric: dividend_yield
+          label: Distribution yield (DPS / price)
+          weight: 100
+          direction: higher_better
+          worse: 0.03
+          better: 0.07
+      quality:
+        - id: dpu_stability
+          metric: dpu_cagr
+          label: DPU CAGR
+          weight: 100
+          direction: higher_better
+          worse: 0
+          better: 0.08
+      financial_health:
+        - id: gearing
+          metric: reit_gearing
+          label: REIT gearing
+          weight: 100
+          direction: lower_better
+          worse: 0.5
+          better: 0.25
+      growth:
+        - id: revenue_cagr
+          metric: revenue_cagr
+          label: Revenue CAGR
+          weight: 100
+          direction: higher_better
+          worse: 0
+          better: 0.08
       news: []
       technical: []

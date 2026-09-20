@@ -1,6 +1,6 @@
-# Bursa research (Phase 3)
+# Bursa research (Phase 4)
 
-Personal Malaysian equity research tool for Andy Yooi. **Phase 3:** snapshot metrics (no scores). No opportunity scanner, research-page product UI, news, alerts, AI, or export.
+Personal Malaysian equity research tool for Andy Yooi. **Phase 4:** config-driven Research Score + Valuation Score. Not the full research page, scanner, news, alerts, AI, or export.
 
 ## Run locally
 
@@ -11,20 +11,21 @@ npm run dev
 
 Open [http://127.0.0.1:43147](http://127.0.0.1:43147).
 
-## Metrics (Phase 3)
+## Scores
 
 ```bash
 npm test
-npm run metrics -- MAYBANK
+npm run scores -- MAYBANK
 ```
 
-Debug page: [/metrics/MAYBANK](http://127.0.0.1:43147/metrics/MAYBANK)
+Debug page: [/scores/MAYBANK](http://127.0.0.1:43147/scores/MAYBANK)
 
-Functions live in `src/metrics/` and only read stored SQLite snapshots. Missing inputs stay **Data unavailable** (never zero). REITs skip industrial FCF/leverage formulas.
+Weights, thresholds, and factor sets live in `config/scoring.yaml`. Change a number there and re-run — scores change without code edits. News and technical stay **not in this run**; remaining category weights are renormalized. Unavailable factors are omitted (never zero). Potential Concerns are listed separately and do not change the Research Score.
 
-## Import data (Phase 2)
+## Metrics and ingest
 
 ```bash
+npm run metrics -- MAYBANK
 npm run ingest:fundamentals -- data/raw/fundamentals-sample.csv
 npm run ingest:prices
 ```

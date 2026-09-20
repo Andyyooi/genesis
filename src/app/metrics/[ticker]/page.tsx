@@ -47,7 +47,11 @@ export default async function MetricsDebugPage({
         <Link href={`/inspect/${data.instrument.ticker}`} className="underline underline-offset-4">
           Snapshots
         </Link>
-        <span className="text-muted-foreground"> · metrics debug (no scores)</span>
+        {" · "}
+        <Link href={`/scores/${data.instrument.ticker}`} className="underline underline-offset-4">
+          Scores
+        </Link>
+        <span className="text-muted-foreground"> · metrics debug</span>
       </p>
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">

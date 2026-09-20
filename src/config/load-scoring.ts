@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { parse } from "yaml";
 import { z } from "zod";
 
-const categoryKeys = [
+export const CATEGORY_KEYS = [
   "valuation",
   "quality",
   "financial_health",
@@ -12,18 +12,39 @@ const categoryKeys = [
   "technical",
 ] as const;
 
+export type CategoryKey = (typeof CATEGORY_KEYS)[number];
+
+const factorSchema = z.object({
+  id: z.string().min(1),
+  metric: z.string().min(1),
+  label: z.string().min(1),
+  weight: z.number().positive(),
+  direction: z.enum(["higher_better", "lower_better"]),
+  worse: z.number(),
+  better: z.number(),
+});
+
 const factorSetsSchema = z.object({
-  valuation: z.array(z.unknown()),
-  quality: z.array(z.unknown()),
-  financial_health: z.array(z.unknown()),
-  growth: z.array(z.unknown()),
-  news: z.array(z.unknown()),
-  technical: z.array(z.unknown()),
+  valuation: z.array(factorSchema),
+  quality: z.array(factorSchema),
+  financial_health: z.array(factorSchema),
+  growth: z.array(factorSchema),
+  news: z.array(factorSchema),
+  technical: z.array(factorSchema),
 });
 
 const instrumentProfileSchema = z.object({
   description: z.string(),
   factor_sets: factorSetsSchema,
+});
+
+const concernRuleSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  message: z.string(),
+  metric: z.string().optional(),
+  when: z.enum(["value_lt", "value_gt", "instrument_pn17"]),
+  threshold: z.number().optional(),
 });
 
 const scoringSchema = z
@@ -38,8 +59,12 @@ const scoringSchema = z
       news: z.number(),
       technical: z.number(),
     }),
-    unavailable_until_data: z.array(z.enum(categoryKeys)),
+    unavailable_until_data: z.array(z.enum(CATEGORY_KEYS)),
     min_category_coverage: z.number().min(0).max(1),
+    concerns: z.object({
+      apply_score_penalty: z.boolean(),
+      rules: z.array(concernRuleSchema),
+    }),
     instrument_profiles: z.object({
       default: instrumentProfileSchema,
       reit: instrumentProfileSchema,
@@ -54,9 +79,26 @@ const scoringSchema = z
         path: ["category_weights"],
       });
     }
+    for (const profileName of ["default", "reit"] as const) {
+      const sets = value.instrument_profiles[profileName].factor_sets;
+      for (const key of CATEGORY_KEYS) {
+        const factors = sets[key];
+        if (factors.length === 0) continue;
+        const factorSum = factors.reduce((a, f) => a + f.weight, 0);
+        if (Math.abs(factorSum - 100) > 0.001) {
+          ctx.addIssue({
+            code: "custom",
+            message: `${profileName}.${key} factor weights must sum to 100 (got ${factorSum})`,
+            path: ["instrument_profiles", profileName, "factor_sets", key],
+          });
+        }
+      }
+    }
   });
 
 export type ScoringConfig = z.infer<typeof scoringSchema>;
+export type FactorConfig = z.infer<typeof factorSchema>;
+export type ConcernRule = z.infer<typeof concernRuleSchema>;
 
 export function loadScoringConfig(rootDir = process.cwd()): ScoringConfig {
   const path = join(rootDir, "config", "scoring.yaml");
@@ -64,7 +106,6 @@ export function loadScoringConfig(rootDir = process.cwd()): ScoringConfig {
   return scoringSchema.parse(raw);
 }
 
-/** Phase 4 will call this instead of always using the industrial template. */
 export function getFactorProfile(
   config: ScoringConfig,
   instrumentType: "COMMON_STOCK" | "REIT",
@@ -72,4 +113,8 @@ export function getFactorProfile(
   return instrumentType === "REIT"
     ? config.instrument_profiles.reit
     : config.instrument_profiles.default;
+}
+
+export function profileName(instrumentType: "COMMON_STOCK" | "REIT"): "default" | "reit" {
+  return instrumentType === "REIT" ? "reit" : "default";
 }
