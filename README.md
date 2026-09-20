@@ -9,7 +9,28 @@ npm install
 npm run dev
 ```
 
-Open [http://127.0.0.1:43147](http://127.0.0.1:43147).
+Binds **0.0.0.0:43147**. Open [http://127.0.0.1:43147](http://127.0.0.1:43147).
+
+### Keep the preview up (restarts if Next exits)
+
+```bash
+npm run dev:persist
+```
+
+That is a small bash loop around `npm run dev`. It writes `data/.dev-persist.pid`. Confirm it is up:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:43147/
+cat data/.dev-persist.pid
+```
+
+Stop:
+
+```bash
+kill "$(cat data/.dev-persist.pid)"
+```
+
+Or `Ctrl-C` if it is in the foreground. Do not start a second persist while one is already bound to 43147.
 
 - [Dashboard](http://127.0.0.1:43147) — watchlists, Shariah/REIT/board/cap filters
 - [Alerts](http://127.0.0.1:43147/alerts)

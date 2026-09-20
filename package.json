@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1 --port 43147",
+    "dev": "next dev --hostname 0.0.0.0 --port 43147",
+    "dev:persist": "bash scripts/dev-persist.sh",
     "build": "next build",
-    "start": "next start --hostname 127.0.0.1 --port 43147",
+    "start": "next start --hostname 0.0.0.0 --port 43147",
     "lint": "eslint",
     "ingest": "tsx src/ingest/cli.ts all",
     "ingest:fundamentals": "tsx src/ingest/cli.ts fundamentals",

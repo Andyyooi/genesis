@@ -40,6 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# persist helper pid
+/data/.dev-persist.pid
+
 # local SQLite (keep the folder)
 /data/sqlite/*.db
 /data/sqlite/*.db-*
