@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bursa research — watchlist",
-  description: "Personal Malaysian equity research tool. Phase 2: CSV and Yahoo ingest.",
+  title: "Bursa research — dashboard",
+  description: "Personal Malaysian equity research. Phase 7: watchlist dashboard and thin opportunity filters.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

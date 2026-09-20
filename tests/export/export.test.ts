@@ -45,6 +45,13 @@ function wrap(
       currency: "MYR",
     },
     score,
+    dates: {
+      score_as_of: score.asOf,
+      last_trade_date: "2026-09-18",
+      fundamentals_period: "2024-12-31",
+      lag_note:
+        "Stored annual fundamentals end 2024-12-31 (FY2024). Price as-of / last trade is 2026-09-18. Score run date is not a new filing year.",
+    },
     metrics,
     financial_periods: [
       {
@@ -100,6 +107,8 @@ describe("ChatGPT export", () => {
     expect(md).toMatch(/actual_or_estimate: actual/);
     expect(md).toMatch(/source: csv-sample/);
     expect(md).toMatch(/available_at: 2025-02-28/);
+    expect(md).toMatch(/fundamentals period/);
+    expect(md).toMatch(/price as-of \/ last trade/);
     expect(md).toMatch(/instrument_type/);
     expect(md).toMatch(/Data unavailable/);
     expect(md).not.toMatch(/\bBUY\b/);

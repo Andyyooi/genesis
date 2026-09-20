@@ -1,6 +1,6 @@
-# Bursa research (Phase 6)
+# Bursa research (Phase 7)
 
-Personal Malaysian equity research tool for Andy Yooi. **Phase 6:** ChatGPT export from the stock research page (Quick Markdown, Full Markdown, Raw JSON + CSV). Not dashboard/scanner, news ingest, alerts, in-app AI, or backtesting.
+Personal Malaysian equity research tool for Andy Yooi. **Phase 7:** watchlist dashboard and thin opportunity filters. Not news ingest, alerts, in-app AI, or backtesting.
 
 ## Run locally
 
@@ -11,21 +11,15 @@ npm run dev
 
 Open [http://127.0.0.1:43147](http://127.0.0.1:43147).
 
-Research pages with export:
+- Dashboard: [http://127.0.0.1:43147](http://127.0.0.1:43147)
+- Research lists: `/?list=undervalued`, `quality`, `quality-value`, `improving`, `discounted`, `catalyst`
+- [MAYBANK](http://127.0.0.1:43147/stock/MAYBANK) · [KLCC (REIT)](http://127.0.0.1:43147/stock/KLCC)
 
-- [MAYBANK](http://127.0.0.1:43147/stock/MAYBANK)
-- [KLCC (REIT)](http://127.0.0.1:43147/stock/KLCC)
+Click a dashboard row to open the research page. Lists are research filters, not buy orders.
 
-Use **Export for ChatGPT** on the page (download or copy). Direct routes:
+**Data lag:** stored sample fundamentals are FY2024. A score run dated 2026 does not mean FY2025/FY2026 numbers exist. The dashboard, research page, and exports show **fundamentals period** and **price as-of / last trade**.
 
-| Kind | Route | File |
-| --- | --- | --- |
-| Quick report | `/export/MAYBANK/quick` | `MAYBANK-quick.md` |
-| Full research report | `/export/MAYBANK/full` | `MAYBANK-full.md` |
-| Raw JSON | `/export/MAYBANK/json` | `MAYBANK-raw.json` |
-| Tables CSV | `/export/MAYBANK/csv` | `MAYBANK-tables.csv` |
-
-The Full report includes factor **evidence**, category **coverage**, financials with dates/sources, actual vs estimate, and labels missing values as unavailable. It does not use BUY/SELL language. REIT tickers export the **reit** scoring profile, not industrial FCF/EV/EBITDA factors.
+Export routes (unchanged): `/export/MAYBANK/quick|full|json|csv`.
 
 ```bash
 npm test
@@ -39,6 +33,7 @@ npm test
 {
   schema, disclaimer,
   instrument: { ticker, name, instrument_type (COMMON_STOCK | REIT), bursa_code, sector, pn17, currency },
+  dates: { score_as_of, last_trade_date, fundamentals_period, lag_note },
   score: ScoreResult {
     asOf, configHash, profile (default | reit),
     researchScore, valuationScore,

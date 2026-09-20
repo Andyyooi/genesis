@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DataLagBanner } from "@/components/research/data-lag-banner";
 import { loadScoreHistory } from "@/db/queries";
 import type { LineItems } from "@/ingest/types";
 import { formatMetricValue } from "@/lib/format-metric";
@@ -27,6 +28,7 @@ import {
   scoreNarrative,
   strongestPositives,
 } from "@/lib/research-copy";
+import { buildSnapshotDates, latestAnnualPeriod } from "@/lib/snapshot-dates";
 import type { MetricValue } from "@/metrics/types";
 import { scoreTicker } from "@/scoring/run-ticker";
 
@@ -67,6 +69,11 @@ export default async function ResearchPage({
   const history = loadScoreHistory(instrument.id, 8);
   const lastClose = metricById(metrics, "last_close");
   const lastTrade = metricById(metrics, "last_trade_date");
+  const snapshotDates = buildSnapshotDates({
+    scoreAsOf: result.asOf,
+    lastTradeDate: lastTrade?.period ?? null,
+    fundamentalsPeriod: latestAnnualPeriod(periods),
+  });
   const positives = strongestPositives(result);
   const annuals = periods.filter((p) => p.statementType === "annual").slice(0, 6);
   const closes = bars.map((b) => b.close).filter((n): n is number => n !== null);
@@ -79,7 +86,7 @@ export default async function ResearchPage({
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6">
       <p className="text-sm text-muted-foreground">
         <Link href="/" className="text-foreground underline underline-offset-4">
-          Watchlist
+          Dashboard
         </Link>
         <span> · research page · not a buy or sell</span>
       </p>
@@ -103,6 +110,7 @@ export default async function ResearchPage({
             last trade {lastTrade?.period ?? "Data unavailable"}
           </span>
         </p>
+        <DataLagBanner dates={snapshotDates} />
         {isReit ? (
           <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
             Scored with the <span className="font-medium">REIT factor profile</span> (distribution

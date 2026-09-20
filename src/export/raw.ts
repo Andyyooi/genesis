@@ -16,6 +16,7 @@ export function buildTablesCsv(payload: ExportPayload): string {
   const lines: string[] = [];
   lines.push(row(["table", "instrument_type", "profile", "ticker"]));
   lines.push(row(["meta", payload.instrument.instrument_type, payload.score.profile, payload.instrument.ticker]));
+  lines.push(row(["dates", payload.dates.fundamentals_period, payload.dates.last_trade_date, payload.dates.score_as_of]));
   lines.push("");
   lines.push(
     row([

@@ -27,7 +27,11 @@ export function buildFullMarkdown(payload: ExportPayload): string {
     `| Currency | ${instrument.currency} |`,
     `| PN17 status | ${instrument.pn17 ? "Yes — higher-risk warning, not a silent score penalty" : "No"} |`,
     `| asOf | ${score.asOf} |`,
+    `| fundamentals period | ${unavailableLabel(payload.dates.fundamentals_period)} |`,
+    `| price as-of / last trade | ${unavailableLabel(payload.dates.last_trade_date)} |`,
     `| config hash | ${score.configHash} |`,
+    "",
+    payload.dates.lag_note,
     "",
   ];
 
