@@ -44,6 +44,10 @@ export default async function MetricsDebugPage({
           Watchlist
         </Link>
         {" · "}
+        <Link href={`/stock/${data.instrument.ticker}`} className="underline underline-offset-4">
+          Research
+        </Link>
+        {" · "}
         <Link href={`/inspect/${data.instrument.ticker}`} className="underline underline-offset-4">
           Snapshots
         </Link>

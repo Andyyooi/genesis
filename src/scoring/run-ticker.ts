@@ -28,6 +28,9 @@ export function scoreTicker(ticker: string, persist = true) {
     name: data.instrument.name,
     instrumentType,
     pn17: data.instrument.pn17,
+    instrument: data.instrument,
+    periods: data.periods,
+    bars: data.bars,
     metrics,
     result,
   };

@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, max } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { financialPeriods, ingestReports, instruments, priceBars } from "@/db/schema";
+import { financialPeriods, ingestReports, instruments, priceBars, scoreRuns } from "@/db/schema";
 import { seedUniverseFromYaml } from "@/db/seed";
 
 export type WatchlistRow = {
@@ -121,4 +121,21 @@ export function loadLatestIngestReports() {
     .orderBy(desc(ingestReports.id))
     .get();
   return { fundamentals, prices };
+}
+
+export function loadScoreHistory(instrumentId: number, limit = 8) {
+  const db = getDb();
+  return db
+    .select({
+      asOf: scoreRuns.asOf,
+      createdAt: scoreRuns.createdAt,
+      researchScore: scoreRuns.researchScore,
+      valuationScore: scoreRuns.valuationScore,
+      configHash: scoreRuns.configHash,
+    })
+    .from(scoreRuns)
+    .where(eq(scoreRuns.instrumentId, instrumentId))
+    .orderBy(desc(scoreRuns.id))
+    .limit(limit)
+    .all();
 }

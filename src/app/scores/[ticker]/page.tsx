@@ -40,10 +40,14 @@ export default async function ScoresDebugPage({
           Watchlist
         </Link>
         {" · "}
+        <Link href={`/stock/${scored.ticker}`} className="underline underline-offset-4">
+          Research
+        </Link>
+        {" · "}
         <Link href={`/metrics/${scored.ticker}`} className="underline underline-offset-4">
           Metrics
         </Link>
-        <span className="text-muted-foreground"> · score debug (not the research page)</span>
+        <span className="text-muted-foreground"> · score debug</span>
       </p>
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">

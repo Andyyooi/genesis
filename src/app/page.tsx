@@ -53,26 +53,24 @@ export default function HomePage() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <header className="flex flex-col gap-2">
-        <p className="text-sm text-muted-foreground">Phase 4 · local only · English · MYR</p>
+        <p className="text-sm text-muted-foreground">Phase 5 · local only · English · MYR</p>
         <h1 className="text-3xl font-semibold tracking-tight">Bursa watchlist</h1>
         <p className="max-w-2xl text-muted-foreground">
-          Config-driven scores from snapshots. Research Score and Valuation Score are separate.
-          Open MAYBANK scores to inspect evidence. Missing inputs stay{" "}
-          <span className="text-foreground">Data unavailable</span>.
+          Open a company research page to see why a Research Score and a Valuation Score differ.
+          Missing inputs stay Data unavailable. This is not a buy or sell list.
         </p>
         <p className="text-sm">
+          <Link href="/stock/MAYBANK" className="underline underline-offset-4">
+            MAYBANK research
+          </Link>
+          {" · "}
+          <Link href="/stock/KLCC" className="underline underline-offset-4">
+            KLCC REIT research
+          </Link>
+          {" · "}
           <Link href="/ingest" className="underline underline-offset-4">
             Import report
           </Link>
-          {" · "}
-          <Link href="/metrics/MAYBANK" className="underline underline-offset-4">
-            MAYBANK metrics
-          </Link>
-          {" · "}
-          <Link href="/scores/MAYBANK" className="underline underline-offset-4">
-            MAYBANK scores
-          </Link>
-          <span className="text-muted-foreground"> · npm run scores -- MAYBANK</span>
         </p>
       </header>
 
@@ -141,7 +139,7 @@ export default function HomePage() {
                 {rows.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-mono font-medium">
-                      <Link href={`/inspect/${row.ticker}`} className="underline underline-offset-4">
+                      <Link href={`/stock/${row.ticker}`} className="underline underline-offset-4">
                         {row.ticker}
                       </Link>
                       <span className="mt-1 block text-xs font-sans font-normal">
@@ -157,7 +155,11 @@ export default function HomePage() {
                     <TableCell className="hidden font-mono text-muted-foreground sm:table-cell">
                       {row.bursaCode ?? "—"}
                     </TableCell>
-                    <TableCell>{row.name}</TableCell>
+                    <TableCell>
+                      <Link href={`/stock/${row.ticker}`} className="underline underline-offset-4">
+                        {row.name}
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       <Badge variant={row.instrumentType === "REIT" ? "secondary" : "outline"}>
                         {row.instrumentType === "REIT" ? "REIT" : "Common stock"}

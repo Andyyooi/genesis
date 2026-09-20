@@ -1,6 +1,6 @@
-# Bursa research (Phase 4)
+# Bursa research (Phase 5)
 
-Personal Malaysian equity research tool for Andy Yooi. **Phase 4:** config-driven Research Score + Valuation Score. Not the full research page, scanner, news, alerts, AI, or export.
+Personal Malaysian equity research tool for Andy Yooi. **Phase 5:** stock research page (English, MYR). Not export, scanner, news ingest, alerts, AI, or backtesting.
 
 ## Run locally
 
@@ -11,21 +11,13 @@ npm run dev
 
 Open [http://127.0.0.1:43147](http://127.0.0.1:43147).
 
-## Scores
+Research pages:
+
+- [MAYBANK](http://127.0.0.1:43147/stock/MAYBANK)
+- [KLCC (REIT)](http://127.0.0.1:43147/stock/KLCC)
+
+Click a category, then a factor, to see inputs, formula, and period. Scores come from `config/scoring.yaml`. Missing data stays **Data unavailable**.
 
 ```bash
 npm test
-npm run scores -- MAYBANK
-```
-
-Debug page: [/scores/MAYBANK](http://127.0.0.1:43147/scores/MAYBANK)
-
-Weights, thresholds, and factor sets live in `config/scoring.yaml`. Change a number there and re-run — scores change without code edits. News and technical stay **not in this run**; remaining category weights are renormalized. Unavailable factors are omitted (never zero). Potential Concerns are listed separately and do not change the Research Score.
-
-## Metrics and ingest
-
-```bash
-npm run metrics -- MAYBANK
-npm run ingest:fundamentals -- data/raw/fundamentals-sample.csv
-npm run ingest:prices
 ```
