@@ -1,4 +1,5 @@
 import { getSqlite } from "@/db/client";
+import { historicalValuationStatus, type HistoricalValuationStatus } from "@/db/point-in-time";
 import type { LineItems } from "@/ingest/types";
 import type { MetricValue, PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
 import type { ResearchProfile } from "@/research/profiles";
@@ -45,6 +46,7 @@ export type ValuationContextBlock = {
   metrics: ContextMetricStats[];
   confidenceLevel: DataConfidence["level"] | null;
   freshness: DataCoverage["freshness"] | null;
+  historicalValuationStatus: HistoricalValuationStatus;
 };
 
 export type ValuationContextResult = {
@@ -138,6 +140,7 @@ export function emptyValuationContext(reason: string): ValuationContextResult {
     metrics: [],
     confidenceLevel: null,
     freshness: null,
+    historicalValuationStatus: "UNAVAILABLE",
   });
   return { historical: block("historical"), peer: block("peer") };
 }
@@ -470,6 +473,13 @@ export function buildValuationContext(args: {
   const histLimitation = hist.lookAheadSafe
     ? "Historical series uses price on or before each filing’s available_at with that period’s line items."
     : PERIOD_END_LIMITATION;
+  const histStatus = historicalValuationStatus({
+    pointCount: hist.points.length,
+    allPointsHaveAvailableAt: hist.lookAheadSafe,
+  });
+  histFacts.unshift(
+    `Historical valuation status: ${histStatus}${histStatus === "PERIOD_END_ONLY" ? " — period-end price vs that period’s earnings; not look-ahead-safe." : histStatus === "POINT_IN_TIME_SAFE" ? " — prices aligned to available_at." : "."}`,
+  );
   if (histLabel === "UNAVAILABLE") {
     histFacts.unshift(
       `Historical context is unavailable: need at least ${MIN_HISTORICAL_POINTS} period-end points per voting metric overlapping stored prices.`,
@@ -534,6 +544,7 @@ export function buildValuationContext(args: {
       metrics: historicalMetrics,
       confidenceLevel: args.dataConfidence?.level ?? null,
       freshness: args.dataCoverage?.freshness ?? null,
+      historicalValuationStatus: histStatus,
     },
     peer: {
       kind: "peer",
@@ -546,6 +557,7 @@ export function buildValuationContext(args: {
       metrics: peerMetrics,
       confidenceLevel: args.dataConfidence?.level ?? null,
       freshness: args.dataCoverage?.freshness ?? null,
+      historicalValuationStatus: "UNAVAILABLE",
     },
   };
 }

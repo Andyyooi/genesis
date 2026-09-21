@@ -100,6 +100,7 @@ describe("valuation context", () => {
       peers: Array.from({ length: 10 }, (_, i) => peer({ ticker: `P${i}`, lastClose: 12, eps: 1 })),
     });
     expect(ctx.historical.lookAheadSafe).toBe(false);
+    expect(ctx.historical.historicalValuationStatus).toBe("PERIOD_END_ONLY");
     expect(ctx.historical.limitation).toMatch(/filing date unknown/i);
     expect(ctx.historical.limitation).toMatch(/not look-ahead-safe/i);
     expect(JSON.stringify(ctx)).not.toMatch(/\bBUY\b/);
@@ -122,6 +123,16 @@ describe("valuation context", () => {
     const { points, lookAheadSafe } = buildHistoricalPoints(periods, bars);
     expect(lookAheadSafe).toBe(true);
     expect(points.every((p) => p.close === 10)).toBe(true);
+    const ctx = buildValuationContext({
+      ticker: "FOOD",
+      researchProfile: "GENERAL",
+      industry: "Packaged Foods",
+      periods,
+      bars,
+      metrics: [metric("last_close", 10), metric("price_to_earnings", 10)],
+      peers: Array.from({ length: 10 }, (_, i) => peer({ ticker: `P${i}` })),
+    });
+    expect(ctx.historical.historicalValuationStatus).toBe("POINT_IN_TIME_SAFE");
   });
 
   it("marks historical UNAVAILABLE when overlapping prices are thinner than the sample rule", () => {
@@ -137,6 +148,7 @@ describe("valuation context", () => {
     });
     expect(ctx.historical.metrics[0]?.sampleSize).toBeLessThan(MIN_HISTORICAL_POINTS);
     expect(ctx.historical.label).toBe("UNAVAILABLE");
+    expect(ctx.historical.historicalValuationStatus).toBe("PERIOD_END_ONLY");
   });
 
   it("does not invent a peer median for empty industry or a tiny sample", () => {

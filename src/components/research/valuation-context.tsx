@@ -24,6 +24,9 @@ export function ValuationContextCard({ block }: { block: ValuationContextBlock }
         <CardTitle className="flex flex-wrap items-center gap-2">
           {title}
           <Badge variant={badgeVariant(block.label)}>{formatContextHeadline(block.label)}</Badge>
+          {block.kind === "historical" ? (
+            <Badge variant="outline">{block.historicalValuationStatus.replaceAll("_", " ")}</Badge>
+          ) : null}
         </CardTitle>
         <CardDescription>{blurb}</CardDescription>
       </CardHeader>
@@ -36,7 +39,8 @@ export function ValuationContextCard({ block }: { block: ValuationContextBlock }
           <p className="text-muted-foreground">Series uses filing dates (available_at) for price alignment.</p>
         ) : block.kind === "historical" ? (
           <p className="text-muted-foreground">
-            Look-ahead-safe point-in-time P/E is not claimed — filing dates are not stored.
+            Status {block.historicalValuationStatus.replaceAll("_", " ")}. Look-ahead-safe
+            point-in-time P/E is only claimed when every series point has available_at.
           </p>
         ) : null}
         <p className="text-muted-foreground">

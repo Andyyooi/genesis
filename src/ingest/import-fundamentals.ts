@@ -1,9 +1,11 @@
 import { refreshAlertsForTicker } from "@/alerts/refresh";
 import { readFileSync } from "node:fs";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { financialPeriods, ingestReports, instruments } from "@/db/schema";
+import { availabilityPatch } from "@/ingest/persist-annual-period";
 import { seedUniverseFromYaml } from "@/db/seed";
+import { mergeLineItems, parseLineItemsJson } from "@/ingest/merge-line-items";
 import { parseFundamentalsCsv } from "@/ingest/providers/csv-fundamentals";
 import type { FundamentalsImportReport, RejectedRow } from "@/ingest/types";
 
@@ -33,36 +35,76 @@ export function importFundamentalsCsv(filePath: string): FundamentalsImportRepor
       continue;
     }
 
-    db.insert(financialPeriods)
-      .values({
-        instrumentId: instrument.id,
-        fiscalYear: row.fiscalYear,
-        fiscalQuarter: row.fiscalQuarter,
-        periodEnd: row.periodEnd,
-        availableAt: row.availableAt,
-        retrievedAt,
-        statementType: row.statementType,
-        source: row.source,
-        actualOrEstimate: row.actualOrEstimate,
-        lineItemsJson: JSON.stringify(row.lineItems),
-      })
-      .onConflictDoUpdate({
-        target: [
-          financialPeriods.instrumentId,
-          financialPeriods.periodEnd,
-          financialPeriods.statementType,
-          financialPeriods.source,
-        ],
-        set: {
-          fiscalYear: row.fiscalYear,
-          fiscalQuarter: row.fiscalQuarter,
-          availableAt: row.availableAt,
+    const existing = db
+      .select()
+      .from(financialPeriods)
+      .where(
+        and(
+          eq(financialPeriods.instrumentId, instrument.id),
+          eq(financialPeriods.periodEnd, row.periodEnd),
+          eq(financialPeriods.statementType, row.statementType),
+          eq(financialPeriods.source, row.source),
+        ),
+      )
+      .get();
+
+    const incomingDates = {
+      availableAt: row.availableAt ?? row.filingDate,
+      filingDate: row.filingDate ?? row.availableAt,
+      availableAtSource: row.availableAt || row.filingDate ? "csv" : null,
+      fiscalYear: row.fiscalYear,
+      fiscalQuarter: row.fiscalQuarter,
+    };
+
+    if (existing) {
+      const merged = mergeLineItems(parseLineItemsJson(existing.lineItemsJson), row.lineItems);
+      const dates = availabilityPatch(existing, incomingDates);
+      db.update(financialPeriods)
+        .set({
+          fiscalYear: existing.fiscalYear ?? row.fiscalYear,
+          fiscalQuarter: existing.fiscalQuarter ?? row.fiscalQuarter,
+          fiscalPeriod: dates.fiscalPeriod,
+          availableAt: dates.availableAt,
+          filingDate: dates.filingDate,
+          availableAtSource: dates.availableAtSource,
           retrievedAt,
           actualOrEstimate: row.actualOrEstimate,
-          lineItemsJson: JSON.stringify(row.lineItems),
+          lineItemsJson: JSON.stringify(merged),
+        })
+        .where(eq(financialPeriods.id, existing.id))
+        .run();
+    } else {
+      const dates = availabilityPatch(
+        {
+          availableAt: null,
+          filingDate: null,
+          availableAtSource: null,
+          fiscalPeriod: null,
+          fiscalYear: row.fiscalYear,
+          fiscalQuarter: row.fiscalQuarter,
+          periodEnd: row.periodEnd,
+          statementType: row.statementType,
         },
-      })
-      .run();
+        incomingDates,
+      );
+      db.insert(financialPeriods)
+        .values({
+          instrumentId: instrument.id,
+          fiscalYear: row.fiscalYear,
+          fiscalQuarter: row.fiscalQuarter,
+          fiscalPeriod: dates.fiscalPeriod,
+          periodEnd: row.periodEnd,
+          availableAt: dates.availableAt,
+          filingDate: dates.filingDate,
+          availableAtSource: dates.availableAtSource,
+          retrievedAt,
+          statementType: row.statementType,
+          source: row.source,
+          actualOrEstimate: row.actualOrEstimate,
+          lineItemsJson: JSON.stringify(row.lineItems),
+        })
+        .run();
+    }
     upserted += 1;
   }
 

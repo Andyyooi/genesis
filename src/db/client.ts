@@ -166,6 +166,9 @@ function ensureSchema(sqlite: Database.Database) {
   addColumn(sqlite, "instruments", "research_profile", "TEXT");
   addColumn(sqlite, "score_runs", "research_profile", "TEXT");
   addColumn(sqlite, "score_runs", "valuation_context_json", "TEXT");
+  addColumn(sqlite, "financial_periods", "fiscal_period", "TEXT");
+  addColumn(sqlite, "financial_periods", "filing_date", "TEXT");
+  addColumn(sqlite, "financial_periods", "available_at_source", "TEXT");
   sqlite.exec(
     "UPDATE instruments SET watchlist = 1 WHERE watchlist IS NULL OR (watchlist = 0 AND universe_source IS NULL)",
   );

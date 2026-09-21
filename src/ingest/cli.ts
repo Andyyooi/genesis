@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { fillYahooAvailableAt } from "./fill-available-at";
 import { importAnnouncementsCsv } from "./import-announcements";
 import { importFundamentalsCsv } from "./import-fundamentals";
 import { importYahooPrices } from "./import-prices";
@@ -23,7 +24,11 @@ async function main() {
     return;
   }
 
-  if (action === "prices") {
+  if (action === "available-at" || action === "filings") {
+    const tickers = arg ? arg.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean) : undefined;
+    printReport(await fillYahooAvailableAt(tickers ? { tickers } : undefined));
+    return;
+  }
     printReport(await importYahooPrices(arg));
     return;
   }
@@ -36,7 +41,7 @@ async function main() {
     return;
   }
 
-  console.error("Usage: npm run ingest -- [all|fundamentals|announcements|prices] [file-or-ticker]");
+  console.error("Usage: npm run ingest -- [all|fundamentals|announcements|prices|available-at] [file-or-ticker]");
   process.exitCode = 1;
 }
 

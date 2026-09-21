@@ -57,7 +57,10 @@ function wrap(
     financial_periods: [
       {
         period_end: "2024-12-31",
+        fiscal_period: "FY2024",
+        filing_date: "2025-02-28",
         available_at: "2025-02-28",
+        available_at_source: "csv",
         retrieved_at: "2026-09-01",
         statement_type: "annual",
         source: "csv-sample",

@@ -22,9 +22,12 @@ export type FundamentalPeriodDraft = {
   periodEnd: string;
   fiscalYear: number | null;
   fiscalQuarter: number | null;
+  fiscalPeriod?: string | null;
   statementType: string;
   source: string;
   availableAt: string | null;
+  filingDate?: string | null;
+  availableAtSource?: string | null;
   actualOrEstimate: "actual" | "estimate";
   lineItems: LineItems;
 };

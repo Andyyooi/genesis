@@ -67,11 +67,18 @@ export const financialPeriods = sqliteTable(
     fiscalYear: integer("fiscal_year"),
     fiscalQuarter: integer("fiscal_quarter"),
     periodEnd: text("period_end").notNull(),
+    /** Display label such as FY2025. Not a date. */
+    fiscalPeriod: text("fiscal_period"),
     /**
      * Publication datetime. As-of scoring (Phase 4+) may only use rows where
      * available_at <= asOf. If unknown, leave null — do not guess a filing date.
+     * Never copy retrieved_at or today's date here.
      */
     availableAt: text("available_at"),
+    /** Report/filing calendar date when known (Yahoo reportedDate or CSV). */
+    filingDate: text("filing_date"),
+    /** csv | yahoo-earnings-reported-date. Not retrieved_at. */
+    availableAtSource: text("available_at_source"),
     retrievedAt: text("retrieved_at").notNull(),
     statementType: text("statement_type").notNull(),
     source: text("source").notNull(),

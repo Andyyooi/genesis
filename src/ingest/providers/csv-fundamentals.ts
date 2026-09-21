@@ -19,6 +19,7 @@ export type ParsedFundamentalRow = {
   bursaCode: string | null;
   periodEnd: string;
   availableAt: string | null;
+  filingDate: string | null;
   fiscalYear: number | null;
   fiscalQuarter: number | null;
   statementType: string;
@@ -126,6 +127,7 @@ export function parseFundamentalsCsv(csvText: string): {
         bursaCode: blank(record.bursa_code) ? null : record.bursa_code.trim(),
         periodEnd,
         availableAt: parseDate(record.available_at, "available_at", rowNumber),
+        filingDate: parseDate(record.filing_date, "filing_date", rowNumber),
         fiscalYear: parseOptionalInt(record.fiscal_year, "fiscal_year", rowNumber),
         fiscalQuarter: parseOptionalInt(record.fiscal_quarter, "fiscal_quarter", rowNumber),
         statementType: blank(record.statement_type) ? "annual" : record.statement_type.trim(),

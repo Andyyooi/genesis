@@ -8,7 +8,10 @@ export const EXPORT_SCHEMA = "bursa-research.score-export.v1";
 
 export type FinancialPeriodExport = {
   period_end: string;
+  fiscal_period: string | null;
+  filing_date: string | null;
   available_at: string | null;
+  available_at_source: string | null;
   retrieved_at: string;
   statement_type: string;
   source: string;
@@ -59,7 +62,10 @@ export function buildExportPayload(ticker: string): ExportPayload | null {
     }
     return {
       period_end: row.periodEnd,
+      fiscal_period: row.fiscalPeriod ?? null,
+      filing_date: row.filingDate ?? null,
       available_at: row.availableAt,
+      available_at_source: row.availableAtSource ?? null,
       retrieved_at: row.retrievedAt,
       statement_type: row.statementType,
       source: row.source,

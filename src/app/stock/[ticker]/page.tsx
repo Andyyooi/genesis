@@ -295,6 +295,38 @@ export default async function ResearchPage({
               </TableRow>
             </TableHeader>
             <TableBody>
+              <TableRow>
+                <TableCell>Fiscal period</TableCell>
+                {annuals.map((row) => (
+                  <TableCell key={`${row.id}-fy`} className="text-right font-mono text-sm">
+                    {row.fiscalPeriod ?? "Data unavailable"}
+                  </TableCell>
+                ))}
+              </TableRow>
+              <TableRow>
+                <TableCell>Filing / report date</TableCell>
+                {annuals.map((row) => (
+                  <TableCell key={`${row.id}-filing`} className="text-right font-mono text-sm">
+                    {row.filingDate ?? "UNKNOWN"}
+                  </TableCell>
+                ))}
+              </TableRow>
+              <TableRow>
+                <TableCell>available_at</TableCell>
+                {annuals.map((row) => (
+                  <TableCell key={`${row.id}-avail`} className="text-right font-mono text-sm">
+                    {row.availableAt ?? "UNKNOWN"}
+                  </TableCell>
+                ))}
+              </TableRow>
+              <TableRow>
+                <TableCell>available_at source</TableCell>
+                {annuals.map((row) => (
+                  <TableCell key={`${row.id}-asrc`} className="text-right text-sm text-muted-foreground">
+                    {row.availableAtSource ?? "—"}
+                  </TableCell>
+                ))}
+              </TableRow>
               {(
                 [
                   ["Revenue", "revenue"],

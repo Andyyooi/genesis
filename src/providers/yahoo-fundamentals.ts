@@ -1,9 +1,11 @@
+import { fiscalPeriodLabel } from "@/db/point-in-time";
 import type { LineItems } from "@/ingest/types";
 import { emptyLineItems } from "@/ingest/merge-line-items";
 import {
   classifyHttpFailure,
   FundamentalIngestError,
 } from "@/providers/fundamental-failures";
+import { matchReportedDateForPeriod, parseYahooEarningsChart } from "@/providers/yahoo-earnings-dates";
 import { createYahooSession, yahooFetch, type YahooSession } from "@/providers/yahoo-session";
 import type { FundamentalPeriodDraft, FundamentalProvider } from "@/providers/types";
 
@@ -38,7 +40,14 @@ type QuoteSummary = {
   };
 };
 
-type QuoteSummaryResult = NonNullable<NonNullable<QuoteSummary["quoteSummary"]>["result"]>[number];
+type QuoteSummaryResult = NonNullable<NonNullable<QuoteSummary["quoteSummary"]>["result"]>[number] & {
+  earnings?: { earningsChart?: { quarterly?: Array<{
+    date?: string;
+    fiscalQuarter?: string;
+    periodEndDate?: { fmt?: string };
+    reportedDate?: { fmt?: string };
+  }> } };
+};
 
 type TimeseriesPoint = {
   asOfDate?: string;
@@ -72,13 +81,16 @@ export function parseYahooTimeseries(json: TimeseriesResponse, source: string): 
     let draft = byEnd.get(periodEnd);
     if (!draft) {
       const year = Number(periodEnd.slice(0, 4));
-      draft = {
+        draft = {
         periodEnd,
         fiscalYear: Number.isInteger(year) ? year : null,
         fiscalQuarter: null,
+        fiscalPeriod: Number.isInteger(year) ? `FY${year}` : null,
         statementType: "annual",
         source,
         availableAt: null,
+        filingDate: null,
+        availableAtSource: null,
         actualOrEstimate: "actual",
         lineItems: emptyLineItems(),
       };
@@ -105,6 +117,35 @@ export function parseYahooTimeseries(json: TimeseriesResponse, source: string): 
   return [...byEnd.values()].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
 }
 
+export function overlayYahooReportedDates(
+  drafts: FundamentalPeriodDraft[],
+  earningsResult: Parameters<typeof parseYahooEarningsChart>[0],
+  ingestDay: string,
+): FundamentalPeriodDraft[] {
+  const dates = parseYahooEarningsChart(earningsResult);
+  for (const draft of drafts) {
+    const hit = matchReportedDateForPeriod({
+      periodEnd: draft.periodEnd,
+      dates,
+      ingestDay,
+    });
+    if (!hit) continue;
+    if (draft.availableAt) continue;
+    draft.availableAt = hit.reportedDate;
+    draft.filingDate = hit.reportedDate;
+    draft.availableAtSource = "yahoo-earnings-reported-date";
+    draft.fiscalPeriod =
+      draft.fiscalPeriod ??
+      fiscalPeriodLabel({
+        fiscalYear: draft.fiscalYear,
+        fiscalQuarter: draft.fiscalQuarter,
+        periodEnd: draft.periodEnd,
+        statementType: draft.statementType,
+      });
+  }
+  return drafts;
+}
+
 export class YahooFundamentalProvider implements FundamentalProvider {
   readonly id = "yahoo-timeseries";
   private session: YahooSession | null = null;
@@ -123,7 +164,7 @@ export class YahooFundamentalProvider implements FundamentalProvider {
       `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooTicker)}`,
     );
     url.searchParams.set("crumb", session.crumb);
-    url.searchParams.set("modules", "incomeStatementHistory,assetProfile,defaultKeyStatistics");
+    url.searchParams.set("modules", "incomeStatementHistory,assetProfile,defaultKeyStatistics,earnings");
     const response = await yahooFetch(url.toString(), session);
     if (!response.ok) {
       const code = classifyHttpFailure(response.status);
@@ -195,7 +236,14 @@ export class YahooFundamentalProvider implements FundamentalProvider {
         body.timeseries.error.description ?? "Yahoo timeseries error",
       );
     }
-    return parseYahooTimeseries(body, this.id);
+    const drafts = parseYahooTimeseries(body, this.id);
+    try {
+      const row = await this.summary(yahooTicker);
+      if (row) overlayYahooReportedDates(drafts, row, new Date().toISOString().slice(0, 10));
+    } catch {
+      /* reportedDate is optional; never invent available_at */
+    }
+    return drafts;
   }
 
   private async quoteSummaryAnnuals(yahooTicker: string): Promise<FundamentalPeriodDraft[]> {
@@ -211,9 +259,12 @@ export class YahooFundamentalProvider implements FundamentalProvider {
           periodEnd,
           fiscalYear: Number.isInteger(year) ? year : null,
           fiscalQuarter: null,
+          fiscalPeriod: Number.isInteger(year) ? `FY${year}` : null,
           statementType: "annual",
           source: "yahoo-quote-summary",
           availableAt: null,
+          filingDate: null,
+          availableAtSource: null,
           actualOrEstimate: "actual",
           lineItems: emptyLineItems(),
         };
@@ -228,6 +279,10 @@ export class YahooFundamentalProvider implements FundamentalProvider {
       items.revenue = num(stmt.totalRevenue);
       items.pat = num(stmt.netIncome);
     }
-    return [...byEnd.values()].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
+    return overlayYahooReportedDates(
+      [...byEnd.values()].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd)),
+      row,
+      new Date().toISOString().slice(0, 10),
+    );
   }
 }

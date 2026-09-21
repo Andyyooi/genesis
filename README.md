@@ -79,6 +79,15 @@ Refreshes COMMON_STOCK + REIT from the **Yahoo Malaysia equity screener** (not a
 
 Yahoo **quoteSummary** income years were incomplete (no balance sheet fields; ~244 names empty). Ingest now uses Yahoo **fundamentals-timeseries** annual series, fills nulls without overwriting history, and writes a quality snapshot.
 
+Publication dates: `available_at` is when an investor could see the filing. Yahoo timeseries has **period-end only**. Where Yahoo’s earnings `reportedDate` matches that period-end, we store it (`yahoo-earnings-reported-date`). Otherwise `available_at` stays UNKNOWN — never ingest time, never today. Historical valuation is labelled PERIOD_END_ONLY until every series point has a date.
+
+```bash
+npm run filings:dates
+```
+
+Optional tickers: `npm run ingest -- available-at MAYBANK,CIMB`.
+
+
 ```bash
 npm run fundamentals:yahoo    # pull annuals (Yahoo only; not Cursor usage)
 npm run fundamentals:report   # coverage / freshness / failure codes
