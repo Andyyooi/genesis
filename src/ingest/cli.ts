@@ -29,6 +29,8 @@ async function main() {
     printReport(await fillYahooAvailableAt(tickers ? { tickers } : undefined));
     return;
   }
+
+  if (action === "prices") {
     printReport(await importYahooPrices(arg));
     return;
   }
