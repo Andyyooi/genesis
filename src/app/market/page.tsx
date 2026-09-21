@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { loadLatestFundamentalsQuality } from "@/market/fundamentals-quality";
 import { loadLatestMarketScan } from "@/market/scan";
 import { formatScore100 } from "@/lib/research-copy";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 export default function MarketPage() {
   const { summary, rows } = loadLatestMarketScan();
+  const quality = loadLatestFundamentalsQuality();
   const dq = summary?.dataQuality;
 
   return (
@@ -33,6 +35,47 @@ export default function MarketPage() {
           Missing filings stay unavailable.
         </p>
       </header>
+
+      {quality ? (
+        <section className="flex flex-col gap-3 rounded-lg border p-4">
+          <h2 className="text-xl font-semibold">Fundamentals data quality</h2>
+          <p className="text-sm text-muted-foreground">
+            Latest annual per listed name. Full = revenue, PAT, and equity present. Partial = at least
+            one of those. Age uses period-end or filing date, not download time. Run{" "}
+            <code className="font-mono">npm run fundamentals:report</code>.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Stat label="Usable (full+partial)" value={String(quality.coverage.usable)} />
+            <Stat label="Full (rev+PAT+equity)" value={String(quality.coverage.full)} />
+            <Stat label="Partial" value={String(quality.coverage.partial)} />
+            <Stat label="None" value={String(quality.coverage.none)} />
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Fresh {quality.freshness.FRESH ?? 0} · aging {quality.freshness.AGING ?? 0} · stale{" "}
+            {quality.freshness.STALE ?? 0} · very stale {quality.freshness.VERY_STALE ?? 0} · no period{" "}
+            {quality.freshness.NONE ?? 0}
+          </p>
+          {quality.failures.length ? (
+            <ul className="text-sm text-muted-foreground">
+              {quality.failures.map((row) => (
+                <li key={row.code}>
+                  {row.code}: {row.count}
+                  {row.examples.length ? ` (e.g. ${row.examples.slice(0, 4).join(", ")})` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No typed fundamentals failures stored yet.</p>
+          )}
+          <p className="text-sm text-muted-foreground">Yahoo cannot: {quality.yahooCannot.join("; ")}.</p>
+        </section>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No fundamentals quality snapshot yet. Run{" "}
+          <code className="font-mono">npm run fundamentals:yahoo</code> then{" "}
+          <code className="font-mono">npm run fundamentals:report</code>.
+        </p>
+      )}
 
       {!summary ? (
         <p className="text-sm text-muted-foreground">

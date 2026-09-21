@@ -122,7 +122,13 @@ function uniqueTicker(base: string): string {
   return `${base}${i}`;
 }
 
-export function recordIngestFailure(kind: string, ticker: string | null, yahooTicker: string | null, reason: string) {
+export function recordIngestFailure(
+  kind: string,
+  ticker: string | null,
+  yahooTicker: string | null,
+  reason: string,
+  failureCode?: string | null,
+) {
   getDb()
     .insert(ingestFailures)
     .values({
@@ -130,6 +136,7 @@ export function recordIngestFailure(kind: string, ticker: string | null, yahooTi
       ticker,
       yahooTicker,
       reason,
+      failureCode: failureCode ?? null,
       createdAt: new Date().toISOString(),
     })
     .run();

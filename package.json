@@ -18,6 +18,8 @@
     "alerts": "tsx src/alerts/cli.ts",
     "market:scan": "tsx src/market/cli.ts",
     "market:rescore": "tsx src/market/cli.ts rescore",
+    "fundamentals:yahoo": "tsx src/market/cli.ts fundamentals",
+    "fundamentals:report": "tsx src/market/cli.ts report",
     "test": "vitest run"
   },
   "dependencies": {

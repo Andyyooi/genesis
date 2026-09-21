@@ -77,6 +77,13 @@ npm run market:scan
 
 Refreshes COMMON_STOCK + REIT from the **Yahoo Malaysia equity screener** (not a hand-typed Bursa list), pulls EOD prices (resumable, per-ticker failures), fills Yahoo annual statements where present, keeps CSV filings, scores everyone, writes data-quality + scanner lists to SQLite. Open `/market`. Slow (rate limits). **Not Cursor usage.** Warrants/ETFs excluded. PN17 only if already stored. Watchlist dashboard still uses `universe.yaml`. Daily `ingest:prices:daily` keeps running on whatever is in the DB.
 
+Yahoo **quoteSummary** income years were incomplete (no balance sheet fields; ~244 names empty). Ingest now uses Yahoo **fundamentals-timeseries** annual series, fills nulls without overwriting history, and writes a quality snapshot.
+
+```bash
+npm run fundamentals:yahoo    # pull annuals (Yahoo only; not Cursor usage)
+npm run fundamentals:report   # coverage / freshness / failure codes
+```
+
 After changing scoring or Data Confidence, refresh scan rows without Yahoo:
 
 ```bash

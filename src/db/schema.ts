@@ -175,6 +175,7 @@ export const ingestFailures = sqliteTable("ingest_failures", {
   ticker: text("ticker"),
   yahooTicker: text("yahoo_ticker"),
   reason: text("reason").notNull(),
+  failureCode: text("failure_code"),
   createdAt: text("created_at").notNull(),
 });
 

@@ -16,6 +16,7 @@ describe("listing classifier", () => {
   it("excludes warrants and ETFs", () => {
     expect(shouldExcludeListing("1155WA.KL", "MAYBANK-WA", "Maybank Warrant")).toMatch(/Warrant/);
     expect(shouldExcludeListing("0820EA.KL", "SOME-ETF", "ABC ETF")).toMatch(/ETF/);
+    expect(shouldExcludeListing("0800EA.KL", "ABFMY1", "ABF Malaysia Bond Index")).toMatch(/ETF/);
   });
 
   it("classifies REITs from the name", () => {

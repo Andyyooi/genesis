@@ -2,7 +2,7 @@ import type { InstrumentType } from "@/db/schema";
 
 const WARRANT_CODE = /^\d{3,5}W[A-Z]$/i;
 const WARRANT_NAME = /\bWARRANT\b|\bCALL WARRANT\b|\bPUT WARRANT\b|[- ]W[A-Z]$/i;
-const ETF_NAME = /\bETF\b|EXCHANGE[\s-]*TRADED/i;
+const ETF_NAME = /\bETF\b|EXCHANGE[\s-]*TRADED|\bBOND INDEX\b|\bINDEX FUND\b/i;
 const REIT_NAME = /\bREIT\b|REAL ESTATE INVESTMENT/i;
 
 export function yahooSymbolParts(symbol: string): { code: string; yahooTicker: string } {

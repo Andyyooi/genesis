@@ -1,4 +1,9 @@
 import type { LineItems } from "@/ingest/types";
+import { emptyLineItems } from "@/ingest/merge-line-items";
+import {
+  classifyHttpFailure,
+  FundamentalIngestError,
+} from "@/providers/fundamental-failures";
 import { createYahooSession, yahooFetch, type YahooSession } from "@/providers/yahoo-session";
 import type { FundamentalPeriodDraft, FundamentalProvider } from "@/providers/types";
 
@@ -28,36 +33,82 @@ type QuoteSummary = {
       assetProfile?: { sector?: string; industry?: string };
       defaultKeyStatistics?: { trailingEps?: YahooNumber; lastDividendValue?: YahooNumber };
       incomeStatementHistory?: { incomeStatementHistory?: StatementRow[] };
-      balanceSheetHistory?: { balanceSheetStatements?: StatementRow[] };
-      cashflowStatementHistory?: { cashflowStatements?: StatementRow[] };
     }>;
     error?: { description?: string };
   };
 };
 
-function emptyItems(): LineItems {
-  return {
-    revenue: null,
-    pat: null,
-    eps: null,
-    equity: null,
-    totalDebt: null,
-    cash: null,
-    ocf: null,
-    capex: null,
-    shares: null,
-    dividendPerShare: null,
-    navPerShare: null,
-    totalAssets: null,
-  };
-}
-
 type QuoteSummaryResult = NonNullable<NonNullable<QuoteSummary["quoteSummary"]>["result"]>[number];
 
+type TimeseriesPoint = {
+  asOfDate?: string;
+  periodType?: string;
+  reportedValue?: YahooNumber;
+};
+
+type TimeseriesResponse = {
+  timeseries?: {
+    result?: Array<Record<string, unknown>>;
+    error?: { description?: string };
+  };
+};
+
+const TIMESERIES_FIELDS: { key: string; line: keyof LineItems; abs?: boolean }[] = [
+  { key: "annualTotalRevenue", line: "revenue" },
+  { key: "annualNetIncome", line: "pat" },
+  { key: "annualDilutedEPS", line: "eps" },
+  { key: "annualStockholdersEquity", line: "equity" },
+  { key: "annualTotalDebt", line: "totalDebt" },
+  { key: "annualCashAndCashEquivalents", line: "cash" },
+  { key: "annualOperatingCashFlow", line: "ocf" },
+  { key: "annualCapitalExpenditure", line: "capex", abs: true },
+  { key: "annualShareIssued", line: "shares" },
+  { key: "annualTotalAssets", line: "totalAssets" },
+];
+
+export function parseYahooTimeseries(json: TimeseriesResponse, source: string): FundamentalPeriodDraft[] {
+  const byEnd = new Map<string, FundamentalPeriodDraft>();
+  const ensure = (periodEnd: string) => {
+    let draft = byEnd.get(periodEnd);
+    if (!draft) {
+      const year = Number(periodEnd.slice(0, 4));
+      draft = {
+        periodEnd,
+        fiscalYear: Number.isInteger(year) ? year : null,
+        fiscalQuarter: null,
+        statementType: "annual",
+        source,
+        availableAt: null,
+        actualOrEstimate: "actual",
+        lineItems: emptyLineItems(),
+      };
+      byEnd.set(periodEnd, draft);
+    }
+    return draft;
+  };
+
+  for (const row of json.timeseries?.result ?? []) {
+    for (const field of TIMESERIES_FIELDS) {
+      const points = row[field.key];
+      if (!Array.isArray(points)) continue;
+      for (const point of points as TimeseriesPoint[]) {
+        if (point.periodType && point.periodType !== "12M") continue;
+        const periodEnd = point.asOfDate?.slice(0, 10);
+        if (!periodEnd || !/^\d{4}-\d{2}-\d{2}$/.test(periodEnd)) continue;
+        let value = num(point.reportedValue);
+        if (value === null) continue;
+        if (field.abs) value = Math.abs(value);
+        ensure(periodEnd).lineItems[field.line] = value;
+      }
+    }
+  }
+  return [...byEnd.values()].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
+}
+
 export class YahooFundamentalProvider implements FundamentalProvider {
-  readonly id = "yahoo-quote-summary";
+  readonly id = "yahoo-timeseries";
   private session: YahooSession | null = null;
-  private cache = new Map<string, QuoteSummaryResult | null>();
+  private summaryCache = new Map<string, QuoteSummaryResult | null>();
 
   private async sessionOrCreate() {
     this.session ??= await createYahooSession();
@@ -65,27 +116,32 @@ export class YahooFundamentalProvider implements FundamentalProvider {
   }
 
   private async summary(yahooTicker: string): Promise<QuoteSummaryResult | null> {
-    const hit = this.cache.get(yahooTicker);
+    const hit = this.summaryCache.get(yahooTicker);
     if (hit !== undefined) return hit;
     const session = await this.sessionOrCreate();
     const url = new URL(
       `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooTicker)}`,
     );
     url.searchParams.set("crumb", session.crumb);
-    url.searchParams.set(
-      "modules",
-      "incomeStatementHistory,balanceSheetHistory,cashflowStatementHistory,assetProfile,defaultKeyStatistics",
-    );
+    url.searchParams.set("modules", "incomeStatementHistory,assetProfile,defaultKeyStatistics");
     const response = await yahooFetch(url.toString(), session);
     if (!response.ok) {
-      throw new Error(`Yahoo fundamentals HTTP ${response.status} for ${yahooTicker}`);
+      const code = classifyHttpFailure(response.status);
+      throw new FundamentalIngestError(
+        code,
+        `Yahoo quoteSummary HTTP ${response.status} for ${yahooTicker}`,
+        response.status,
+      );
     }
     const body = (await response.json()) as QuoteSummary;
     if (body.quoteSummary?.error) {
-      throw new Error(body.quoteSummary.error.description ?? "Yahoo quoteSummary error");
+      throw new FundamentalIngestError(
+        "PROVIDER_ERROR",
+        body.quoteSummary.error.description ?? "Yahoo quoteSummary error",
+      );
     }
     const result = body.quoteSummary?.result?.[0] ?? null;
-    this.cache.set(yahooTicker, result);
+    this.summaryCache.set(yahooTicker, result);
     return result;
   }
 
@@ -102,13 +158,51 @@ export class YahooFundamentalProvider implements FundamentalProvider {
   }
 
   async annualPeriods(yahooTicker: string): Promise<FundamentalPeriodDraft[]> {
+    const fromSeries = await this.timeseriesAnnuals(yahooTicker);
+    if (fromSeries.length) return fromSeries;
+    return this.quoteSummaryAnnuals(yahooTicker);
+  }
+
+  private async timeseriesAnnuals(yahooTicker: string): Promise<FundamentalPeriodDraft[]> {
+    const session = await this.sessionOrCreate();
+    const url = new URL(
+      `https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(yahooTicker)}`,
+    );
+    url.searchParams.set("lang", "en-US");
+    url.searchParams.set("region", "MY");
+    url.searchParams.set("merge", "false");
+    url.searchParams.set("period1", "0");
+    url.searchParams.set("period2", String(Math.floor(Date.now() / 1000)));
+    url.searchParams.set("type", TIMESERIES_FIELDS.map((f) => f.key).join(","));
+    const response = await yahooFetch(url.toString(), session);
+    if (!response.ok) {
+      const code = classifyHttpFailure(response.status);
+      throw new FundamentalIngestError(
+        code,
+        `Yahoo timeseries HTTP ${response.status} for ${yahooTicker}`,
+        response.status,
+      );
+    }
+    let body: TimeseriesResponse;
+    try {
+      body = (await response.json()) as TimeseriesResponse;
+    } catch {
+      throw new FundamentalIngestError("PARSING_ERROR", `Yahoo timeseries JSON parse failed for ${yahooTicker}`);
+    }
+    if (body.timeseries?.error) {
+      throw new FundamentalIngestError(
+        "PROVIDER_ERROR",
+        body.timeseries.error.description ?? "Yahoo timeseries error",
+      );
+    }
+    return parseYahooTimeseries(body, this.id);
+  }
+
+  private async quoteSummaryAnnuals(yahooTicker: string): Promise<FundamentalPeriodDraft[]> {
     const row = await this.summary(yahooTicker);
     if (!row) return [];
     const income = row.incomeStatementHistory?.incomeStatementHistory ?? [];
-    const balance = row.balanceSheetHistory?.balanceSheetStatements ?? [];
-    const cashflow = row.cashflowStatementHistory?.cashflowStatements ?? [];
     const byEnd = new Map<string, FundamentalPeriodDraft>();
-
     const ensure = (periodEnd: string) => {
       let draft = byEnd.get(periodEnd);
       if (!draft) {
@@ -118,46 +212,21 @@ export class YahooFundamentalProvider implements FundamentalProvider {
           fiscalYear: Number.isInteger(year) ? year : null,
           fiscalQuarter: null,
           statementType: "annual",
-          source: this.id,
+          source: "yahoo-quote-summary",
           availableAt: null,
           actualOrEstimate: "actual",
-          lineItems: emptyItems(),
+          lineItems: emptyLineItems(),
         };
         byEnd.set(periodEnd, draft);
       }
       return draft;
     };
-
     for (const stmt of income) {
       const periodEnd = isoDay(stmt.endDate);
       if (!periodEnd) continue;
       const items = ensure(periodEnd).lineItems;
       items.revenue = num(stmt.totalRevenue);
       items.pat = num(stmt.netIncome);
-    }
-    for (const stmt of balance) {
-      const periodEnd = isoDay(stmt.endDate);
-      if (!periodEnd) continue;
-      const items = ensure(periodEnd).lineItems;
-      items.equity = num(stmt.totalStockholderEquity);
-      items.totalDebt = num(stmt.shortLongTermDebt) ?? num(stmt.longTermDebt);
-      items.cash = num(stmt.cash);
-      items.totalAssets = num(stmt.totalAssets);
-    }
-    for (const stmt of cashflow) {
-      const periodEnd = isoDay(stmt.endDate);
-      if (!periodEnd) continue;
-      const items = ensure(periodEnd).lineItems;
-      items.ocf = num(stmt.totalCashFromOperatingActivities);
-      items.capex = num(stmt.capitalExpenditures);
-      if (items.capex !== null) items.capex = Math.abs(items.capex);
-    }
-    const eps = num(row.defaultKeyStatistics?.trailingEps);
-    const dps = num(row.defaultKeyStatistics?.lastDividendValue);
-    const latest = [...byEnd.keys()].sort().at(-1);
-    if (latest) {
-      if (eps !== null) byEnd.get(latest)!.lineItems.eps = eps;
-      if (dps !== null) byEnd.get(latest)!.lineItems.dividendPerShare = dps;
     }
     return [...byEnd.values()].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
   }
