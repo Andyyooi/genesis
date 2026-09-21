@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { loadLatestIngestReports } from "@/db/queries";
+import { isSnapshotReadOnly } from "@/lib/data-mode";
 import type { EventsImportReport, FundamentalsImportReport, PricesImportReport } from "@/ingest/types";
 
 export const dynamic = "force-dynamic";
@@ -41,8 +42,9 @@ export default function IngestReportPage() {
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold tracking-tight">Import report</h1>
         <p className="max-w-2xl text-muted-foreground">
-          Rejected CSV rows and Yahoo misses stay here so they can be fixed. Nothing is
-          silently filled in. Re-run ingest after editing the CSV or universe mapping.
+          {isSnapshotReadOnly()
+            ? "This host serves a frozen import-report snapshot. CSV ingest and Yahoo price pulls cannot write here."
+            : "Rejected CSV rows and Yahoo misses stay here so they can be fixed. Nothing is silently filled in. Re-run ingest after editing the CSV or universe mapping."}
         </p>
         <p className="text-sm text-muted-foreground">
           Daily Yahoo EOD (not live ticks) can run on this machine with{" "}

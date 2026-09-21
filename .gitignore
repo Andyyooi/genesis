@@ -49,6 +49,9 @@ next-env.d.ts
 /data/sqlite/*.db
 /data/sqlite/*.db-*
 
+# Bundled gzip snapshot for Vercel (not the live WAL DB)
+!/data/snapshots/research.db.gz
+
 # Andy's dropped CSVs (keep the template and sample)
 /data/raw/*
 !/data/raw/fundamentals-template.csv

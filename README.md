@@ -108,3 +108,29 @@ npm run profiles:classify
 ```bash
 npm test
 ```
+
+## Why `research.db` is not the git object
+
+The live file is ~123 MB (plus WAL). It is local machine state: regenerable from ingest, too large for a normal git push, and **not source code**. Vercel’s filesystem is **ephemeral and not writable for persistence** — committing a `.db` would not give you a database that new ingest runs can update.
+
+For a **test deploy**, the app ships a **read-only gzip snapshot** of the current research store (`data/snapshots/research.db.gz`, ~15 MB). That is real stored data, not invented numbers. On Vercel the process gunzips it to `/tmp` and opens SQLite **read-only**. Ingest, daily prices, and `market:scan` **do not write**.
+
+### Refresh the snapshot (local only)
+
+```bash
+# after ingest/scores on this machine
+npm run snapshot:pack
+git add data/snapshots/research.db.gz
+```
+
+Do not commit `.env*`, `data/sqlite/research.db`, or WAL/SHM.
+
+## Vercel
+
+1. In [Vercel](https://vercel.com) create a project and import **andy-yooi/genesis** if GitHub/Origin is connected, **or** from a machine with `vercel login` run `npx vercel` in this repo (Origin is not GitHub; you may need a GitHub mirror or CLI deploy).
+2. Framework: Next.js. No env secrets required for the snapshot demo.
+3. Deploy. The site shows a banner: static snapshot, writes disabled.
+4. `better-sqlite3` is a native addon. If the build fails on the serverless image, check the Vercel build log; local `npm run build` must succeed with Node 20+.
+
+Local default stays **writable** `data/sqlite/research.db` on `npm run dev`. To simulate Vercel: `BURSA_SNAPSHOT_READONLY=1 npm run dev` (needs the gzip present).
+

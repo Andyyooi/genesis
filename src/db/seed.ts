@@ -2,11 +2,15 @@ import { eq } from "drizzle-orm";
 import { loadUniverseConfig } from "@/config/load-universe";
 import { getDb } from "@/db/client";
 import { instruments } from "@/db/schema";
+import { isSnapshotReadOnly } from "@/lib/data-mode";
 import { assignResearchProfiles } from "@/research/assign-profiles";
 import { clearPeerUniverseCache } from "@/scoring/valuation-context";
 
 export function seedUniverseFromYaml() {
   const universe = loadUniverseConfig();
+  if (isSnapshotReadOnly()) {
+    return universe;
+  }
   const db = getDb();
   const now = new Date().toISOString();
 

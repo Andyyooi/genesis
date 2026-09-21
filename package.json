@@ -22,7 +22,8 @@
     "fundamentals:report": "tsx src/market/cli.ts report",
     "filings:dates": "tsx src/ingest/cli.ts available-at",
     "profiles:classify": "tsx src/research/cli.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "snapshot:pack": "tsx scripts/pack-snapshot.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

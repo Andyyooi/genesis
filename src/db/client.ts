@@ -1,16 +1,11 @@
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/db/schema";
+import { resolveSqliteFile } from "@/db/snapshot-file";
 
 const globalForDb = globalThis as unknown as {
   sqlite?: Database.Database;
 };
-
-function sqlitePath() {
-  return join(process.cwd(), "data", "sqlite", "research.db");
-}
 
 function ensureSchema(sqlite: Database.Database) {
   sqlite.exec(`
@@ -193,11 +188,15 @@ export function getSqlite() {
 
 export function getDb() {
   if (!globalForDb.sqlite) {
-    mkdirSync(join(process.cwd(), "data", "sqlite"), { recursive: true });
-    const sqlite = new Database(sqlitePath());
-    sqlite.pragma("journal_mode = WAL");
+    const resolved = resolveSqliteFile();
+    const sqlite = resolved.readonly
+      ? new Database(resolved.path, { readonly: true, fileMustExist: true })
+      : new Database(resolved.path);
     sqlite.pragma("foreign_keys = ON");
-    ensureSchema(sqlite);
+    if (!resolved.readonly) {
+      sqlite.pragma("journal_mode = WAL");
+      ensureSchema(sqlite);
+    }
     globalForDb.sqlite = sqlite;
   }
   return drizzle(globalForDb.sqlite, { schema });

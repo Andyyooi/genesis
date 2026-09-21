@@ -1,3 +1,4 @@
+import { refuseSnapshotWrites } from "@/lib/data-mode";
 import { importYahooFundamentals } from "./ingest-fundamentals-yahoo";
 import {
   buildFundamentalsQualityReport,
@@ -6,6 +7,10 @@ import {
 import { rescoreListedMarket, runMarketScan } from "./scan";
 
 async function main() {
+  if (refuseSnapshotWrites("market scan / fundamentals ingest")) {
+    process.exitCode = 1;
+    return;
+  }
   const mode = process.argv[2] ?? "scan";
   if (mode === "rescore") {
     console.log(JSON.stringify(rescoreListedMarket(), null, 2));

@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { refuseSnapshotWrites } from "@/lib/data-mode";
 import { fillYahooAvailableAt } from "./fill-available-at";
 import { importAnnouncementsCsv } from "./import-announcements";
 import { importFundamentalsCsv } from "./import-fundamentals";
@@ -9,6 +10,10 @@ function printReport(report: unknown) {
 }
 
 async function main() {
+  if (refuseSnapshotWrites("ingest")) {
+    process.exitCode = 1;
+    return;
+  }
   const [, , command, arg] = process.argv;
   const action = command ?? "all";
 

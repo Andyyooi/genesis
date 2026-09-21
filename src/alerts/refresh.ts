@@ -3,6 +3,7 @@ import { loadScoringConfig } from "@/config/load-scoring";
 import { getDb } from "@/db/client";
 import { alerts, alertState, instruments } from "@/db/schema";
 import { loadInstrumentSnapshots, loadScoreHistory, loadWatchlist } from "@/db/queries";
+import { isSnapshotReadOnly } from "@/lib/data-mode";
 import { latestAnnualObservation, latestAnnualPeriod } from "@/lib/snapshot-dates";
 import type { MetricValue } from "@/metrics/types";
 import { snapshotsToMetrics } from "@/metrics/from-snapshots";
@@ -211,6 +212,7 @@ export function refreshAlertsForTicker(ticker: string): { drafts: number; insert
 }
 
 export function refreshAlertsForUniverse() {
+  if (isSnapshotReadOnly()) return [];
   const rows = loadWatchlist();
   return rows.map((row) => ({ ticker: row.ticker, ...refreshAlertsForTicker(row.ticker) }));
 }

@@ -5,6 +5,7 @@ import { loadInstrumentSnapshots } from "@/db/queries";
 import { instruments } from "@/db/schema";
 import { latestAnnualObservation } from "@/lib/snapshot-dates";
 import { snapshotsToMetrics } from "@/metrics/from-snapshots";
+import { isSnapshotReadOnly } from "@/lib/data-mode";
 import { persistScoreRun } from "@/scoring/persist";
 import { scoreFromMetrics } from "@/scoring/score";
 import {
@@ -29,11 +30,13 @@ export function scoreTicker(
     config,
   );
   if (data.instrument.researchProfile !== classified.profile) {
-    getDb()
-      .update(instruments)
-      .set({ researchProfile: classified.profile, updatedAt: new Date().toISOString() })
-      .where(eq(instruments.id, data.instrument.id))
-      .run();
+    if (!isSnapshotReadOnly()) {
+      getDb()
+        .update(instruments)
+        .set({ researchProfile: classified.profile, updatedAt: new Date().toISOString() })
+        .where(eq(instruments.id, data.instrument.id))
+        .run();
+    }
     data.instrument.researchProfile = classified.profile;
   }
   const asOf = new Date().toISOString();
@@ -73,7 +76,7 @@ export function scoreTicker(
       dataCoverage: result.dataCoverage,
     });
   }
-  if (persist) {
+  if (persist && !isSnapshotReadOnly()) {
     persistScoreRun({ instrumentId: data.instrument.id, result });
   }
   return {

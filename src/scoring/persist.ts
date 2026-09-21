@@ -1,11 +1,13 @@
 import { getDb } from "@/db/client";
 import { scoreRuns } from "@/db/schema";
+import { isSnapshotReadOnly } from "@/lib/data-mode";
 import type { ScoreResult } from "@/scoring/types";
 
 export function persistScoreRun(args: {
   instrumentId: number;
   result: ScoreResult;
 }) {
+  if (isSnapshotReadOnly()) return;
   const db = getDb();
   const createdAt = new Date().toISOString();
   db.insert(scoreRuns)

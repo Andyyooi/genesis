@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { loadLatestFundamentalsQuality } from "@/market/fundamentals-quality";
 import { loadLatestMarketScan } from "@/market/scan";
+import { isSnapshotReadOnly } from "@/lib/data-mode";
 import { formatScore100 } from "@/lib/research-copy";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,9 +31,9 @@ export default function MarketPage() {
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold tracking-tight">Market scan</h1>
         <p className="max-w-3xl text-muted-foreground">
-          Last <code className="font-mono text-sm">npm run market:scan</code> snapshot. Universe comes
-          from the Yahoo Malaysia equity screener (COMMON_STOCK + REIT). Warrants/ETFs excluded.
-          Missing filings stay unavailable.
+          {isSnapshotReadOnly()
+            ? "Last stored market scan from the bundled snapshot. npm run market:scan cannot write on Vercel."
+            : "Last npm run market:scan snapshot. Universe comes from the Yahoo Malaysia equity screener (COMMON_STOCK + REIT). Warrants/ETFs excluded. Missing filings stay unavailable."}
         </p>
       </header>
 
