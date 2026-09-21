@@ -25,10 +25,14 @@ export type YahooEarningsChartJson = {
   };
 };
 
+function unwrapEarningsResult(json: YahooEarningsChartJson | YahooEarningsResult): YahooEarningsResult | undefined {
+  if ("earnings" in json) return json;
+  return (json as YahooEarningsChartJson).quoteSummary?.result?.[0];
+}
+
 /** Yahoo earnings print date for a quarter. Not a Bursa announcement id. */
 export function parseYahooEarningsChart(json: YahooEarningsChartJson | YahooEarningsResult): EarningsReportedDate[] {
-  const result =
-    "quoteSummary" in json ? json.quoteSummary?.result?.[0] : json;
+  const result = unwrapEarningsResult(json);
   const quarters = result?.earnings?.earningsChart?.quarterly ?? [];
   const out: EarningsReportedDate[] = [];
   for (const row of quarters) {

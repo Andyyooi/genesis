@@ -16,6 +16,7 @@ export type MarketScanRowPayload = {
   instrumentType: string;
   pn17: boolean;
   profile: string;
+  researchProfile: string;
   researchScore: number | null;
   valuationScore: number | null;
   coverage: number | null;

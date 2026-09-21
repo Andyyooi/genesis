@@ -3,6 +3,7 @@ import {
   extractIsoDate,
   freshnessBand,
   monthsBetween,
+  type FreshnessBand,
 } from "@/scoring/freshness";
 import type {
   CategoryScore,
