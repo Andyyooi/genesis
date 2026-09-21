@@ -125,6 +125,7 @@ export const scoreRuns = sqliteTable("score_runs", {
   coverageJson: text("coverage_json"),
   dataConfidence: text("data_confidence"),
   evidenceJson: text("evidence_json"),
+  valuationContextJson: text("valuation_context_json"),
   createdAt: text("created_at").notNull(),
 });
 

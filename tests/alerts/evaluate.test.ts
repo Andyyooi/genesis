@@ -2,6 +2,7 @@ import { loadScoringConfig } from "@/config/load-scoring";
 import { describe, expect, it } from "vitest";
 import { evaluateAlertDrafts, isEarningsHeadline, type AlertInputs } from "@/alerts/evaluate";
 import type { ScoreResult } from "@/scoring/types";
+import { emptyValuationContext } from "@/scoring/valuation-context";
 
 const config = loadScoringConfig();
 
@@ -46,6 +47,7 @@ function result(over: Partial<ScoreResult> = {}): ScoreResult {
       ageMonths: 21,
     },
     dataConfidence: { level: "MEDIUM", reasons: [], needsVerification: false },
+    valuationContext: emptyValuationContext("test fixture"),
     ...over,
   };
 }

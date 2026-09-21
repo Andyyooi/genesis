@@ -13,6 +13,7 @@ import { evaluateConcerns } from "@/scoring/concerns";
 import { hashScoringConfig } from "@/scoring/hash";
 import { scoreFactor } from "@/scoring/map-factor";
 import type { CategoryScore, ScoreResult } from "@/scoring/types";
+import { emptyValuationContext } from "@/scoring/valuation-context";
 
 function categoryAverage(factors: { score: number | null; weight: number; available: boolean }[]): {
   score: number | null;
@@ -162,5 +163,8 @@ export function scoreFromMetrics(args: {
     notes,
     dataCoverage,
     dataConfidence,
+    valuationContext: emptyValuationContext(
+      "Historical and peer context are attached at scoreTicker, not in the isolated scoring engine.",
+    ),
   };
 }

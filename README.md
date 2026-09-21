@@ -38,7 +38,7 @@ Or `Ctrl-C` if it is in the foreground. Do not start a second persist while one 
 - [MAYBANK](http://127.0.0.1:43147/stock/MAYBANK) — bank overlay (P/B, ROE)
 - [KLCC](http://127.0.0.1:43147/stock/KLCC) — REIT profile (DPU / book NAV / gearing)
 
-**Profiles:** ordinary companies use `default`. REITs use `reit` (not industrial FCF or EV/EBITDA). MAYBANK, CIMB, and PBBANK use `bank`. Missing CSV lines stay unavailable — never invented.
+**Profiles:** ordinary companies use `default`. REITs use `reit` (not industrial FCF or EV/EBITDA). Banks use `bank`. Missing CSV lines stay unavailable — never invented. The headline **Valuation Score** is unchanged; research pages also show **Historical Context** and **Peer Context** (Positive / Neutral / Negative / Unavailable) versus own period-end history and a constructed peer set. Those labels are not blended into a new overall score. Historical series is period-end price vs that year’s earnings when filing dates are unknown — not look-ahead-safe PIT P/E.
 
 ## Data (daily prices ≠ Cursor usage)
 

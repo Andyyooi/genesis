@@ -26,12 +26,25 @@ export function buildTablesCsv(payload: ExportPayload): string {
       payload.score.dataCoverage.expected,
       payload.score.dataConfidence.needsVerification,
     ]),
-  );
-  lines.push("");
   lines.push(
     row([
-      "table",
-      "category",
+      "valuation_context",
+      "historical",
+      payload.score.valuationContext.historical.label,
+      payload.score.valuationContext.historical.lookAheadSafe,
+      payload.score.valuationContext.historical.limitation,
+    ]),
+  );
+  lines.push(
+    row([
+      "valuation_context",
+      "peer",
+      payload.score.valuationContext.peer.label,
+      payload.score.valuationContext.peer.groupDescription,
+      payload.score.valuationContext.peer.limitation,
+    ]),
+  );
+  lines.push("");
       "factor_id",
       "label",
       "metric",

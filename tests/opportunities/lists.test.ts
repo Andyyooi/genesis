@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ScoreResult } from "@/scoring/types";
+import { emptyValuationContext } from "@/scoring/valuation-context";
 import {
   liveCoverage,
   rowMatchesFilters,
@@ -108,6 +109,7 @@ function result(partial: Partial<ScoreResult> = {}): ScoreResult {
       ageMonths: 3,
     },
     dataConfidence: { level: "HIGH", reasons: [], needsVerification: false },
+    valuationContext: emptyValuationContext("test fixture"),
     ...partial,
   };
 }

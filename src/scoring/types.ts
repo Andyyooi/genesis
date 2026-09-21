@@ -1,4 +1,5 @@
 import type { ResearchProfile } from "@/research/profiles";
+import type { ValuationContextResult } from "@/scoring/valuation-context";
 
 export type FactorEvidence = {
   id: string;
@@ -78,4 +79,6 @@ export type ScoreResult = {
   notes: string[];
   dataCoverage: DataCoverage;
   dataConfidence: DataConfidence;
+  /** Separate from Valuation Score. Never blended into an overall score. */
+  valuationContext: ValuationContextResult;
 };

@@ -1,4 +1,4 @@
-import { CATEGORY_LABELS, formatScore100, scoreNarrative, strongestPositives } from "@/lib/research-copy";
+import { CATEGORY_LABELS, formatContextHeadline, formatScore100, scoreNarrative, strongestPositives } from "@/lib/research-copy";
 import { unavailableLabel, type ExportPayload } from "@/export/payload";
 
 function num(value: number | null | undefined): string {
@@ -53,6 +53,8 @@ export function buildFullMarkdown(payload: ExportPayload): string {
     "",
     `- Research Score: ${formatScore100(score.researchScore)}`,
     `- Valuation Score: ${formatScore100(score.valuationScore)} (valuation factors only)`,
+    `- Historical Context: ${formatContextHeadline(score.valuationContext.historical.label)} (not blended into Valuation Score)`,
+    `- Peer Context: ${formatContextHeadline(score.valuationContext.peer.label)} (not blended into Valuation Score)`,
     `- Data Confidence: ${score.dataConfidence.level}${score.dataConfidence.needsVerification ? " — needs verification" : ""}`,
     `- Data freshness: ${score.dataCoverage.freshness}`,
     `- Core coverage: ${score.dataCoverage.available} of ${score.dataCoverage.expected} expected factors (${Math.round(score.dataCoverage.coverageRatio * 100)}%)`,
@@ -60,6 +62,20 @@ export function buildFullMarkdown(payload: ExportPayload): string {
     score.dataConfidence.reasons.map((r) => `- ${r}`).join("\n"),
     "",
     scoreNarrative(score),
+    "",
+    "### Historical Context",
+    "",
+    score.valuationContext.historical.limitation
+      ? `${score.valuationContext.historical.limitation}`
+      : "",
+    "",
+    ...score.valuationContext.historical.facts.map((f) => `- ${f}`),
+    "",
+    "### Peer Context",
+    "",
+    score.valuationContext.peer.limitation ? `${score.valuationContext.peer.limitation}` : "",
+    "",
+    ...score.valuationContext.peer.facts.map((f) => `- ${f}`),
     "",
     "### Coverage and live weights",
     "",

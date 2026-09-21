@@ -115,6 +115,8 @@ describe("ChatGPT export", () => {
     expect(md).toMatch(/price as-of \/ last trade/);
     expect(md).toMatch(/instrument_type/);
     expect(md).toMatch(/Data unavailable/);
+    expect(md).toMatch(/Historical Context/);
+    expect(md).toMatch(/Peer Context/);
     expect(md).not.toMatch(/\bBUY\b/);
     expect(md).not.toMatch(/\bSELL\b/);
   });

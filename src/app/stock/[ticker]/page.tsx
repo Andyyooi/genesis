@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/table";
 import { DataConfidenceCard, ScoreWithConfidence } from "@/components/research/data-confidence";
 import { DataLagBanner } from "@/components/research/data-lag-banner";
+import { ValuationContextCard } from "@/components/research/valuation-context";
 import { loadScoreHistory } from "@/db/queries";
 import type { LineItems } from "@/ingest/types";
 import { formatMetricValue } from "@/lib/format-metric";
@@ -175,6 +176,10 @@ export default async function ResearchPage({
         </Card>
         <DataConfidenceCard result={result} />
       </section>
+      <section className="grid gap-3 lg:grid-cols-2">
+        <ValuationContextCard block={result.valuationContext.historical} />
+        <ValuationContextCard block={result.valuationContext.peer} />
+      </section>
       <p className="text-sm text-muted-foreground">{scoreNarrative(result)}</p>
 
       <section className="flex flex-col gap-3">
@@ -237,8 +242,8 @@ export default async function ResearchPage({
       <section className="flex flex-col gap-3">
         <h2 className="text-xl font-semibold">Valuation</h2>
         <p className="text-sm text-muted-foreground">
-          From stored snapshots only. Peer comparisons and a full historical valuation range are not
-          in this phase.
+          Absolute snapshot used in the Valuation Score (last close vs latest annual). Historical and
+          peer labels above are separate — they do not change this score.
         </p>
         <Table>
           <TableHeader>
@@ -261,13 +266,6 @@ export default async function ResearchPage({
                 </TableRow>
               );
             })}
-            <TableRow>
-              <TableCell>Peer comparison</TableCell>
-              <TableCell className="text-right">Data unavailable</TableCell>
-              <TableCell className="hidden text-muted-foreground sm:table-cell">
-                No peer set yet
-              </TableCell>
-            </TableRow>
           </TableBody>
         </Table>
         {isReit ? (

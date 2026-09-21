@@ -81,3 +81,10 @@ export function scoreNarrative(result: ScoreResult): string {
 export function categoryTitle(category: CategoryScore): string {
   return CATEGORY_LABELS[category.id] ?? category.id;
 }
+
+export function formatContextHeadline(label: string | undefined): string {
+  if (label === "POSITIVE") return "Positive";
+  if (label === "NEGATIVE") return "Negative";
+  if (label === "NEUTRAL") return "Neutral";
+  return "Unavailable";
+}

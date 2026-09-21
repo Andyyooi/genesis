@@ -165,6 +165,7 @@ function ensureSchema(sqlite: Database.Database) {
   addColumn(sqlite, "ingest_failures", "failure_code", "TEXT");
   addColumn(sqlite, "instruments", "research_profile", "TEXT");
   addColumn(sqlite, "score_runs", "research_profile", "TEXT");
+  addColumn(sqlite, "score_runs", "valuation_context_json", "TEXT");
   sqlite.exec(
     "UPDATE instruments SET watchlist = 1 WHERE watchlist IS NULL OR (watchlist = 0 AND universe_source IS NULL)",
   );
@@ -180,6 +181,11 @@ function addColumn(sqlite: Database.Database, table: string, name: string, ddl: 
   if (cols.length && !cols.some((col) => col.name === name)) {
     sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${ddl}`);
   }
+}
+
+export function getSqlite() {
+  getDb();
+  return globalForDb.sqlite as Database.Database;
 }
 
 export function getDb() {

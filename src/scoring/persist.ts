@@ -35,7 +35,9 @@ export function persistScoreRun(args: {
         concerns: args.result.concerns,
         notes: args.result.notes,
         dataConfidence: args.result.dataConfidence,
+        valuationContext: args.result.valuationContext,
       }),
+      valuationContextJson: JSON.stringify(args.result.valuationContext),
       createdAt,
     })
     .run();

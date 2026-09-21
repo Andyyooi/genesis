@@ -1,4 +1,4 @@
-import { CATEGORY_LABELS, formatScore100, scoreNarrative, strongestPositives } from "@/lib/research-copy";
+import { CATEGORY_LABELS, formatContextHeadline, formatScore100, scoreNarrative, strongestPositives } from "@/lib/research-copy";
 import type { ExportPayload } from "@/export/payload";
 
 export function buildQuickMarkdown(payload: ExportPayload): string {
@@ -20,6 +20,8 @@ export function buildQuickMarkdown(payload: ExportPayload): string {
     payload.dates.lag_note,
     `**Research Score:** ${formatScore100(score.researchScore)}`,
     `**Valuation Score:** ${formatScore100(score.valuationScore)} (valuation factors only; not a copy of Research Score)`,
+    `**Historical Context:** ${formatContextHeadline(score.valuationContext.historical.label)} — ${score.valuationContext.historical.limitation ?? score.valuationContext.historical.facts[0] ?? "Data unavailable"}`,
+    `**Peer Context:** ${formatContextHeadline(score.valuationContext.peer.label)} — ${score.valuationContext.peer.limitation ?? score.valuationContext.peer.facts[0] ?? "Data unavailable"}`,
     `**Data Confidence:** ${score.dataConfidence.level}${score.dataConfidence.needsVerification ? " — High score — needs verification" : ""}`,
     `**Data freshness:** ${score.dataCoverage.freshness} · core coverage ${score.dataCoverage.available}/${score.dataCoverage.expected}`,
     "",
