@@ -23,6 +23,7 @@
     "filings:dates": "tsx src/ingest/cli.ts available-at",
     "profiles:classify": "tsx src/research/cli.ts",
     "test": "vitest run",
+    "events:ingest": "tsx src/events/cli.ts",
     "snapshot:pack": "tsx scripts/pack-snapshot.ts"
   },
   "dependencies": {

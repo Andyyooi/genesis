@@ -4,6 +4,12 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { events, ingestReports, instruments } from "@/db/schema";
 import { seedUniverseFromYaml } from "@/db/seed";
+import {
+  classifyEventType,
+  defaultMateriality,
+  sentimentFromLegacyClassification,
+} from "@/events/classify";
+import { buildDedupeKey } from "@/events/dedupe";
 import { parseAnnouncementsCsv } from "@/ingest/providers/csv-announcements";
 import type { EventsImportReport, RejectedRow } from "@/ingest/types";
 
@@ -28,27 +34,63 @@ export function importAnnouncementsCsv(filePath: string): EventsImportReport {
       continue;
     }
 
+    const eventType = classifyEventType(row.headline, row.excerpt);
+    const sentiment = sentimentFromLegacyClassification(row.classification);
+    const dedupeKey = buildDedupeKey({
+      source: row.source,
+      sourceId: null,
+      sourceUrl: row.sourceUrl,
+      headline: row.headline,
+      ticker: row.ticker,
+      companyName: null,
+      publishedAt: row.occurredAt,
+      occurredAt: row.occurredAt,
+    });
+
     db.insert(events)
       .values({
         instrumentId: instrument.id,
         occurredAt: row.occurredAt,
+        publishedAt: row.occurredAt,
         availableAt: row.availableAt,
+        retrievedAt: createdAt,
         source: row.source,
         sourceUrl: row.sourceUrl,
+        sourceId: null,
         headline: row.headline,
         excerpt: row.excerpt,
         classification: row.classification,
         relevanceNote: row.relevanceNote,
+        eventType,
+        sentiment,
+        materiality: defaultMateriality(eventType),
+        eventConfidence: row.availableAt ? "MEDIUM" : "LOW",
+        mappingConfidence: "HIGH",
+        sourceReliability: "CURATED",
+        companyNameRaw: null,
+        bursaCodeRaw: null,
+        dedupeKey,
         createdAt,
+        updatedAt: createdAt,
       })
       .onConflictDoUpdate({
         target: [events.instrumentId, events.occurredAt, events.source, events.headline],
         set: {
           availableAt: row.availableAt,
+          publishedAt: row.occurredAt,
+          retrievedAt: createdAt,
           sourceUrl: row.sourceUrl,
           excerpt: row.excerpt,
           classification: row.classification,
           relevanceNote: row.relevanceNote,
+          eventType,
+          sentiment,
+          materiality: defaultMateriality(eventType),
+          eventConfidence: row.availableAt ? "MEDIUM" : "LOW",
+          mappingConfidence: "HIGH",
+          sourceReliability: "CURATED",
+          dedupeKey,
+          updatedAt: createdAt,
         },
       })
       .run();

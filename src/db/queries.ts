@@ -117,16 +117,25 @@ export function loadInstrumentSnapshots(ticker: string) {
     .all();
 
   const eventSnapshots: EventSnapshot[] = eventRows
-    .filter((row) => row.occurredAt && row.headline && row.source)
+    .filter((row) => (row.occurredAt || row.publishedAt) && row.headline && row.source)
     .map((row) => ({
-      occurredAt: row.occurredAt as string,
+      occurredAt: (row.occurredAt ?? row.publishedAt) as string,
+      publishedAt: row.publishedAt ?? row.occurredAt,
       availableAt: row.availableAt,
+      retrievedAt: row.retrievedAt,
       source: row.source as string,
       sourceUrl: row.sourceUrl,
+      sourceId: row.sourceId,
       headline: row.headline as string,
       excerpt: row.excerpt,
       classification: row.classification ?? "Uncertain",
       relevanceNote: row.relevanceNote,
+      eventType: row.eventType,
+      sentiment: row.sentiment,
+      materiality: row.materiality,
+      eventConfidence: row.eventConfidence,
+      mappingConfidence: row.mappingConfidence,
+      sourceReliability: row.sourceReliability,
     }));
 
   return { instrument, periods, bars, events: eventSnapshots };

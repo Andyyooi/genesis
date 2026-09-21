@@ -47,7 +47,8 @@ export function scoreTicker(
     industry: data.instrument.industry,
     periods: data.periods,
     bars: data.bars,
-    events: data.events,
+    // Phase 16: store/display events, but do not feed news_tone into Research Score yet.
+    events: [],
     asOf,
   });
   const result = scoreFromMetrics({

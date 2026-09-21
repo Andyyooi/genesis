@@ -437,49 +437,62 @@ export default async function ResearchPage({
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold">News & announcements</h2>
+        <h2 className="text-xl font-semibold">Recent Events</h2>
         <p className="text-sm text-muted-foreground">
-          Stored CSV rows only. Classification is keyword rules (or a label you typed). Headlines
-          are not facts and this is not a buy list. Open the original URL.
+          Stored normalized events only (Phase 16). Not live-scraped on page load. Classification and
+          sentiment are rule-based labels — not buy/sell signals. Events do not change Research Score
+          or Absolute Valuation Score in this phase. Open the original source.
         </p>
         {scored.events.length === 0 ? (
-          <p className="text-sm">Data unavailable — import data/raw/announcements-sample.csv.</p>
+          <p className="text-sm">
+            Data unavailable — run{" "}
+            <code className="text-xs">npm run events:ingest</code> (curated fixture) or import{" "}
+            <code className="text-xs">data/raw/announcements-sample.csv</code>.
+          </p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
-                <TableHead>Source</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Headline</TableHead>
-                <TableHead>Classification</TableHead>
-                <TableHead className="hidden md:table-cell">Relevance</TableHead>
+                <TableHead>Source</TableHead>
+                <TableHead>Confidence</TableHead>
+                <TableHead className="hidden md:table-cell">Sentiment</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {scored.events.map((event, index) => (
-                <TableRow key={`${event.occurredAt}-${index}`}>
-                  <TableCell className="whitespace-nowrap">{event.occurredAt}</TableCell>
-                  <TableCell>{event.source}</TableCell>
-                  <TableCell>
-                    {event.sourceUrl ? (
-                      <a
-                        href={event.sourceUrl}
-                        className="underline underline-offset-4"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {event.headline}
-                      </a>
-                    ) : (
-                      event.headline
-                    )}
-                  </TableCell>
-                  <TableCell>{event.classification}</TableCell>
-                  <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
-                    {event.relevanceNote ?? "Data unavailable"}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {scored.events.map((event, index) => {
+                const when = (event.publishedAt ?? event.occurredAt).slice(0, 10);
+                return (
+                  <TableRow key={`${event.sourceId ?? event.occurredAt}-${index}`}>
+                    <TableCell className="whitespace-nowrap">{when}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {event.eventType ?? "UNKNOWN"}
+                    </TableCell>
+                    <TableCell>
+                      {event.sourceUrl ? (
+                        <a
+                          href={event.sourceUrl}
+                          className="underline underline-offset-4"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {event.headline}
+                        </a>
+                      ) : (
+                        event.headline
+                      )}
+                    </TableCell>
+                    <TableCell>{event.source}</TableCell>
+                    <TableCell>{event.eventConfidence ?? "UNKNOWN"}</TableCell>
+                    <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
+                      {event.sentiment ?? event.classification}
+                      {event.materiality ? ` · materiality ${event.materiality}` : ""}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}

@@ -11,17 +11,22 @@ export function snapshotGzPath() {
 }
 
 export function liveSqlitePath() {
+  if (process.env.BURSA_SQLITE_PATH?.trim()) {
+    return process.env.BURSA_SQLITE_PATH.trim();
+  }
   return join(process.cwd(), "data", "sqlite", "research.db");
 }
 
 /**
  * Local writable DB, or a /tmp copy of the committed gzip snapshot (read-only).
  * Vercel cannot persist SQLite writes; /tmp is per-instance only.
+ * Tests may set BURSA_SQLITE_PATH to an isolated file.
  */
 export function resolveSqliteFile(): { path: string; readonly: boolean } {
   if (!isSnapshotReadOnly()) {
-    mkdirSync(join(process.cwd(), "data", "sqlite"), { recursive: true });
-    return { path: liveSqlitePath(), readonly: false };
+    const path = liveSqlitePath();
+    mkdirSync(join(path, ".."), { recursive: true });
+    return { path, readonly: false };
   }
   const gz = snapshotGzPath();
   if (!existsSync(gz)) {

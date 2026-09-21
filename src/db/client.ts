@@ -172,6 +172,21 @@ function ensureSchema(sqlite: Database.Database) {
   if (eventCols.length && !eventCols.some((col) => col.name === "relevance_note")) {
     sqlite.exec("ALTER TABLE events ADD COLUMN relevance_note TEXT");
   }
+  // Phase 16 event infrastructure columns (additive; never invent dates).
+  addColumn(sqlite, "events", "published_at", "TEXT");
+  addColumn(sqlite, "events", "retrieved_at", "TEXT");
+  addColumn(sqlite, "events", "source_id", "TEXT");
+  addColumn(sqlite, "events", "event_type", "TEXT");
+  addColumn(sqlite, "events", "sentiment", "TEXT");
+  addColumn(sqlite, "events", "materiality", "TEXT");
+  addColumn(sqlite, "events", "event_confidence", "TEXT");
+  addColumn(sqlite, "events", "mapping_confidence", "TEXT");
+  addColumn(sqlite, "events", "source_reliability", "TEXT");
+  addColumn(sqlite, "events", "company_name_raw", "TEXT");
+  addColumn(sqlite, "events", "bursa_code_raw", "TEXT");
+  addColumn(sqlite, "events", "dedupe_key", "TEXT");
+  addColumn(sqlite, "events", "updated_at", "TEXT");
+  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS events_dedupe_key ON events (dedupe_key)");
 }
 
 function addColumn(sqlite: Database.Database, table: string, name: string, ddl: string) {

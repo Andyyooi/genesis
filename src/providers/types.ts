@@ -50,5 +50,6 @@ export interface FundamentalProvider {
 
 export interface NewsProvider {
   readonly id: string;
+  /** Phase 16+: return drafts via EventSourceProvider implementations instead. */
   list(yahooTicker: string): Promise<never[]>;
 }

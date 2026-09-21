@@ -134,3 +134,4 @@ Do not commit `.env*`, `data/sqlite/research.db`, or WAL/SHM.
 
 Local default stays **writable** `data/sqlite/research.db` on `npm run dev`. To simulate Vercel: `BURSA_SNAPSHOT_READONLY=1 npm run dev` (needs the gzip present).
 
+**Full local SQLite:** gunzip `data/snapshots/research.db.gz` into `data/sqlite/research.db` (the live 123 MB DB was left out of this Cursor pack).

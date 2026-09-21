@@ -47,13 +47,22 @@ export type StatementSnapshot = {
 
 export type EventSnapshot = {
   occurredAt: string;
+  publishedAt?: string | null;
   availableAt: string | null;
+  retrievedAt?: string | null;
   source: string;
   sourceUrl: string | null;
+  sourceId?: string | null;
   headline: string;
   excerpt: string | null;
   classification: string;
   relevanceNote: string | null;
+  eventType?: string | null;
+  sentiment?: string | null;
+  materiality?: string | null;
+  eventConfidence?: string | null;
+  mappingConfidence?: string | null;
+  sourceReliability?: string | null;
 };
 
 export type PriceBarSnapshot = {

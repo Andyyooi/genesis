@@ -95,24 +95,49 @@ export const financialPeriods = sqliteTable(
   ],
 );
 
-/** Announcements/news ingested from CSV (Phase 8). */
+/**
+ * Announcements / company events (Phase 8 CSV + Phase 16 normalized layer).
+ * published_at / available_at are never filled from retrieved_at.
+ */
 export const events = sqliteTable(
   "events",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     instrumentId: integer("instrument_id").references(() => instruments.id),
+    /** Event/announcement calendar date (Phase 8). Prefer published_at when both exist. */
     occurredAt: text("occurred_at"),
+    /** Public announcement timestamp when known. Null = unknown (not PIT-safe). */
+    publishedAt: text("published_at"),
+    /**
+     * When an investor could see the item. Null when unknown — do not copy retrieved_at.
+     * PIT queries should require this for backtests.
+     */
     availableAt: text("available_at"),
+    /** Ingest clock only. Never used as publication time. */
+    retrievedAt: text("retrieved_at"),
     source: text("source"),
     sourceUrl: text("source_url"),
+    sourceId: text("source_id"),
     headline: text("headline"),
     excerpt: text("excerpt"),
+    /** Phase 8 legacy tone label (Positive catalyst / Negative / Neutral / Uncertain). */
     classification: text("classification"),
     relevanceNote: text("relevance_note"),
+    eventType: text("event_type"),
+    sentiment: text("sentiment"),
+    materiality: text("materiality"),
+    eventConfidence: text("event_confidence"),
+    mappingConfidence: text("mapping_confidence"),
+    sourceReliability: text("source_reliability"),
+    companyNameRaw: text("company_name_raw"),
+    bursaCodeRaw: text("bursa_code_raw"),
+    dedupeKey: text("dedupe_key"),
     createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at"),
   },
   (table) => [
     uniqueIndex("events_unique").on(table.instrumentId, table.occurredAt, table.source, table.headline),
+    uniqueIndex("events_dedupe_key").on(table.dedupeKey),
   ],
 );
 
