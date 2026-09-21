@@ -1,3 +1,5 @@
+import type { ResearchProfile } from "@/research/profiles";
+
 export type FactorEvidence = {
   id: string;
   label: string;
@@ -67,6 +69,8 @@ export type ScoreResult = {
   asOf: string;
   configHash: string;
   profile: "default" | "reit" | "bank";
+  researchProfile: ResearchProfile;
+  researchProfileReason: string;
   researchScore: number | null;
   valuationScore: number | null;
   categories: CategoryScore[];

@@ -10,6 +10,8 @@ function result(over: Partial<ScoreResult> = {}): ScoreResult {
     asOf: "2026-09-20T00:00:00.000Z",
     configHash: "x",
     profile: "default",
+    researchProfile: "GENERAL",
+    researchProfileReason: "test fixture",
     researchScore: 71,
     valuationScore: 84,
     categories: [

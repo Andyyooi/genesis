@@ -90,7 +90,11 @@ After changing scoring or Data Confidence, refresh scan rows without Yahoo:
 npm run market:rescore
 ```
 
-Research, dashboard, exports, and `/market` show **Data Coverage**, **Freshness** (period-end or filing date — never ingestion time), and **Data Confidence** (HIGH / MEDIUM / LOW / VERY_LOW). Raw Research and Valuation numbers are not rewritten. Thin or stale high scores appear under **High Score — Needs Verification**.
+Research, dashboard, exports, and `/market` show **Data Coverage**, **Freshness**, and **Data Confidence**. Raw Research and Valuation numbers are not rewritten for GENERAL. `research_profile` (GENERAL / BANK / REIT / OTHER_FINANCIAL / UNKNOWN) is stored separately from `instrument_type`.
+
+```bash
+npm run profiles:classify
+```
 
 ```bash
 npm test

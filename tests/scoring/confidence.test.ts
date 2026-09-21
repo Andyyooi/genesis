@@ -149,13 +149,13 @@ describe("data confidence", () => {
       latestAnnual: { periodEnd: "2025-06-30", availableAt: "2025-08-01" },
     });
     expect(result.profile).toBe("reit");
-    expect(result.dataCoverage.expected).toBe(5);
+    expect(result.dataCoverage.expected).toBe(9);
     expect(result.dataCoverage.available).toBe(5);
-    expect(result.dataConfidence.level).toBe("HIGH");
+    expect(result.dataConfidence.level).toBe("MEDIUM");
     expect(result.categories.flatMap((c) => c.factors.map((f) => f.id))).not.toContain("fcf");
   });
 
-  it("bank overlay skips empty health from expected counts", () => {
+  it("bank overlay declares health metrics unavailable instead of using industrial FCF", () => {
     const result = scoreFromMetrics({
       config,
       instrumentType: "COMMON_STOCK",
@@ -172,9 +172,10 @@ describe("data confidence", () => {
       latestAnnual: { periodEnd: "2025-06-30", availableAt: "2025-08-20" },
     });
     expect(result.profile).toBe("bank");
-    expect(result.dataCoverage.expected).toBe(5);
-    expect(result.categories.find((c) => c.id === "financial_health")?.factors).toHaveLength(0);
-    expect(result.dataConfidence.level).toBe("HIGH");
+    expect(result.dataCoverage.expected).toBe(9);
+    expect(result.categories.find((c) => c.id === "financial_health")?.factors.length).toBe(4);
+    expect(result.categories.find((c) => c.id === "financial_health")?.score).toBeNull();
+    expect(result.dataConfidence.level).toBe("MEDIUM");
   });
 
   it("PN17-unknown does not invent a PN17 feed or change the raw score", () => {

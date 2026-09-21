@@ -11,8 +11,9 @@ const universeInstrumentSchema = z.object({
   name: z.string().min(1),
   instrument_type: z.enum(INSTRUMENT_TYPES),
   listing_board: z.string().optional(),
-  sector: z.string().optional(),
+    sector: z.string().optional(),
   industry: z.string().optional(),
+  research_profile: z.enum(["GENERAL", "BANK", "REIT", "OTHER_FINANCIAL", "UNKNOWN"]).optional(),
   pn17: z.boolean().default(false),
   shariah_compliant: z.boolean().optional(),
 });

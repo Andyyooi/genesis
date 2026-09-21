@@ -140,7 +140,10 @@ describe("scoring engine", () => {
     expect(bankMetrics).not.toContain("fcf");
     expect(bankMetrics).not.toContain("ev_ebitda");
     expect(bankMetrics).not.toContain("net_debt_to_ebitda");
-    expect(bank.factor_sets.financial_health).toHaveLength(0);
+    expect(bank.factor_sets.financial_health).toHaveLength(4);
+    expect(bank.factor_sets.financial_health.map((f) => f.metric)).toEqual(
+      expect.arrayContaining(["nim", "cet1_ratio"]),
+    );
 
     const scored = scoreFromMetrics({
       config,

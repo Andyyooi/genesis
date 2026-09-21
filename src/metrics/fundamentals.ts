@@ -453,6 +453,24 @@ export function fundamentalMetrics(
     p,
   );
 
+  const undeclared =
+    "Not in stored Yahoo/CSV filings for this name — not invented.";
+  const nim = unavailable("nim", "Net interest margin", "net interest income / interest-bearing assets", undeclared, [], p);
+  const costToIncome = unavailable("cost_to_income", "Cost / income", "operating expense / operating income", undeclared, [], p);
+  const impairedLoans = unavailable("impaired_loans_ratio", "Impaired loans ratio", "impaired loans / gross loans", undeclared, [], p);
+  const cet1 = unavailable("cet1_ratio", "CET1 ratio", "common equity tier 1 / risk-weighted assets", undeclared, [], p);
+  const occupancy = unavailable("occupancy", "Occupancy", "occupied NLA / total NLA", undeclared, [], p);
+  const wale = unavailable("wale_years", "WALE", "weighted average lease expiry (years)", undeclared, [], p);
+  const npi = unavailable("npi", "Net property income", "reported NPI", undeclared, [], p, "myr");
+  const reitIc = unavailable(
+    "reit_interest_coverage",
+    "REIT interest coverage",
+    "NPI / finance cost",
+    undeclared,
+    [],
+    p,
+  );
+
   return [
     grossMargin,
     operatingMargin,
@@ -473,5 +491,13 @@ export function fundamentalMetrics(
     ttmRevenueMetric,
     ttmPatMetric,
     epsMetric,
+    nim,
+    costToIncome,
+    impairedLoans,
+    cet1,
+    occupancy,
+    wale,
+    npi,
+    reitIc,
   ];
 }

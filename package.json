@@ -20,6 +20,7 @@
     "market:rescore": "tsx src/market/cli.ts rescore",
     "fundamentals:yahoo": "tsx src/market/cli.ts fundamentals",
     "fundamentals:report": "tsx src/market/cli.ts report",
+    "profiles:classify": "tsx src/research/cli.ts",
     "test": "vitest run"
   },
   "dependencies": {

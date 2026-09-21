@@ -82,7 +82,7 @@ export default async function ResearchPage({
   const sma200 = sma(closes, 200);
   const lastVolume = bars[0]?.volume ?? null;
   const isReit = scored.instrumentType === "REIT";
-  const isBank = result.profile === "bank";
+  const isBank = result.researchProfile === "BANK" || result.profile === "bank";
   const valuationIds = isReit
     ? ["dividend_yield", "book_nav_premium", "price_to_book", "nav_per_share"]
     : isBank
@@ -104,6 +104,7 @@ export default async function ResearchPage({
           <Badge variant={isReit ? "secondary" : "outline"}>
             {isReit ? "REIT" : "Common stock"}
           </Badge>
+          <Badge variant="outline">Profile {result.researchProfile}</Badge>
           {instrument.pn17 ? <Badge variant="destructive">PN17 — higher risk</Badge> : null}
           {instrument.shariahCompliant === true ? (
             <Badge variant="secondary">Shariah (stored flag)</Badge>
@@ -140,7 +141,11 @@ export default async function ResearchPage({
             measures are the only configured health inputs.
           </p>
         ) : null}
-        <ExportActions ticker={instrument.ticker} />
+          <p className="text-sm text-muted-foreground">
+            Expected core factors {result.dataCoverage.expected} · available {result.dataCoverage.available} ·
+            unavailable {result.dataCoverage.unavailable}
+            {result.dataConfidence.needsVerification ? " · needs verification" : ""}.
+          </p>
       </header>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

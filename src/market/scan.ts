@@ -170,6 +170,7 @@ function persistListedScores(meta: {
       instrumentType: scoredRow.instrumentType,
       pn17: instrument.pn17,
       profile: scoredRow.result.profile,
+      researchProfile: scoredRow.result.researchProfile,
       researchScore: scoredRow.result.researchScore,
       valuationScore: scoredRow.result.valuationScore,
       coverage,

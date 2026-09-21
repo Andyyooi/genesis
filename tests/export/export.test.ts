@@ -122,7 +122,7 @@ describe("ChatGPT export", () => {
   it("Quick report stays concise and names the profile", () => {
     const md = buildQuickMarkdown(common);
     expect(md).toMatch(/instrument_type: COMMON_STOCK/);
-    expect(md).toMatch(/scoring profile: default/);
+    expect(md).toMatch(/scoring factor set: default/);
     expect(md.length).toBeLessThan(buildFullMarkdown(common).length);
   });
 

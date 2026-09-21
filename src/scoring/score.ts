@@ -2,9 +2,11 @@ import {
   CATEGORY_KEYS,
   getFactorProfile,
   profileName,
+  resolveResearchProfile,
   type CategoryKey,
   type ScoringConfig,
 } from "@/config/load-scoring";
+import type { ResearchProfile } from "@/research/profiles";
 import type { MetricValue } from "@/metrics/types";
 import { assessDataQuality } from "@/scoring/confidence";
 import { evaluateConcerns } from "@/scoring/concerns";
@@ -36,14 +38,25 @@ export function scoreFromMetrics(args: {
   ticker?: string | null;
   sector?: string | null;
   industry?: string | null;
+  researchProfile?: ResearchProfile | null;
   pn17?: boolean;
   asOf?: string;
   /** Latest annual filing clock. available_at if known, else period_end. Never retrieved_at. */
   latestAnnual?: { periodEnd: string; availableAt: string | null } | null;
 }): ScoreResult {
-  const hints = { sector: args.sector, industry: args.industry };
+  const classified = resolveResearchProfile(
+    args.instrumentType,
+    args.ticker,
+    { sector: args.sector, industry: args.industry, explicit: args.researchProfile },
+    args.config,
+  );
+  const hints = {
+    sector: args.sector,
+    industry: args.industry,
+    explicit: classified.profile,
+  };
   const profile = getFactorProfile(args.config, args.instrumentType, args.ticker, hints);
-  const name = profileName(args.instrumentType, args.ticker, hints);
+  const name = profileName(args.instrumentType, args.ticker, hints, args.config);
   const asOf = args.asOf ?? new Date().toISOString();
   const notes: string[] = [];
 
@@ -100,6 +113,9 @@ export function scoreFromMetrics(args: {
   const valuation = categories.find((c) => c.id === "valuation");
   const valuationScore = valuation?.score ?? null;
 
+  notes.push(
+    `Research profile ${classified.profile} (${classified.reason}) Factor set ${classified.factorSet}.`,
+  );
   if (args.config.unavailable_until_data.length) {
     notes.push(
       `${args.config.unavailable_until_data
@@ -137,6 +153,8 @@ export function scoreFromMetrics(args: {
     asOf,
     configHash: hashScoringConfig(args.config),
     profile: name,
+    researchProfile: classified.profile,
+    researchProfileReason: classified.reason,
     researchScore,
     valuationScore,
     categories,

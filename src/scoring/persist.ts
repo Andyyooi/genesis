@@ -14,6 +14,7 @@ export function persistScoreRun(args: {
       asOf: args.result.asOf,
       configHash: args.result.configHash,
       instrumentProfile: args.result.profile,
+      researchProfile: args.result.researchProfile,
       researchScore: args.result.researchScore,
       valuationScore: args.result.valuationScore,
       categoryScoresJson: JSON.stringify(

@@ -19,6 +19,27 @@ unavailable_until_data:
 
 min_category_coverage: 0.5
 
+# Classification uses stored industry / instrument_type / this explicit ticker list.
+# Not issuer-name matching.
+research_profile_rules:
+  bank_industry_includes:
+    - banks
+  other_financial_industry_includes:
+    - insurance
+    - takaful
+    - asset management
+    - capital markets
+    - credit services
+    - financial data
+    - stock exchanges
+  bank_tickers:
+    - MAYBANK
+    - CIMB
+    - PBBANK
+    - HLBANK
+    - RHBBANK
+
+
 # In-app alerts (Phase 9). Thresholds are research triggers, not trade signals.
 alerts:
   score_delta: 5
@@ -169,10 +190,38 @@ instrument_profiles:
         - id: gearing
           metric: reit_gearing
           label: REIT gearing (debt / capital)
-          weight: 100
+          weight: 40
           direction: lower_better
           worse: 0.5
           better: 0.25
+        - id: occupancy
+          metric: occupancy
+          label: Occupancy
+          weight: 15
+          direction: higher_better
+          worse: 0.85
+          better: 0.97
+        - id: wale
+          metric: wale_years
+          label: WALE
+          weight: 15
+          direction: higher_better
+          worse: 2
+          better: 6
+        - id: npi
+          metric: npi
+          label: Net property income
+          weight: 15
+          direction: higher_better
+          worse: 0
+          better: 1
+        - id: reit_interest_coverage
+          metric: reit_interest_coverage
+          label: REIT interest coverage
+          weight: 15
+          direction: higher_better
+          worse: 1.5
+          better: 4
       growth:
         - id: revenue_cagr
           metric: revenue_cagr
@@ -217,7 +266,35 @@ instrument_profiles:
           direction: higher_better
           worse: 0.05
           better: 0.18
-      financial_health: []
+      financial_health:
+        - id: nim
+          metric: nim
+          label: Net interest margin
+          weight: 25
+          direction: higher_better
+          worse: 0.015
+          better: 0.025
+        - id: cost_to_income
+          metric: cost_to_income
+          label: Cost / income
+          weight: 25
+          direction: lower_better
+          worse: 0.55
+          better: 0.35
+        - id: impaired_loans
+          metric: impaired_loans_ratio
+          label: Impaired loans ratio
+          weight: 25
+          direction: lower_better
+          worse: 0.04
+          better: 0.01
+        - id: cet1
+          metric: cet1_ratio
+          label: CET1 ratio
+          weight: 25
+          direction: higher_better
+          worse: 0.12
+          better: 0.16
       growth:
         - id: revenue_cagr
           metric: revenue_cagr

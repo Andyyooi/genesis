@@ -26,6 +26,7 @@ export type ExportPayload = {
     bursa_code: string | null;
     sector: string | null;
     pn17: boolean;
+    research_profile?: string | null;
     currency: string;
   };
   /** Score-run calendar date vs stored filing period vs last trade. */
@@ -77,6 +78,7 @@ export function buildExportPayload(ticker: string): ExportPayload | null {
       bursa_code: scored.instrument.bursaCode,
       sector: scored.instrument.sector,
       pn17: scored.instrument.pn17,
+      research_profile: scored.result.researchProfile,
       currency: scored.instrument.currency,
     },
     dates: buildSnapshotDates({

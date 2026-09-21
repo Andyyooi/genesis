@@ -2,6 +2,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { z } from "zod";
+import {
+  classifyResearchProfile,
+  factorSetForProfile,
+  type ResearchProfile,
+  type ResearchProfileRules,
+} from "@/research/profiles";
 
 export const CATEGORY_KEYS = [
   "valuation",
@@ -83,6 +89,33 @@ const scoringSchema = z
       reit: instrumentProfileSchema,
       bank: instrumentProfileSchema,
     }),
+    research_profile_rules: z
+      .object({
+        bank_industry_includes: z.array(z.string()).default(["banks"]),
+        other_financial_industry_includes: z.array(z.string()).default([
+          "insurance",
+          "takaful",
+          "asset management",
+          "capital markets",
+          "credit services",
+          "financial data",
+          "stock exchanges",
+        ]),
+        bank_tickers: z.array(z.string()).default(["MAYBANK", "CIMB", "PBBANK"]),
+      })
+      .default({
+        bank_industry_includes: ["banks"],
+        other_financial_industry_includes: [
+          "insurance",
+          "takaful",
+          "asset management",
+          "capital markets",
+          "credit services",
+          "financial data",
+          "stock exchanges",
+        ],
+        bank_tickers: ["MAYBANK", "CIMB", "PBBANK"],
+      }),
   })
   .superRefine((value, ctx) => {
     const sum = Object.values(value.category_weights).reduce((a, b) => a + b, 0);
@@ -120,37 +153,63 @@ export function loadScoringConfig(rootDir = process.cwd()): ScoringConfig {
   return scoringSchema.parse(raw);
 }
 
+export function profileRulesFromConfig(config: ScoringConfig): ResearchProfileRules {
+  const rules = config.research_profile_rules;
+  return {
+    bankIndustryIncludes: rules.bank_industry_includes,
+    otherFinancialIndustryIncludes: rules.other_financial_industry_includes,
+    bankTickers: rules.bank_tickers.map((t) => t.toUpperCase()),
+  };
+}
+
+/** @deprecated Explicit bank tickers now live in scoring.yaml research_profile_rules.bank_tickers */
 export const BANK_OVERLAY_TICKERS = new Set(["MAYBANK", "CIMB", "PBBANK"]);
 
 export type ScoringProfileName = "default" | "reit" | "bank";
 
+export function resolveResearchProfile(
+  instrumentType: "COMMON_STOCK" | "REIT",
+  ticker?: string | null,
+  hints?: { sector?: string | null; industry?: string | null; explicit?: ResearchProfile | null },
+  config?: ScoringConfig,
+): ReturnType<typeof classifyResearchProfile> {
+  const rules = config ? profileRulesFromConfig(config) : undefined;
+  return classifyResearchProfile({
+    instrumentType,
+    ticker,
+    sector: hints?.sector,
+    industry: hints?.industry,
+    explicit: hints?.explicit,
+    rules,
+  });
+}
+
 export function resolveScoringProfile(
   instrumentType: "COMMON_STOCK" | "REIT",
   ticker?: string | null,
-  hints?: { sector?: string | null; industry?: string | null },
+  hints?: { sector?: string | null; industry?: string | null; explicit?: ResearchProfile | null },
+  config?: ScoringConfig,
 ): ScoringProfileName {
-  if (instrumentType === "REIT") return "reit";
-  if (ticker && BANK_OVERLAY_TICKERS.has(ticker.toUpperCase())) return "bank";
-  const industry = (hints?.industry ?? "").toLowerCase();
-  const sector = (hints?.sector ?? "").toLowerCase();
-  if (industry.includes("bank")) return "bank";
-  if (sector.includes("financial") && industry.includes("bank")) return "bank";
-  return "default";
+  return resolveResearchProfile(instrumentType, ticker, hints, config).factorSet;
 }
 
 export function getFactorProfile(
   config: ScoringConfig,
   instrumentType: "COMMON_STOCK" | "REIT",
   ticker?: string | null,
-  hints?: { sector?: string | null; industry?: string | null },
+  hints?: { sector?: string | null; industry?: string | null; explicit?: ResearchProfile | null },
 ) {
-  return config.instrument_profiles[resolveScoringProfile(instrumentType, ticker, hints)];
+  const key = resolveScoringProfile(instrumentType, ticker, hints, config);
+  return config.instrument_profiles[key];
 }
 
 export function profileName(
   instrumentType: "COMMON_STOCK" | "REIT",
   ticker?: string | null,
-  hints?: { sector?: string | null; industry?: string | null },
+  hints?: { sector?: string | null; industry?: string | null; explicit?: ResearchProfile | null },
+  config?: ScoringConfig,
 ): ScoringProfileName {
-  return resolveScoringProfile(instrumentType, ticker, hints);
+  return resolveScoringProfile(instrumentType, ticker, hints, config);
 }
+
+export { factorSetForProfile };

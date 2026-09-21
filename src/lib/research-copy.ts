@@ -66,11 +66,15 @@ export function scoreNarrative(result: ScoreResult): string {
           ? "historical growth is moderate"
           : "historical growth is relatively weak";
   const profileBit =
-    result.profile === "reit"
+    result.researchProfile === "REIT" || result.profile === "reit"
       ? "This name is scored with the REIT factor profile (distribution yield, book NAV, DPU CAGR, gearing) — not industrial FCF or EV/EBITDA."
-      : result.profile === "bank"
-        ? "This name is scored with the bank overlay (P/B and ROE). Industrial FCF and EV/EBITDA are not scoring factors."
-        : "This name is scored with the ordinary-company factor profile.";
+      : result.researchProfile === "BANK" || result.profile === "bank"
+        ? "This name is scored with the bank overlay (P/B and ROE). Industrial FCF and EV/EBITDA are not scoring factors. Declared bank health metrics stay unavailable until a filing source exists."
+        : result.researchProfile === "OTHER_FINANCIAL"
+          ? "Research profile OTHER_FINANCIAL: labelled from stored industry, still using the GENERAL factor set (no insurance/credit model yet)."
+          : result.researchProfile === "UNKNOWN"
+            ? "Research profile UNKNOWN: not enough industry data to assign BANK/REIT. GENERAL factor set."
+            : "This name is scored with the GENERAL (ordinary-company) factor profile.";
   return `${profileBit} ${qualityBit[0].toUpperCase()}${qualityBit.slice(1)}; ${valueBit}; ${growthBit}. These are research observations, not a buy or sell.`;
 }
 

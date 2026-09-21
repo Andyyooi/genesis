@@ -14,6 +14,7 @@ instruments:
     instrument_type: COMMON_STOCK
     listing_board: MAIN
     sector: Financial Services
+    industry: Banks - Regional
     pn17: false
     shariah_compliant: false
   - ticker: CIMB
@@ -23,6 +24,7 @@ instruments:
     instrument_type: COMMON_STOCK
     listing_board: MAIN
     sector: Financial Services
+    industry: Banks - Regional
     pn17: false
     shariah_compliant: false
   - ticker: PBBANK
@@ -32,6 +34,7 @@ instruments:
     instrument_type: COMMON_STOCK
     listing_board: MAIN
     sector: Financial Services
+    industry: Banks - Regional
     pn17: false
     shariah_compliant: false
   - ticker: HLBANK
@@ -41,6 +44,7 @@ instruments:
     instrument_type: COMMON_STOCK
     listing_board: MAIN
     sector: Financial Services
+    industry: Banks - Regional
     pn17: false
     shariah_compliant: false
   - ticker: RHBBANK
@@ -50,6 +54,7 @@ instruments:
     instrument_type: COMMON_STOCK
     listing_board: MAIN
     sector: Financial Services
+    industry: Banks - Regional
     pn17: false
     shariah_compliant: false
   - ticker: TENAGA

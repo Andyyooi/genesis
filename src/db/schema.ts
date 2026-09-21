@@ -12,9 +12,11 @@ export const instruments = sqliteTable("instruments", {
   name: text("name").notNull(),
   sector: text("sector"),
   industry: text("industry"),
-  listingBoard: text("listing_board"),
-  /** Phase 4/10 scoring selects default, reit, or bank overlay from this field plus ticker. */
+    listingBoard: text("listing_board"),
+  /** COMMON_STOCK or REIT. Separate from research_profile. */
   instrumentType: text("instrument_type", { enum: INSTRUMENT_TYPES }).notNull(),
+  /** GENERAL | BANK | REIT | OTHER_FINANCIAL | UNKNOWN */
+  researchProfile: text("research_profile"),
   /** PN17/GN3-style status: warning in the UI, never a silent score deduction. */
   pn17: integer("pn17", { mode: "boolean" }).notNull().default(false),
   currency: text("currency").notNull().default("MYR"),
@@ -116,6 +118,7 @@ export const scoreRuns = sqliteTable("score_runs", {
   asOf: text("as_of").notNull(),
   configHash: text("config_hash"),
   instrumentProfile: text("instrument_profile"),
+  researchProfile: text("research_profile"),
   researchScore: real("research_score"),
   valuationScore: real("valuation_score"),
   categoryScoresJson: text("category_scores_json"),

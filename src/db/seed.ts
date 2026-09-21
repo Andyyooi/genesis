@@ -1,6 +1,8 @@
+import { eq } from "drizzle-orm";
 import { loadUniverseConfig } from "@/config/load-universe";
 import { getDb } from "@/db/client";
 import { instruments } from "@/db/schema";
+import { assignResearchProfiles } from "@/research/assign-profiles";
 
 export function seedUniverseFromYaml() {
   const universe = loadUniverseConfig();
@@ -8,6 +10,7 @@ export function seedUniverseFromYaml() {
   const now = new Date().toISOString();
 
   for (const row of universe.instruments) {
+    const existing = db.select().from(instruments).where(eq(instruments.ticker, row.ticker)).get();
     db.insert(instruments)
       .values({
         ticker: row.ticker,
@@ -18,6 +21,7 @@ export function seedUniverseFromYaml() {
         industry: row.industry ?? null,
         listingBoard: row.listing_board ?? null,
         instrumentType: row.instrument_type,
+        researchProfile: row.research_profile ?? null,
         pn17: row.pn17,
         currency: "MYR",
         shariahCompliant: row.shariah_compliant ?? null,
@@ -32,10 +36,11 @@ export function seedUniverseFromYaml() {
           bursaCode: row.bursa_code ?? null,
           yahooTicker: row.yahoo_ticker ?? null,
           name: row.name,
-          sector: row.sector ?? null,
-          industry: row.industry ?? null,
+          sector: row.sector ?? existing?.sector ?? null,
+          industry: row.industry ?? existing?.industry ?? null,
           listingBoard: row.listing_board ?? null,
           instrumentType: row.instrument_type,
+          researchProfile: row.research_profile ?? existing?.researchProfile ?? null,
           pn17: row.pn17,
           currency: "MYR",
           shariahCompliant: row.shariah_compliant ?? null,
@@ -47,5 +52,6 @@ export function seedUniverseFromYaml() {
       .run();
   }
 
+  assignResearchProfiles();
   return universe;
 }

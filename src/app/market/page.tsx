@@ -172,7 +172,10 @@ export default function MarketPage() {
                           </Badge>
                         ) : null}
                       </TableCell>
-                      <TableCell>{String(row.instrumentType)}</TableCell>
+                      <TableCell>
+                        {String(row.instrumentType)}
+                        {row.researchProfile ? ` · ${String(row.researchProfile)}` : ""}
+                      </TableCell>
                       <TableCell
                         className={`text-right ${row.needsVerification ? "text-muted-foreground" : ""}`}
                       >

@@ -313,9 +313,20 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
                         REIT
                       </Badge>
                     ) : null}
-                    {row.result.profile === "bank" ? (
+                    {row.result.researchProfile === "BANK" || row.result.profile === "bank" ? (
                       <Badge className="relative z-10 ml-1" variant="outline">
-                        Bank
+                        BANK
+                      </Badge>
+                    ) : null}
+                    {row.result.researchProfile === "GENERAL" ? (
+                      <Badge className="relative z-10 ml-1" variant="outline">
+                        GENERAL
+                      </Badge>
+                    ) : null}
+                    {row.result.researchProfile === "OTHER_FINANCIAL" ||
+                    row.result.researchProfile === "UNKNOWN" ? (
+                      <Badge className="relative z-10 ml-1" variant="outline">
+                        {row.result.researchProfile}
                       </Badge>
                     ) : null}
                     {row.shariahCompliant === true ? (

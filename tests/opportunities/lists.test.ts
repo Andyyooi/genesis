@@ -12,6 +12,8 @@ function result(partial: Partial<ScoreResult> = {}): ScoreResult {
     asOf: "2026-09-20T00:00:00.000Z",
     configHash: "test",
     profile: "default",
+    researchProfile: "GENERAL",
+    researchProfileReason: "test fixture",
     researchScore: 60,
     valuationScore: 80,
     categories: [
