@@ -15,6 +15,9 @@ export function persistAnnualPeriod(
   period: FundamentalPeriodDraft,
   retrievedAt: string,
 ): PeriodPersistResult {
+  const incomingHasValue = Object.values(period.lineItems).some((value) => value !== null);
+  if (!incomingHasValue) return "unchanged";
+
   const db = getDb();
   const sameYear = db
     .select()

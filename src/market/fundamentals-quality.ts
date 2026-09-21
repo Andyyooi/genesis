@@ -63,7 +63,8 @@ export function buildFundamentalsQualityReport(asOf = new Date().toISOString()):
     const annuals = (byInstrument.get(instrument.id) ?? [])
       .filter((row) => row.statementType === "annual")
       .sort((a, b) => b.periodEnd.localeCompare(a.periodEnd));
-    const annual = annuals[0];
+    const annual =
+      annuals.find((row) => latestAnnualHasCore(parseLineItemsJson(row.lineItemsJson))) ?? annuals[0];
     if (!annual) {
       none += 1;
       freshness.NONE += 1;
@@ -109,8 +110,18 @@ export function buildFundamentalsQualityReport(asOf = new Date().toISOString()):
     if (tickerLatest.has(row.ticker)) continue;
     tickerLatest.set(row.ticker, row.failureCode ?? "UNKNOWN");
   }
+  const gapTickers = new Set(
+    listed
+      .filter((instrument) => {
+        const annuals = (byInstrument.get(instrument.id) ?? []).filter((row) => row.statementType === "annual");
+        const usable = annuals.some((row) => latestAnnualHasCore(parseLineItemsJson(row.lineItemsJson)));
+        return !usable;
+      })
+      .map((row) => row.ticker),
+  );
   const byCode = new Map<string, string[]>();
-  for (const [ticker, code] of tickerLatest) {
+  for (const ticker of gapTickers) {
+    const code = tickerLatest.get(ticker) ?? "NO_DATA";
     const list = byCode.get(code) ?? [];
     list.push(ticker);
     byCode.set(code, list);
