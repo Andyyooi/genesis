@@ -215,7 +215,8 @@ instruments:
     name: Mr D.I.Y. Group (M) Berhad
     instrument_type: COMMON_STOCK
     listing_board: MAIN
-    sector: Consumer Products
+    sector: Consumer Cyclical
+    industry: Home Improvement Retail
     pn17: false
   - ticker: KLCC
     bursa_code: "5235SS"

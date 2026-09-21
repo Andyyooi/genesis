@@ -4,13 +4,25 @@ import type { LineItems } from "@/ingest/types";
 import type { MetricValue, PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
 import type { ResearchProfile } from "@/research/profiles";
 import type { DataConfidence, DataCoverage } from "@/scoring/types";
+import {
+  emptyPeerQuality,
+  MIN_USABLE_PEERS,
+  selectPeerSet,
+  type PeerQuality,
+  type PeerUniverseRow,
+} from "@/scoring/peer-group";
+
+export type { PeerQuality, PeerUniverseRow } from "@/scoring/peer-group";
+export { MIN_USABLE_PEERS } from "@/scoring/peer-group";
 
 export const CONTEXT_LABELS = ["POSITIVE", "NEUTRAL", "NEGATIVE", "UNAVAILABLE"] as const;
 export type ContextLabel = (typeof CONTEXT_LABELS)[number];
 
 export const MIN_HISTORICAL_POINTS = 3;
-export const MIN_PEER_BANK_REIT = 5;
-export const MIN_PEER_GENERAL = 8;
+/** @deprecated use MIN_USABLE_PEERS */
+export const MIN_PEER_BANK_REIT = MIN_USABLE_PEERS;
+/** @deprecated use MIN_USABLE_PEERS */
+export const MIN_PEER_GENERAL = MIN_USABLE_PEERS;
 export const PRICE_ALIGN_DAYS = 21;
 
 const PERIOD_END_LIMITATION =
@@ -47,28 +59,12 @@ export type ValuationContextBlock = {
   confidenceLevel: DataConfidence["level"] | null;
   freshness: DataCoverage["freshness"] | null;
   historicalValuationStatus: HistoricalValuationStatus;
+  peerQuality: PeerQuality | null;
 };
 
 export type ValuationContextResult = {
   historical: ValuationContextBlock;
   peer: ValuationContextBlock;
-};
-
-export type PeerUniverseRow = {
-  ticker: string;
-  researchProfile: ResearchProfile;
-  industry: string | null;
-  sector: string | null;
-  lastClose: number | null;
-  lastCloseDate: string | null;
-  periodEnd: string | null;
-  availableAt: string | null;
-  eps: number | null;
-  dividendPerShare: number | null;
-  equity: number | null;
-  shares: number | null;
-  revenue: number | null;
-  pat: number | null;
 };
 
 export type HistoricalPoint = {
@@ -97,7 +93,7 @@ function profileSpecs(profile: ResearchProfile): MetricSpec[] {
     return [
       { id: "price_to_book", label: "Price / book", direction: "lower_better", inVote: true, unit: "ratio" },
       { id: "dividend_yield", label: "Dividend yield", direction: "higher_better", inVote: true, unit: "yield" },
-      { id: "price_to_earnings", label: "Price / EPS", direction: "lower_better", inVote: false, unit: "ratio" },
+      { id: "price_to_earnings", label: "Price / EPS", direction: "lower_better", inVote: true, unit: "ratio" },
       { id: "roe", label: "ROE", direction: "higher_better", inVote: false, unit: "yield" },
     ];
   }
@@ -141,6 +137,7 @@ export function emptyValuationContext(reason: string): ValuationContextResult {
     confidenceLevel: null,
     freshness: null,
     historicalValuationStatus: "UNAVAILABLE",
+    peerQuality: kind === "peer" ? emptyPeerQuality("GENERAL", null, null, reason) : null,
   });
   return { historical: block("historical"), peer: block("peer") };
 }
@@ -395,51 +392,6 @@ function statsFromSample(
   return { ...base, fact, labelForMetric };
 }
 
-function peerGroup(args: {
-  profile: ResearchProfile;
-  industry: string | null;
-}): { description: string; minN: number; weak: string | null; match: (row: PeerUniverseRow) => boolean } {
-  if (args.profile === "UNKNOWN") {
-    return {
-      description: "UNKNOWN profile has no peer set",
-      minN: MIN_PEER_GENERAL,
-      weak: "Research profile UNKNOWN — industry is not reliable enough for a peer median.",
-      match: () => false,
-    };
-  }
-  if (args.profile === "BANK") {
-    return {
-      description: "Malaysian banks (research_profile BANK)",
-      minN: MIN_PEER_BANK_REIT,
-      weak: null,
-      match: (row) => row.researchProfile === "BANK",
-    };
-  }
-  if (args.profile === "REIT") {
-    return {
-      description: "Malaysian REITs (research_profile REIT; not Yahoo sub-industry)",
-      minN: MIN_PEER_BANK_REIT,
-      weak: null,
-      match: (row) => row.researchProfile === "REIT",
-    };
-  }
-  const industry = (args.industry ?? "").trim();
-  if (!industry) {
-    return {
-      description: `${args.profile} with missing industry`,
-      minN: MIN_PEER_GENERAL,
-      weak: "Stored industry is missing — peer median is not invented from the whole market.",
-      match: () => false,
-    };
-  }
-  return {
-    description: `${args.profile} names in industry “${industry}”`,
-    minN: MIN_PEER_GENERAL,
-    weak: null,
-    match: (row) => row.researchProfile === args.profile && (row.industry ?? "").trim() === industry,
-  };
-}
-
 export function buildValuationContext(args: {
   ticker: string;
   researchProfile: ResearchProfile;
@@ -498,39 +450,70 @@ export function buildValuationContext(args: {
     histFacts.push("REIT historical context uses distribution yield and book NAV. Industrial FCF is not used.");
   }
 
-  const group = peerGroup({ profile: args.researchProfile, industry: args.industry ?? null });
-  const peerRows = args.peers.filter((row) => row.ticker !== args.ticker && group.match(row));
+  const selected = selectPeerSet({
+    ticker: args.ticker,
+    researchProfile: args.researchProfile,
+    industry: args.industry ?? null,
+    sector: args.sector ?? null,
+    peers: args.peers,
+    voteMetricIds: specs.filter((s) => s.inVote).map((s) => s.id),
+    metricValue: (id, row) => metricFromInputs(id, row.lastClose, row).value,
+  });
+  const peerRows = selected.rows;
   const peerMetrics = specs.map((spec) => {
     const sample = peerRows
       .map((row) => metricFromInputs(spec.id, row.lastClose, row).value)
       .filter((n): n is number => n !== null);
     const current = currentFromHeadline(args.metrics, spec, lastClose, latestAnnual);
-    const minN = group.weak ? MIN_PEER_GENERAL : group.minN;
-    return statsFromSample(spec, current, sample, minN, "peer");
+    return statsFromSample(spec, current, sample, MIN_USABLE_PEERS, "peer");
   });
   let peerLabel: ContextLabel = "UNAVAILABLE";
   const peerFacts: string[] = [];
-  let peerLimitation: string | null = group.weak;
-  if (group.weak) {
-    peerFacts.push(group.weak);
-  } else {
-    const vote = peerMetrics.filter((m) => m.inVote);
-    const enough = vote.filter((m) => m.sampleSize >= group.minN && m.labelForMetric !== "UNAVAILABLE");
-    if (!enough.length) {
-      peerLimitation = `Peer sample is too small for ${group.description} (need ${group.minN} names with the metric, excluding this ticker). No fake median.`;
-      peerFacts.push(peerLimitation);
-    } else {
-      peerLabel = combineLabels(enough.map((m) => m.labelForMetric));
-      peerLimitation = null;
-    }
+  let peerLimitation: string | null = selected.qualityBase.unavailableReason;
+  const vote = peerMetrics.filter((m) => m.inVote);
+  const enough = vote.filter((m) => m.sampleSize >= MIN_USABLE_PEERS && m.labelForMetric !== "UNAVAILABLE");
+  if (selected.qualityBase.groupType !== "NONE" && enough.length) {
+    peerLabel = combineLabels(enough.map((m) => m.labelForMetric));
+    peerLimitation = null;
+  } else if (!peerLimitation) {
+    peerLimitation = `Peer sample is too small (need ${MIN_USABLE_PEERS} usable names per metric, excluding this ticker). No fake median.`;
   }
-  peerFacts.push(...peerMetrics.map((m) => m.fact));
+  const peerQuality: PeerQuality = {
+    ...selected.qualityBase,
+    metrics: peerMetrics.map((m) => ({
+      metricId: m.metricId,
+      label: m.label,
+      usableCount: m.sampleSize,
+      median: m.median,
+      subject: m.current,
+      vsMedian:
+        m.current === null || m.median === null
+          ? "unavailable"
+          : m.current === m.median
+            ? "in_line"
+            : m.current < m.median
+              ? "below"
+              : "above",
+      contextLabel: m.labelForMetric,
+      reason: m.currentUnavailableReason,
+    })),
+    contextLabel: peerLabel,
+    unavailableReason: peerLimitation,
+  };
   peerFacts.push(
-    `Peer set: ${group.description}. ${peerRows.length} other names loaded; medians use only names with that metric.`,
+    `Peer group: ${peerQuality.usableCount} usable peers (${peerQuality.eligibleCount} eligible). Path: ${peerQuality.selectionPath}.`,
   );
+  if (peerLimitation) peerFacts.push(peerLimitation);
+  peerFacts.push(...peerMetrics.map((m) => m.fact));
   peerFacts.push(
     `Data confidence ${args.dataConfidence?.level ?? "not attached"} · freshness ${args.dataCoverage?.freshness ?? "UNKNOWN"}.`,
   );
+  if (args.researchProfile === "BANK") {
+    peerFacts.push("Bank peers use P/B, P/E, and yield. EV/EBITDA and FCF are not required.");
+  }
+  if (args.researchProfile === "REIT") {
+    peerFacts.push("REIT peers use distribution yield and book NAV. Industrial FCF and ordinary P/E are not in the vote.");
+  }
 
   return {
     historical: {
@@ -545,6 +528,7 @@ export function buildValuationContext(args: {
       confidenceLevel: args.dataConfidence?.level ?? null,
       freshness: args.dataCoverage?.freshness ?? null,
       historicalValuationStatus: histStatus,
+      peerQuality: null,
     },
     peer: {
       kind: "peer",
@@ -552,12 +536,13 @@ export function buildValuationContext(args: {
       facts: peerFacts,
       limitation: peerLimitation,
       lookAheadSafe: false,
-      groupDescription: group.description,
-      sampleRule: `At least ${group.minN} peers excluding self`,
+      groupDescription: peerQuality.selectionPath,
+      sampleRule: `At least ${MIN_USABLE_PEERS} usable peers excluding self`,
       metrics: peerMetrics,
       confidenceLevel: args.dataConfidence?.level ?? null,
       freshness: args.dataCoverage?.freshness ?? null,
       historicalValuationStatus: "UNAVAILABLE",
+      peerQuality,
     },
   };
 }
@@ -624,11 +609,15 @@ export function loadPeerUniverse(force = false): PeerUniverseRow[] {
   const sqlite = getSqlite();
   const names = sqlite
     .prepare(
-      `SELECT id, ticker, research_profile as researchProfile, industry, sector FROM instruments`,
+      `SELECT id, ticker, name, listing_status as listingStatus, instrument_type as instrumentType,
+              research_profile as researchProfile, industry, sector FROM instruments`,
     )
     .all() as {
     id: number;
     ticker: string;
+    name: string;
+    listingStatus: string | null;
+    instrumentType: string | null;
     researchProfile: string | null;
     industry: string | null;
     sector: string | null;
@@ -666,6 +655,9 @@ export function loadPeerUniverse(force = false): PeerUniverseRow[] {
     const items = parseLineItems(period?.lineItemsJson ?? null);
     return {
       ticker: name.ticker,
+      name: name.name,
+      listingStatus: name.listingStatus,
+      instrumentType: name.instrumentType,
       researchProfile: (name.researchProfile ?? "GENERAL") as ResearchProfile,
       industry: name.industry,
       sector: name.sector,

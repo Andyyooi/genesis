@@ -55,6 +55,9 @@ export function buildFullMarkdown(payload: ExportPayload): string {
     `- Valuation Score: ${formatScore100(score.valuationScore)} (valuation factors only)`,
     `- Historical Context: ${formatContextHeadline(score.valuationContext.historical.label)} (${score.valuationContext.historical.historicalValuationStatus}) (not blended into Valuation Score)`,
     `- Peer Context: ${formatContextHeadline(score.valuationContext.peer.label)} (not blended into Valuation Score)`,
+    score.valuationContext.peer.peerQuality
+      ? `- Peer group: ${score.valuationContext.peer.peerQuality.usableCount} usable / ${score.valuationContext.peer.peerQuality.eligibleCount} eligible (${score.valuationContext.peer.peerQuality.groupType}; ${score.valuationContext.peer.peerQuality.selectionPath})`
+      : "",
     `- Data Confidence: ${score.dataConfidence.level}${score.dataConfidence.needsVerification ? " — needs verification" : ""}`,
     `- Data freshness: ${score.dataCoverage.freshness}`,
     `- Core coverage: ${score.dataCoverage.available} of ${score.dataCoverage.expected} expected factors (${Math.round(score.dataCoverage.coverageRatio * 100)}%)`,

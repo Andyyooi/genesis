@@ -21,7 +21,7 @@ export function buildQuickMarkdown(payload: ExportPayload): string {
     `**Research Score:** ${formatScore100(score.researchScore)}`,
     `**Valuation Score:** ${formatScore100(score.valuationScore)} (valuation factors only; not a copy of Research Score)`,
     `**Historical Context:** ${formatContextHeadline(score.valuationContext.historical.label)} (${score.valuationContext.historical.historicalValuationStatus.replaceAll("_", " ")}) — ${score.valuationContext.historical.limitation ?? score.valuationContext.historical.facts[0] ?? "Data unavailable"}`,
-    `**Peer Context:** ${formatContextHeadline(score.valuationContext.peer.label)} — ${score.valuationContext.peer.limitation ?? score.valuationContext.peer.facts[0] ?? "Data unavailable"}`,
+    `- Peer Context: ${formatContextHeadline(score.valuationContext.peer.label)} — ${score.valuationContext.peer.peerQuality ? `group ${score.valuationContext.peer.peerQuality.groupType}, ${score.valuationContext.peer.peerQuality.usableCount} usable peers` : score.valuationContext.peer.limitation ?? "Data unavailable"}`,
     `**Data Confidence:** ${score.dataConfidence.level}${score.dataConfidence.needsVerification ? " — High score — needs verification" : ""}`,
     `**Data freshness:** ${score.dataCoverage.freshness} · core coverage ${score.dataCoverage.available}/${score.dataCoverage.expected}`,
     "",

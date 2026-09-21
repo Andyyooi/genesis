@@ -163,7 +163,9 @@ describe("valuation context", () => {
       peers: Array.from({ length: 20 }, (_, i) => peer({ ticker: `X${i}` })),
     });
     expect(emptyIndustry.peer.label).toBe("UNAVAILABLE");
-    expect(emptyIndustry.peer.limitation).toMatch(/industry is missing/i);
+    expect(emptyIndustry.peer.limitation).toMatch(/no stored industry or sector/i);
+    expect(emptyIndustry.peer.peerQuality?.groupType).toBe("NONE");
+    expect(emptyIndustry.peer.limitation).toMatch(/whole-market median is not used/i);
 
     const tiny = buildValuationContext({
       ticker: "FOOD",
@@ -175,7 +177,32 @@ describe("valuation context", () => {
       peers: [peer({ ticker: "A" }), peer({ ticker: "B" })],
     });
     expect(tiny.peer.label).toBe("UNAVAILABLE");
-    expect(tiny.peer.limitation).toMatch(/too small/i);
+    expect(tiny.peer.limitation).toMatch(/too small|Whole Bursa is not used/i);
+
+    const sectorFallback = buildValuationContext({
+      ticker: "MRDIY",
+      researchProfile: "GENERAL",
+      industry: "Home Improvement Retail",
+      sector: "Consumer Cyclical",
+      periods,
+      bars: barsForYears(periods.map((p) => p.periodEnd)),
+      metrics: [metric("last_close", 10), metric("price_to_earnings", 20)],
+      peers: [
+        ...Array.from({ length: 6 }, (_, i) =>
+          peer({
+            ticker: `CYC${i}`,
+            industry: "Specialty Retail",
+            sector: "Consumer Cyclical",
+          }),
+        ),
+        ...Array.from({ length: 20 }, (_, i) =>
+          peer({ ticker: `FOOD${i}`, industry: "Packaged Foods", sector: "Consumer Defensive" }),
+        ),
+      ],
+    });
+    expect(sectorFallback.peer.peerQuality?.groupType).toBe("SECTOR");
+    expect(sectorFallback.peer.label).not.toBe("UNAVAILABLE");
+    expect(sectorFallback.peer.groupDescription).toMatch(/Consumer Cyclical/);
   });
 
   it("uses bank metrics (P/B, yield) and not EV/EBITDA, and REIT yield/NAV not FCF", () => {
@@ -209,6 +236,8 @@ describe("valuation context", () => {
     expect(bankIds).not.toContain("fcf_yield");
     expect(bankIds).not.toContain("ev_ebitda");
     expect(bank.peer.label).not.toBe("UNAVAILABLE");
+    expect(bank.peer.peerQuality?.groupType).toBe("BANK_PROFILE");
+    expect(bank.peer.facts[0]).toMatch(/Peer group: \d+ usable peers/);
 
     const reitPeers = Array.from({ length: 8 }, (_, i) =>
       peer({

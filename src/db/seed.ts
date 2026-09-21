@@ -3,6 +3,7 @@ import { loadUniverseConfig } from "@/config/load-universe";
 import { getDb } from "@/db/client";
 import { instruments } from "@/db/schema";
 import { assignResearchProfiles } from "@/research/assign-profiles";
+import { clearPeerUniverseCache } from "@/scoring/valuation-context";
 
 export function seedUniverseFromYaml() {
   const universe = loadUniverseConfig();
@@ -53,5 +54,6 @@ export function seedUniverseFromYaml() {
   }
 
   assignResearchProfiles();
+  clearPeerUniverseCache();
   return universe;
 }
