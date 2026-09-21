@@ -26,6 +26,7 @@ export function buildTablesCsv(payload: ExportPayload): string {
       payload.score.dataCoverage.expected,
       payload.score.dataConfidence.needsVerification,
     ]),
+  );
   lines.push(
     row([
       "valuation_context",
@@ -45,6 +46,10 @@ export function buildTablesCsv(payload: ExportPayload): string {
     ]),
   );
   lines.push("");
+  lines.push(
+    row([
+      "table",
+      "category",
       "factor_id",
       "label",
       "metric",
