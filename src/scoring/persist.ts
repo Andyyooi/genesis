@@ -27,13 +27,13 @@ export function persistScoreRun(args: {
           warning: c.warning,
         })),
       ),
-      coverageJson: JSON.stringify(
-        Object.fromEntries(args.result.categories.map((c) => [c.id, c.coverage])),
-      ),
+      coverageJson: JSON.stringify(args.result.dataCoverage),
+      dataConfidence: args.result.dataConfidence.level,
       evidenceJson: JSON.stringify({
         factors: args.result.categories.flatMap((c) => c.factors),
         concerns: args.result.concerns,
         notes: args.result.notes,
+        dataConfidence: args.result.dataConfidence,
       }),
       createdAt,
     })

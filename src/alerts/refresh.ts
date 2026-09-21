@@ -3,7 +3,7 @@ import { loadScoringConfig } from "@/config/load-scoring";
 import { getDb } from "@/db/client";
 import { alerts, alertState, instruments } from "@/db/schema";
 import { loadInstrumentSnapshots, loadScoreHistory, loadWatchlist } from "@/db/queries";
-import { latestAnnualPeriod } from "@/lib/snapshot-dates";
+import { latestAnnualObservation, latestAnnualPeriod } from "@/lib/snapshot-dates";
 import type { MetricValue } from "@/metrics/types";
 import { snapshotsToMetrics } from "@/metrics/from-snapshots";
 import { categoryScore } from "@/opportunities/lists";
@@ -130,7 +130,11 @@ export function refreshAlertsForTicker(ticker: string): { drafts: number; insert
     metrics,
     instrumentType,
     pn17: data.instrument.pn17,
+    ticker: data.instrument.ticker,
+    sector: data.instrument.sector,
+    industry: data.instrument.industry,
     asOf,
+    latestAnnual: latestAnnualObservation(data.periods),
   });
 
   const history = loadScoreHistory(data.instrument.id, 8);

@@ -45,9 +45,10 @@ export default function MarketPage() {
             <Stat label="Listed names" value={String(dq?.instruments ?? "—")} />
             <Stat label="With prices" value={String(dq?.withPrices ?? "—")} />
             <Stat label="With fundamentals" value={String(dq?.withFundamentals ?? "—")} />
+            <Stat label="Insufficient data" value={String(summary.scores.insufficient)} />
             <Stat
-              label="Insufficient data"
-              value={String(summary.scores.insufficient)}
+              label="Needs verification"
+              value={String(summary.scores.needsVerification ?? 0)}
             />
           </section>
           <p className="text-sm text-muted-foreground">
@@ -57,17 +58,25 @@ export default function MarketPage() {
 
           <ScanTable
             title="Highest Research Score"
-            rows={summary.highlights.highestResearch.map((r) => ({
+            rows={(summary.highlights.highestResearch ?? []).map((r) => ({
               ticker: r.ticker,
-              extra: formatScore100(r.score),
+              extra: `${formatScore100(r.score)} · ${r.confidence ?? ""}`,
             }))}
           />
           <ScanTable
             title="Highest Valuation Score"
-            rows={summary.highlights.highestValuation.map((r) => ({
+            rows={(summary.highlights.highestValuation ?? []).map((r) => ({
               ticker: r.ticker,
-              extra: formatScore100(r.score),
+              extra: `${formatScore100(r.score)} · ${r.confidence ?? ""}`,
             }))}
+          />
+          <ScanTable
+            title="High Score — Needs Verification"
+            rows={(summary.highlights.needsVerification ?? []).map((r) => ({
+              ticker: r.ticker,
+              extra: `${formatScore100(r.score)} · ${r.confidence ?? ""} · ${String(r.freshness ?? "").replaceAll("_", " ")}`,
+            }))}
+            empty="No thin-coverage or stale high scores in this snapshot."
           />
           <ScanTable
             title="Large discount vs 52-week high (≥15%)"
@@ -102,6 +111,8 @@ export default function MarketPage() {
                     <TableHead>Type</TableHead>
                     <TableHead className="text-right">Research</TableHead>
                     <TableHead className="text-right">Valuation</TableHead>
+                    <TableHead>Confidence</TableHead>
+                    <TableHead>Freshness</TableHead>
                     <TableHead className="text-right">Coverage</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -119,14 +130,31 @@ export default function MarketPage() {
                         ) : null}
                       </TableCell>
                       <TableCell>{String(row.instrumentType)}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell
+                        className={`text-right ${row.needsVerification ? "text-muted-foreground" : ""}`}
+                      >
                         {formatScore100(typeof row.researchScore === "number" ? row.researchScore : null)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell
+                        className={`text-right ${row.needsVerification ? "text-muted-foreground" : ""}`}
+                      >
                         {formatScore100(typeof row.valuationScore === "number" ? row.valuationScore : null)}
                       </TableCell>
+                      <TableCell>
+                        {String(row.confidence ?? "—")}
+                        {row.needsVerification ? (
+                          <Badge className="ml-1" variant="outline">
+                            Needs verification
+                          </Badge>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>{String(row.freshness ?? "—").replaceAll("_", " ")}</TableCell>
                       <TableCell className="text-right">
-                        {typeof row.coverage === "number" ? `${(row.coverage * 100).toFixed(0)}%` : "Data unavailable"}
+                        {typeof row.coreCoverageRatio === "number"
+                          ? `${Math.round(row.coreCoverageRatio * 100)}% (${row.availableFactors}/${row.expectedFactors})`
+                          : typeof row.coverage === "number"
+                            ? `${(row.coverage * 100).toFixed(0)}%`
+                            : "Data unavailable"}
                       </TableCell>
                     </TableRow>
                   ))}

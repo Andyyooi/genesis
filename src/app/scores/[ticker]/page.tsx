@@ -78,6 +78,19 @@ export default async function ScoresDebugPage({
           </CardHeader>
           <CardContent className="text-3xl font-semibold">{fmtScore(result.valuationScore)}</CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Data Confidence</CardTitle>
+            <CardDescription>Not a rewrite of the raw scores</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-semibold">{result.dataConfidence.level}</p>
+            <p className="text-sm text-muted-foreground">
+              {result.dataCoverage.freshness} · {result.dataCoverage.available}/
+              {result.dataCoverage.expected} core factors
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>

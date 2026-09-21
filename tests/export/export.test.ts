@@ -98,7 +98,8 @@ describe("ChatGPT export", () => {
     expect(parsed.score.profile).toBe("default");
     expect(parsed.score.categories.length).toBeGreaterThan(0);
     expect(parsed.score).toHaveProperty("researchScore");
-    expect(parsed.score).toHaveProperty("valuationScore");
+    expect(parsed.score).toHaveProperty("dataConfidence");
+    expect(parsed.score).toHaveProperty("dataCoverage");
     expect(parsed.score.categories.every((c) => typeof c.coverage === "number")).toBe(true);
     expect(parsed.financial_periods[0]?.actual_or_estimate).toBe("actual");
   });
@@ -106,7 +107,7 @@ describe("ChatGPT export", () => {
   it("Full report includes evidence, coverage, dates, sources, actual vs estimate", () => {
     const md = buildFullMarkdown(common);
     expect(md).toMatch(/Factor evidence/i);
-    expect(md).toMatch(/Coverage and live weights/i);
+    expect(md).toMatch(/Data Confidence/);
     expect(md).toMatch(/actual_or_estimate: actual/);
     expect(md).toMatch(/source: csv-sample/);
     expect(md).toMatch(/available_at: 2025-02-28/);

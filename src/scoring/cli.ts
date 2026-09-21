@@ -17,6 +17,8 @@ function main() {
         configHash: result.configHash,
         researchScore: result.researchScore,
         valuationScore: result.valuationScore,
+        dataConfidence: result.dataConfidence,
+        dataCoverage: result.dataCoverage,
         categories: result.categories.map((c) => ({
           id: c.id,
           score: c.score,

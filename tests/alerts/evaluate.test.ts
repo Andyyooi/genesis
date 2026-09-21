@@ -28,6 +28,22 @@ function result(over: Partial<ScoreResult> = {}): ScoreResult {
     ],
     concerns: [],
     notes: ["News is in this live run."],
+    dataCoverage: {
+      expected: 9,
+      available: 7,
+      unavailable: 2,
+      coverageRatio: 7 / 9,
+      freshCount: 7,
+      agingCount: 0,
+      staleCount: 0,
+      veryStaleCount: 0,
+      unknownCount: 0,
+      freshness: "AGING",
+      periodEnd: "2024-12-31",
+      availableAt: null,
+      ageMonths: 21,
+    },
+    dataConfidence: { level: "MEDIUM", reasons: [], needsVerification: false },
     ...over,
   };
 }

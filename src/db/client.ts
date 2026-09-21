@@ -98,6 +98,7 @@ function ensureSchema(sqlite: Database.Database) {
       valuation_score REAL,
       category_scores_json TEXT,
       coverage_json TEXT,
+      data_confidence TEXT,
       evidence_json TEXT,
       created_at TEXT NOT NULL
     );
@@ -160,6 +161,7 @@ function ensureSchema(sqlite: Database.Database) {
   addColumn(sqlite, "instruments", "universe_source", "TEXT");
   addColumn(sqlite, "instruments", "universe_synced_at", "TEXT");
   addColumn(sqlite, "price_bars", "adj_close", "REAL");
+  addColumn(sqlite, "score_runs", "data_confidence", "TEXT");
   sqlite.exec(
     "UPDATE instruments SET watchlist = 1 WHERE watchlist IS NULL OR (watchlist = 0 AND universe_source IS NULL)",
   );

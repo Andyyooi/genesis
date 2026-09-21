@@ -14,6 +14,21 @@ export function formatScore100(value: number | null): string {
   return `${value.toFixed(0)}/100`;
 }
 
+export function formatFreshnessBand(band: string | null | undefined): string {
+  if (!band) return "UNKNOWN";
+  return band.replaceAll("_", " ");
+}
+
+export function formatCoreCoverage(result: ScoreResult): string {
+  const c = result.dataCoverage;
+  if (c.expected === 0) return "No expected core factors";
+  return `${Math.round(c.coverageRatio * 100)}% (${c.available}/${c.expected})`;
+}
+
+export function scoreEmphasisMuted(result: ScoreResult): boolean {
+  return result.dataConfidence.level === "LOW" || result.dataConfidence.level === "VERY_LOW";
+}
+
 export function strongestPositives(result: ScoreResult, limit = 4): FactorEvidence[] {
   return result.categories
     .flatMap((c) => c.factors.map((f) => ({ ...f, category: c.id })))

@@ -86,6 +86,10 @@ export type OpportunityRow = {
   growthScore: number | null;
   healthScore: number | null;
   coverage: number | null;
+  freshness: string | null;
+  confidence: string | null;
+  needsVerification: boolean;
+  coreCoverageLabel: string | null;
   mainConcern: string | null;
   distanceFrom52wHigh: number | null;
   distanceFrom52wHighAvailable: boolean;

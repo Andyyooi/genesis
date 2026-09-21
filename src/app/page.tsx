@@ -17,7 +17,10 @@ import {
 } from "@/components/ui/table";
 import type { PricesImportReport } from "@/ingest/types";
 import { formatMyr } from "@/lib/format-myr";
-import { formatScore100 } from "@/lib/research-copy";
+import {
+  formatFreshnessBand,
+  formatScore100,
+} from "@/lib/research-copy";
 import { buildSnapshotDates } from "@/lib/snapshot-dates";
 import {
   OPPORTUNITY_LISTS,
@@ -286,6 +289,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
                 <TableHead>Fundamentals period</TableHead>
                 <TableHead className="text-right">Research</TableHead>
                 <TableHead className="text-right">Valuation</TableHead>
+                <TableHead>Confidence</TableHead>
+                <TableHead>Freshness</TableHead>
                 <TableHead className="text-right">Quality</TableHead>
                 <TableHead className="text-right">Growth</TableHead>
                 <TableHead className="text-right">Health</TableHead>
@@ -332,11 +337,44 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
                   <TableCell className="whitespace-nowrap">
                     {row.fundamentalsPeriod ?? "Data unavailable"}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell
+                    className={cn(
+                      "text-right tabular-nums",
+                      row.needsVerification || row.confidence === "VERY_LOW" || row.confidence === "LOW"
+                        ? "text-muted-foreground"
+                        : "font-medium",
+                    )}
+                  >
                     {formatScore100(row.researchScore)}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell
+                    className={cn(
+                      "text-right tabular-nums",
+                      row.needsVerification || row.confidence === "VERY_LOW" || row.confidence === "LOW"
+                        ? "text-muted-foreground"
+                        : undefined,
+                    )}
+                  >
                     {formatScore100(row.valuationScore)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        row.confidence === "VERY_LOW"
+                          ? "destructive"
+                          : row.confidence === "HIGH"
+                            ? "secondary"
+                            : "outline"
+                      }
+                    >
+                      {row.confidence ?? "UNKNOWN"}
+                    </Badge>
+                    {row.needsVerification ? (
+                      <span className="mt-1 block text-xs text-muted-foreground">Needs verification</span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                    {formatFreshnessBand(row.freshness)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatScore100(row.qualityScore)}
@@ -347,7 +385,9 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
                   <TableCell className="text-right tabular-nums">
                     {formatScore100(row.healthScore)}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{fmtCoverage(row.coverage)}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {row.coreCoverageLabel ?? fmtCoverage(row.coverage)}
+                  </TableCell>
                   <TableCell className="max-w-56 text-sm text-muted-foreground">
                     {row.catalystLabel ? <span className="block">Catalyst: {row.catalystLabel}</span> : null}
                     {row.mainConcern ? <span className="block">Concern: {row.mainConcern}</span> : null}

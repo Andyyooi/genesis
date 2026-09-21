@@ -1,5 +1,6 @@
 import { loadScoringConfig } from "@/config/load-scoring";
 import { loadInstrumentSnapshots } from "@/db/queries";
+import { latestAnnualObservation } from "@/lib/snapshot-dates";
 import { snapshotsToMetrics } from "@/metrics/from-snapshots";
 import { persistScoreRun } from "@/scoring/persist";
 import { scoreFromMetrics } from "@/scoring/score";
@@ -29,6 +30,7 @@ export function scoreTicker(ticker: string, persist = true) {
     sector: data.instrument.sector,
     industry: data.instrument.industry,
     asOf,
+    latestAnnual: latestAnnualObservation(data.periods),
   });
   if (persist) {
     persistScoreRun({ instrumentId: data.instrument.id, result });

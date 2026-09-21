@@ -36,6 +36,33 @@ export type ConcernHit = {
   period: string | null;
 };
 
+export type FreshnessBand = "FRESH" | "AGING" | "STALE" | "VERY_STALE" | "UNKNOWN";
+
+export type DataConfidenceLevel = "HIGH" | "MEDIUM" | "LOW" | "VERY_LOW";
+
+/** Count-based coverage of core scoring factors. Not a fake precision percentage. */
+export type DataCoverage = {
+  expected: number;
+  available: number;
+  unavailable: number;
+  coverageRatio: number;
+  freshCount: number;
+  agingCount: number;
+  staleCount: number;
+  veryStaleCount: number;
+  unknownCount: number;
+  freshness: FreshnessBand;
+  periodEnd: string | null;
+  availableAt: string | null;
+  ageMonths: number | null;
+};
+
+export type DataConfidence = {
+  level: DataConfidenceLevel;
+  reasons: string[];
+  needsVerification: boolean;
+};
+
 export type ScoreResult = {
   asOf: string;
   configHash: string;
@@ -45,4 +72,6 @@ export type ScoreResult = {
   categories: CategoryScore[];
   concerns: ConcernHit[];
   notes: string[];
+  dataCoverage: DataCoverage;
+  dataConfidence: DataConfidence;
 };

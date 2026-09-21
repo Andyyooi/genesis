@@ -6,6 +6,7 @@ import {
   type ScoringConfig,
 } from "@/config/load-scoring";
 import type { MetricValue } from "@/metrics/types";
+import { assessDataQuality } from "@/scoring/confidence";
 import { evaluateConcerns } from "@/scoring/concerns";
 import { hashScoringConfig } from "@/scoring/hash";
 import { scoreFactor } from "@/scoring/map-factor";
@@ -37,6 +38,8 @@ export function scoreFromMetrics(args: {
   industry?: string | null;
   pn17?: boolean;
   asOf?: string;
+  /** Latest annual filing clock. available_at if known, else period_end. Never retrieved_at. */
+  latestAnnual?: { periodEnd: string; availableAt: string | null } | null;
 }): ScoreResult {
   const hints = { sector: args.sector, industry: args.industry };
   const profile = getFactorProfile(args.config, args.instrumentType, args.ticker, hints);
@@ -122,6 +125,14 @@ export function scoreFromMetrics(args: {
     pn17: args.pn17 ?? false,
   });
 
+  const { dataCoverage, dataConfidence } = assessDataQuality({
+    asOf,
+    categories,
+    researchScore,
+    valuationScore,
+    latestAnnual: args.latestAnnual,
+  });
+
   return {
     asOf,
     configHash: hashScoringConfig(args.config),
@@ -131,5 +142,7 @@ export function scoreFromMetrics(args: {
     categories,
     concerns,
     notes,
+    dataCoverage,
+    dataConfidence,
   };
 }

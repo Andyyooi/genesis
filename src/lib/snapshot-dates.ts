@@ -10,11 +10,18 @@ export type SnapshotDates = {
 export function latestAnnualPeriod(
   periods: { periodEnd: string; statementType: string }[],
 ): string | null {
+  return latestAnnualObservation(periods)?.periodEnd ?? null;
+}
+
+export function latestAnnualObservation(
+  periods: { periodEnd: string; availableAt?: string | null; statementType: string }[],
+): { periodEnd: string; availableAt: string | null } | null {
   const annuals = periods
     .filter((row) => row.statementType === "annual")
-    .map((row) => row.periodEnd)
-    .sort((a, b) => b.localeCompare(a));
-  return annuals[0] ?? periods.map((row) => row.periodEnd).sort((a, b) => b.localeCompare(a))[0] ?? null;
+    .sort((a, b) => b.periodEnd.localeCompare(a.periodEnd));
+  const row = annuals[0] ?? [...periods].sort((a, b) => b.periodEnd.localeCompare(a.periodEnd))[0];
+  if (!row) return null;
+  return { periodEnd: row.periodEnd, availableAt: row.availableAt ?? null };
 }
 
 export function buildSnapshotDates(args: {

@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DataLagBanner } from "@/components/research/data-lag-banner";
+import { DataConfidenceCard, ScoreWithConfidence } from "@/components/research/data-confidence";
 import { loadScoreHistory } from "@/db/queries";
 import type { LineItems } from "@/ingest/types";
 import { formatMetricValue } from "@/lib/format-metric";
@@ -142,7 +142,7 @@ export default async function ResearchPage({
         <ExportActions ticker={instrument.ticker} />
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Research Score</CardTitle>
@@ -151,7 +151,9 @@ export default async function ResearchPage({
               renormalized. Not a verdict on cheap vs good.
             </CardDescription>
           </CardHeader>
-          <CardContent className="text-4xl font-semibold">{formatScore100(result.researchScore)}</CardContent>
+          <CardContent>
+            <ScoreWithConfidence result={result} kind="research" />
+          </CardContent>
         </Card>
         <Card>
           <CardHeader>
@@ -161,8 +163,11 @@ export default async function ResearchPage({
               copy of the Research Score.
             </CardDescription>
           </CardHeader>
-          <CardContent className="text-4xl font-semibold">{formatScore100(result.valuationScore)}</CardContent>
+          <CardContent>
+            <ScoreWithConfidence result={result} kind="valuation" />
+          </CardContent>
         </Card>
+        <DataConfidenceCard result={result} />
       </section>
       <p className="text-sm text-muted-foreground">{scoreNarrative(result)}</p>
 

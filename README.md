@@ -77,6 +77,14 @@ npm run market:scan
 
 Refreshes COMMON_STOCK + REIT from the **Yahoo Malaysia equity screener** (not a hand-typed Bursa list), pulls EOD prices (resumable, per-ticker failures), fills Yahoo annual statements where present, keeps CSV filings, scores everyone, writes data-quality + scanner lists to SQLite. Open `/market`. Slow (rate limits). **Not Cursor usage.** Warrants/ETFs excluded. PN17 only if already stored. Watchlist dashboard still uses `universe.yaml`. Daily `ingest:prices:daily` keeps running on whatever is in the DB.
 
+After changing scoring or Data Confidence, refresh scan rows without Yahoo:
+
+```bash
+npm run market:rescore
+```
+
+Research, dashboard, exports, and `/market` show **Data Coverage**, **Freshness** (period-end or filing date — never ingestion time), and **Data Confidence** (HIGH / MEDIUM / LOW / VERY_LOW). Raw Research and Valuation numbers are not rewritten. Thin or stale high scores appear under **High Score — Needs Verification**.
+
 ```bash
 npm test
 ```
