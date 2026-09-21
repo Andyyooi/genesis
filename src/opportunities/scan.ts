@@ -13,11 +13,17 @@ function metric(metrics: MetricValue[], id: string): MetricValue | undefined {
   return metrics.find((m) => m.id === id);
 }
 
+const SCAN_CACHE_MS = 15_000;
+let scanCache: { at: number; rows: OpportunityRow[] } | null = null;
+
 export function scanWatchlist(): OpportunityRow[] {
+  if (scanCache && Date.now() - scanCache.at < SCAN_CACHE_MS) {
+    return scanCache.rows;
+  }
   const universe = loadWatchlist();
   const rows: OpportunityRow[] = [];
   for (const item of universe) {
-    const scored = scoreTicker(item.ticker, false);
+    const scored = scoreTicker(item.ticker, false, { attachValuationContext: false });
     if (!scored) continue;
     const lastClose = metric(scored.metrics, "last_close");
     const lastTrade = metric(scored.metrics, "last_trade_date");
@@ -66,5 +72,6 @@ export function scanWatchlist(): OpportunityRow[] {
       result: scored.result,
     });
   }
+  scanCache = { at: Date.now(), rows };
   return rows;
 }

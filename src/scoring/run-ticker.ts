@@ -13,7 +13,11 @@ import {
   periodsToSnapshots,
 } from "@/scoring/valuation-context";
 
-export function scoreTicker(ticker: string, persist = true) {
+export function scoreTicker(
+  ticker: string,
+  persist = true,
+  opts?: { attachValuationContext?: boolean },
+) {
   const data = loadInstrumentSnapshots(ticker);
   if (!data) return null;
   const instrumentType = data.instrument.instrumentType === "REIT" ? "REIT" : "COMMON_STOCK";
@@ -55,18 +59,20 @@ export function scoreTicker(ticker: string, persist = true) {
     asOf,
     latestAnnual: latestAnnualObservation(data.periods),
   });
-  result.valuationContext = buildValuationContext({
-    ticker: data.instrument.ticker,
-    researchProfile: classified.profile,
-    industry: data.instrument.industry,
-    sector: data.instrument.sector,
-    periods: periodsToSnapshots(data.periods),
-    bars: data.bars,
-    metrics,
-    peers: loadPeerUniverse(),
-    dataConfidence: result.dataConfidence,
-    dataCoverage: result.dataCoverage,
-  });
+  if (opts?.attachValuationContext !== false) {
+    result.valuationContext = buildValuationContext({
+      ticker: data.instrument.ticker,
+      researchProfile: classified.profile,
+      industry: data.instrument.industry,
+      sector: data.instrument.sector,
+      periods: periodsToSnapshots(data.periods),
+      bars: data.bars,
+      metrics,
+      peers: loadPeerUniverse(),
+      dataConfidence: result.dataConfidence,
+      dataCoverage: result.dataCoverage,
+    });
+  }
   if (persist) {
     persistScoreRun({ instrumentId: data.instrument.id, result });
   }
