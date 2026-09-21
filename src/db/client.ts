@@ -196,6 +196,11 @@ function addColumn(sqlite: Database.Database, table: string, name: string, ddl: 
   }
 }
 
+/** Apply CREATE/ALTER migrations. Safe to run on a /tmp snapshot copy before read-only open. */
+export function migrateSqliteSchema(sqlite: Database.Database) {
+  ensureSchema(sqlite);
+}
+
 export function getSqlite() {
   getDb();
   return globalForDb.sqlite as Database.Database;
@@ -204,6 +209,14 @@ export function getSqlite() {
 export function getDb() {
   if (!globalForDb.sqlite) {
     const resolved = resolveSqliteFile();
+    // Snapshot DBs are packed from older schema tips. Migrate the /tmp copy in place
+    // (additive columns only) so Drizzle selects for new fields do not crash on Vercel.
+    if (resolved.readonly) {
+      const migrator = new Database(resolved.path);
+      migrator.pragma("foreign_keys = ON");
+      ensureSchema(migrator);
+      migrator.close();
+    }
     const sqlite = resolved.readonly
       ? new Database(resolved.path, { readonly: true, fileMustExist: true })
       : new Database(resolved.path);
