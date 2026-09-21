@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DataConfidenceCard, ScoreWithConfidence } from "@/components/research/data-confidence";
+import { DataLagBanner } from "@/components/research/data-lag-banner";
 import { loadScoreHistory } from "@/db/queries";
 import type { LineItems } from "@/ingest/types";
 import { formatMetricValue } from "@/lib/format-metric";
