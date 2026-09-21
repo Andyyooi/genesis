@@ -1,0 +1,99 @@
+{
+  "source": "curated-company-ir",
+  "reliability": "CURATED",
+  "note": "Hand-labelled public company IR/newsroom rows for Phase 16. Not a Bursa scrape. published_at is the public announcement date from the source page. available_at equals published_at when known. Do not invent dates.",
+  "events": [
+    {
+      "ticker": "MAYBANK",
+      "bursa_code": "1155",
+      "company_name": "Malayan Banking Berhad",
+      "published_at": "2024-11-26",
+      "source": "Maybank IR",
+      "source_url": "https://www.maybank.com/en/news/2024/11/26.page",
+      "headline": "Maybank’s 9M FY24 net profit rises 8.5% to RM7.56b",
+      "excerpt": "Company news release on 9M FY24 results. Classification is rule-based from the headline; numbers are not copied into scores.",
+      "event_type": "RESULTS"
+    },
+    {
+      "ticker": "MAYBANK",
+      "bursa_code": "1155",
+      "company_name": "Malayan Banking Berhad",
+      "published_at": "2024-05-24",
+      "source": "Maybank IR",
+      "source_url": "https://www.maybank.com/en/news/2024/05/24.page",
+      "headline": "Maybank 1Q FY24 Net Profit up 9.8% to RM2.49b",
+      "excerpt": "Company news release on 1Q FY24 results.",
+      "event_type": "RESULTS"
+    },
+    {
+      "ticker": "CIMB",
+      "bursa_code": "1023",
+      "company_name": "CIMB Group Holdings Berhad",
+      "published_at": "2025-05-30",
+      "source": "CIMB Newsroom",
+      "source_url": "https://www.cimb.com/en/newsroom/2025/cimb-delivers-11-4-percent-roe-and-9-6-percent-net-profit-growth-in-1q.html",
+      "headline": "CIMB delivers 11.4% ROE and 9.6% net profit growth in 1Q",
+      "excerpt": "CIMB Group 1Q25 results press release (public newsroom).",
+      "event_type": "RESULTS"
+    },
+    {
+      "ticker": "CIMB",
+      "bursa_code": "1023",
+      "company_name": "CIMB Group Holdings Berhad",
+      "published_at": "2026-02-27",
+      "source": "CIMB Newsroom",
+      "source_url": "https://www.cimb.com/en/newsroom/2026/cimb-delivers-net-profit-of-rm7-9-billion-with-roe-at-11-3-percent-strengthens-long-term-value-creation-for-shareholders.html",
+      "headline": "CIMB delivers net profit of RM7.9 billion with ROE at 11.3%; strengthens long term value creation for shareholders",
+      "excerpt": "CIMB Group FY25 results and dividend announcement (public newsroom).",
+      "event_type": "RESULTS"
+    },
+    {
+      "ticker": "MRDIY",
+      "bursa_code": "5296",
+      "company_name": "MR D.I.Y. Group (M) Berhad",
+      "published_at": "2025-02-25",
+      "source": "MR DIY IR (curated label)",
+      "source_url": "https://www.mrdiy.com/investor-relations",
+      "headline": "MR DIY Group FY2024 financial results announcement (curated IR index pointer)",
+      "excerpt": "Curated pointer to the company IR hub. Replace with a specific Bursa/IR PDF URL when copying a concrete headline. published_at is the labelled results window, not inventing line items.",
+      "event_type": "RESULTS",
+      "materiality": "MEDIUM"
+    },
+    {
+      "ticker": "INARI",
+      "bursa_code": "0166",
+      "company_name": "Inari Amertron Berhad",
+      "published_at": "2025-02-20",
+      "source": "Inari IR (curated label)",
+      "source_url": "https://www.inari-amertron.com/investor-relations",
+      "headline": "Inari Amertron quarterly financial results announcement (curated IR index pointer)",
+      "excerpt": "Curated IR hub pointer for Phase 16 mapping tests. Not a fabricated filing.",
+      "event_type": "RESULTS",
+      "materiality": "MEDIUM"
+    },
+    {
+      "ticker": "KLCC",
+      "bursa_code": "5235SS",
+      "company_name": "KLCC Property Holdings Berhad",
+      "published_at": "2024-08-20",
+      "source": "EXAMPLE (not a scraped Bursa PDF)",
+      "source_url": "https://www.bursamalaysia.com/trade/trading_resources/listing_directory/company-profile?stock_code=5235SS",
+      "headline": "KLCCP Stapled Group distribution / results (sample row — replace with a copied Bursa headline)",
+      "excerpt": "Labelled example URL: Bursa company profile for 5235SS. Not a fabricated FY filing.",
+      "event_type": "DIVIDEND",
+      "materiality": "MEDIUM"
+    },
+    {
+      "ticker": "PAVREIT",
+      "bursa_code": "5212",
+      "company_name": "Pavilion Real Estate Investment Trust",
+      "published_at": "2025-01-22",
+      "source": "Pavilion REIT IR (curated label)",
+      "source_url": "https://www.pavilion-reit.com/investor-relations",
+      "headline": "Pavilion REIT income distribution / results announcement (curated IR index pointer)",
+      "excerpt": "Curated IR hub pointer for Phase 16 REIT mapping. Not scraped PDF text.",
+      "event_type": "DIVIDEND",
+      "materiality": "MEDIUM"
+    }
+  ]
+}

@@ -58,3 +58,4 @@ next-env.d.ts
 !/data/raw/fundamentals-sample.csv
 !/data/raw/announcements-template.csv
 !/data/raw/announcements-sample.csv
+!/data/raw/events-phase16-fixture.json
