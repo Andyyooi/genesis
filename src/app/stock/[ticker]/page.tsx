@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CategoryDisclosure } from "@/components/research/category-disclosure";
+import {
+  DataQualitySection,
+  ResearchScoreCard,
+  ScoreWithConfidence,
+} from "@/components/research/data-confidence";
+import { DataLagBanner } from "@/components/research/data-lag-banner";
 import { ExportActions } from "@/components/research/export-actions";
+import { RecentEventsSection } from "@/components/research/recent-events";
+import { ValuationContextCard } from "@/components/research/valuation-context";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -18,18 +26,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DataConfidenceCard, ScoreWithConfidence } from "@/components/research/data-confidence";
-import { DataLagBanner } from "@/components/research/data-lag-banner";
-import { ValuationContextCard } from "@/components/research/valuation-context";
 import { loadScoreHistory } from "@/db/queries";
 import type { LineItems } from "@/ingest/types";
+import { formatDateSafe } from "@/lib/display";
 import { formatMetricValue } from "@/lib/format-metric";
 import { formatMyr } from "@/lib/format-myr";
 import {
-  formatScore100,
-  scoreNarrative,
-  strongestPositives,
-} from "@/lib/research-copy";
+  absoluteValuationBlurb,
+  researchInterpretationBullets,
+} from "@/lib/research-presentation";
 import { buildSnapshotDates, latestAnnualPeriod } from "@/lib/snapshot-dates";
 import type { MetricValue } from "@/metrics/types";
 import { scoreTicker } from "@/scoring/run-ticker";
@@ -56,8 +61,78 @@ function sma(closesNewestFirst: number[], window: number): number | null {
 }
 
 function fmtRatio(metric: MetricValue | undefined): string {
-  if (!metric) return "Data unavailable";
+  if (!metric) return "Unavailable";
   return formatMetricValue(metric);
+}
+
+function profileMetricIds(profile: string, isReit: boolean): string[] {
+  if (isReit || profile === "REIT") {
+    return [
+      "dividend_yield",
+      "book_nav_premium",
+      "nav_per_share",
+      "dpu_cagr",
+      "reit_gearing",
+      "occupancy",
+      "wale_years",
+      "npi",
+      "reit_interest_coverage",
+      "revenue_cagr",
+    ];
+  }
+  if (profile === "BANK") {
+    return [
+      "price_to_book",
+      "dividend_yield",
+      "roe",
+      "nim",
+      "cost_to_income",
+      "impaired_loans_ratio",
+      "cet1_ratio",
+      "revenue_cagr",
+      "pat_cagr",
+    ];
+  }
+  return [
+    "price_to_earnings",
+    "dividend_yield",
+    "price_to_book",
+    "roe",
+    "net_margin",
+    "debt_to_equity",
+    "fcf",
+    "net_debt_to_ebitda",
+    "revenue_cagr",
+    "pat_cagr",
+  ];
+}
+
+function MetricTable({ ids, metrics }: { ids: string[]; metrics: MetricValue[] }) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Metric</TableHead>
+          <TableHead className="text-right">Value</TableHead>
+          <TableHead className="hidden sm:table-cell">Period</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {ids.map((id) => {
+          const metric = metricById(metrics, id);
+          return (
+            <TableRow key={id}>
+              <TableCell>{metric?.label ?? id}</TableCell>
+              <TableCell className="text-right">{fmtRatio(metric)}</TableCell>
+              <TableCell className="hidden text-muted-foreground sm:table-cell">
+                {metric?.period ? formatDateSafe(metric.period) : "Unavailable"}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
 }
 
 export default async function ResearchPage({
@@ -76,7 +151,6 @@ export default async function ResearchPage({
     lastTradeDate: lastTrade?.period ?? null,
     fundamentalsPeriod: latestAnnualPeriod(periods),
   });
-  const positives = strongestPositives(result);
   const annuals = periods.filter((p) => p.statementType === "annual").slice(0, 6);
   const closes = bars.map((b) => b.close).filter((n): n is number => n !== null);
   const sma50 = sma(closes, 50);
@@ -84,203 +158,176 @@ export default async function ResearchPage({
   const lastVolume = bars[0]?.volume ?? null;
   const isReit = scored.instrumentType === "REIT";
   const isBank = result.researchProfile === "BANK" || result.profile === "bank";
-  const valuationIds = isReit
-    ? ["dividend_yield", "book_nav_premium", "price_to_book", "nav_per_share"]
-    : isBank
-      ? ["price_to_book", "dividend_yield", "price_to_earnings"]
-      : ["price_to_earnings", "dividend_yield", "price_to_book"];
+  const instrumentLabel = isReit ? "REIT" : "Common stock";
+  const interpretation = researchInterpretationBullets({
+    result,
+    metrics,
+    events: scored.events,
+  });
+  const profileIds = profileMetricIds(result.researchProfile, isReit);
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6">
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-8 sm:px-6">
       <p className="text-sm text-muted-foreground">
         <Link href="/" className="text-foreground underline underline-offset-4">
           Dashboard
         </Link>
-        <span> · research page · not a buy or sell</span>
       </p>
 
-      <header className="flex flex-col gap-3">
+      {/* A. Header */}
+      <header className="flex flex-col gap-3 border-b pb-6">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-3xl font-semibold tracking-tight">{instrument.name}</h1>
-          <Badge variant={isReit ? "secondary" : "outline"}>
-            {isReit ? "REIT" : "Common stock"}
-          </Badge>
-          <Badge variant="outline">Profile {result.researchProfile}</Badge>
-          {instrument.pn17 ? <Badge variant="destructive">PN17 — higher risk</Badge> : null}
+          <Badge variant={isReit ? "secondary" : "outline"}>{instrumentLabel}</Badge>
+          <Badge variant="outline">{result.researchProfile}</Badge>
+          {instrument.pn17 ? <Badge variant="destructive">PN17</Badge> : null}
           {instrument.shariahCompliant === true ? (
-            <Badge variant="secondary">Shariah (stored flag)</Badge>
-          ) : instrument.shariahCompliant === false ? (
-            <Badge variant="outline">Not Shariah (stored flag)</Badge>
+            <Badge variant="secondary">Shariah</Badge>
           ) : null}
           {instrument.listingBoard ? (
             <Badge variant="outline">{instrument.listingBoard}</Badge>
           ) : null}
         </div>
         <p className="text-muted-foreground">
-          Ticker {instrument.ticker}
+          {instrument.ticker}
           {instrument.bursaCode ? ` · Bursa ${instrument.bursaCode}` : ""}
-          {instrument.sector ? ` · ${instrument.sector}` : " · Sector: Data unavailable"}
+          {instrument.sector ? ` · ${instrument.sector}` : ""}
+          {instrument.industry ? ` · ${instrument.industry}` : ""}
         </p>
-        <p className="text-lg">
-          Current price: {fmtRatio(lastClose)}
-          <span className="ml-2 text-sm text-muted-foreground">
-            last trade {lastTrade?.period ?? "Data unavailable"}
-          </span>
-        </p>
+        <dl className="grid gap-2 text-sm sm:grid-cols-3">
+          <div>
+            <dt className="text-muted-foreground">Current price</dt>
+            <dd className="text-lg font-medium tabular-nums">{fmtRatio(lastClose)}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Price date</dt>
+            <dd className="font-medium">{formatDateSafe(lastTrade?.period)}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Last research run</dt>
+            <dd className="font-medium">{formatDateSafe(result.asOf)}</dd>
+          </div>
+        </dl>
         <DataLagBanner dates={snapshotDates} />
         {isReit ? (
-          <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-            Scored with the <span className="font-medium">REIT factor profile</span> (distribution
-            yield, book NAV premium, DPU CAGR, gearing). Industrial FCF, net debt/EBITDA, EV/EBITDA,
-            and ordinary-company P/E are not used.
+          <p className="text-sm text-muted-foreground">
+            REIT profile: distribution yield, book NAV, DPU growth, gearing and related REIT
+            metrics. Industrial FCF and EV/EBITDA are not used.
           </p>
         ) : null}
         {isBank ? (
-          <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-            Scored with the <span className="font-medium">bank overlay</span> (P/B and ROE). Industrial
-            FCF and EV/EBITDA are not scoring factors. Health is omitted when those industrial
-            measures are the only configured health inputs.
+          <p className="text-sm text-muted-foreground">
+            Bank profile: P/B, ROE, and bank health overlays where data exists. Industrial FCF and
+            EV/EBITDA are not scoring factors.
           </p>
         ) : null}
-          <p className="text-sm text-muted-foreground">
-            Expected core factors {result.dataCoverage.expected} · available {result.dataCoverage.available} ·
-            unavailable {result.dataCoverage.unavailable}
-            {result.dataConfidence.needsVerification ? " · needs verification" : ""}.
-          </p>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Research Score</CardTitle>
-            <CardDescription>
-              Mix of live categories. News and technical are not in this run; remaining weights are
-              renormalized. Not a verdict on cheap vs good.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ScoreWithConfidence result={result} kind="research" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Valuation Score</CardTitle>
-            <CardDescription>
-              Valuation factors only — answers “does the price look demanding?” It is not a second
-              copy of the Research Score.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ScoreWithConfidence result={result} kind="valuation" />
-          </CardContent>
-        </Card>
-        <DataConfidenceCard result={result} />
-      </section>
-      <section className="grid gap-3 lg:grid-cols-2">
-        <ValuationContextCard block={result.valuationContext.historical} />
-        <ValuationContextCard block={result.valuationContext.peer} />
-      </section>
-      <p className="text-sm text-muted-foreground">{scoreNarrative(result)}</p>
+      {/* B. Research Score Card */}
+      <ResearchScoreCard result={result} />
 
+      {/* C. Score breakdown */}
       <section className="flex flex-col gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Score breakdown</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Score breakdown</h2>
           <p className="text-sm text-muted-foreground">
-            Summary first. Open a category, then a factor, for inputs, formula, and period.
-            Unavailable factors are listed and omitted from the average — never scored as zero.
+            Live weight is the share of this run after unavailable categories are dropped and
+            remaining weights are renormalized. Unavailable factors are excluded — never treated as
+            zero.
           </p>
         </div>
         <CategoryDisclosure categories={result.categories} />
       </section>
 
+      {/* 3. Data Quality */}
+      <DataQualitySection result={result} />
+
+      {/* 4. Research interpretation */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold">Why it is interesting</h2>
-        {positives.length === 0 ? (
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Research interpretation</h2>
           <p className="text-sm text-muted-foreground">
-            No factor scored 60 or above in this run. That is not a sell signal — coverage may be
-            thin.
+            Factual observations from stored metrics and context labels. Not a recommendation.
           </p>
-        ) : (
-          <ul className="list-disc space-y-2 pl-5 text-sm">
-            {positives.map((factor) => (
-              <li key={factor.id}>
-                <span className="font-medium">{factor.label}</span> scored{" "}
-                {formatScore100(factor.score)}
-                {factor.period ? ` (${factor.period})` : ""}. {factor.formula}
-              </li>
-            ))}
-          </ul>
-        )}
+        </div>
+        <ul className="list-disc space-y-2 pl-5 text-sm">
+          {interpretation.map((bullet) => (
+            <li key={bullet}>{bullet}</li>
+          ))}
+        </ul>
       </section>
 
+      {/* 5. Absolute Valuation vs Contextual */}
+      <section className="flex flex-col gap-4">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Absolute Valuation</h2>
+          <p className="text-sm text-muted-foreground">{absoluteValuationBlurb()}</p>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Absolute Valuation Score</CardTitle>
+            <CardDescription>
+              Valuation factors only for this research profile. Separate from Research Score and
+              from historical/peer labels below.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <ScoreWithConfidence result={result} kind="valuation" />
+            <MetricTable ids={profileIds.slice(0, isReit ? 3 : isBank ? 3 : 3)} metrics={metrics} />
+          </CardContent>
+        </Card>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <ValuationContextCard block={result.valuationContext.historical} />
+          <ValuationContextCard block={result.valuationContext.peer} />
+        </div>
+      </section>
+
+      {/* Profile metrics */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold">Potential Concerns</h2>
-        <p className="text-sm text-muted-foreground">
-          These factors triggered a warning. This is not a “value trap” stamp and does not change
-          the Research Score.
-        </p>
-        {result.concerns.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No concern rules fired for this snapshot.</p>
-        ) : (
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">
+            {isReit ? "REIT metrics" : isBank ? "Bank metrics" : "Company metrics"}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Profile-relevant stored metrics. Missing values stay Unavailable.
+          </p>
+        </div>
+        <MetricTable ids={profileIds} metrics={metrics} />
+      </section>
+
+      {result.concerns.length > 0 || instrument.pn17 ? (
+        <section className="flex flex-col gap-3">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">Flagged observations</h2>
+            <p className="text-sm text-muted-foreground">
+              Rule-based notices from stored data. They do not change Research Score unless scoring
+              config enables a penalty (currently off).
+            </p>
+          </div>
           <ul className="list-disc space-y-2 pl-5 text-sm">
             {result.concerns.map((concern) => (
               <li key={concern.id}>
                 <span className="font-medium">{concern.label}.</span> {concern.message}
-                {concern.value !== null ? ` Value: ${concern.value.toFixed(4)}.` : ""}
+                {concern.value !== null && Number.isFinite(concern.value)
+                  ? ` Value: ${concern.value.toFixed(4)}.`
+                  : ""}
                 {concern.period ? ` Period: ${concern.period}.` : ""}
               </li>
             ))}
+            {instrument.pn17 ? (
+              <li className="text-destructive">
+                PN17 listing status is stored on this name (status warning, not a score deduction).
+              </li>
+            ) : null}
           </ul>
-        )}
-        {instrument.pn17 ? (
-          <p className="text-sm text-destructive">
-            PN17 is a listing-status warning (higher risk), not a hidden score deduction.
-          </p>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold">Valuation</h2>
-        <p className="text-sm text-muted-foreground">
-          Absolute snapshot used in the Valuation Score (last close vs latest annual). Historical and
-          peer labels above are separate — they do not change this score.
-        </p>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Metric</TableHead>
-              <TableHead className="text-right">Value</TableHead>
-              <TableHead className="hidden sm:table-cell">Period</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {valuationIds.map((id) => {
-              const metric = metricById(metrics, id);
-              return (
-                <TableRow key={id}>
-                  <TableCell>{metric?.label ?? id}</TableCell>
-                  <TableCell className="text-right">{fmtRatio(metric)}</TableCell>
-                  <TableCell className="hidden text-muted-foreground sm:table-cell">
-                    {metric?.period ?? "Data unavailable"}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-        {isReit ? (
-          <p className="text-sm text-muted-foreground">
-            Ordinary-company P/E is shown only as a raw metric if the snapshot has EPS. It is not in
-            the REIT scoring profile.
-          </p>
-        ) : null}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold">Financials</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Financials</h2>
         {annuals.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No annual periods stored. Import a fundamentals CSV. Missing cells stay Data unavailable.
+            Unavailable — no annual periods stored for this name.
           </p>
         ) : (
           <Table>
@@ -299,7 +346,7 @@ export default async function ResearchPage({
                 <TableCell>Fiscal period</TableCell>
                 {annuals.map((row) => (
                   <TableCell key={`${row.id}-fy`} className="text-right font-mono text-sm">
-                    {row.fiscalPeriod ?? "Data unavailable"}
+                    {row.fiscalPeriod ?? "Unavailable"}
                   </TableCell>
                 ))}
               </TableRow>
@@ -307,7 +354,7 @@ export default async function ResearchPage({
                 <TableCell>Filing / report date</TableCell>
                 {annuals.map((row) => (
                   <TableCell key={`${row.id}-filing`} className="text-right font-mono text-sm">
-                    {row.filingDate ?? "UNKNOWN"}
+                    {row.filingDate ?? "Unavailable"}
                   </TableCell>
                 ))}
               </TableRow>
@@ -315,15 +362,7 @@ export default async function ResearchPage({
                 <TableCell>available_at</TableCell>
                 {annuals.map((row) => (
                   <TableCell key={`${row.id}-avail`} className="text-right font-mono text-sm">
-                    {row.availableAt ?? "UNKNOWN"}
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell>available_at source</TableCell>
-                {annuals.map((row) => (
-                  <TableCell key={`${row.id}-asrc`} className="text-right text-sm text-muted-foreground">
-                    {row.availableAtSource ?? "—"}
+                    {row.availableAt ?? "Unavailable"}
                   </TableCell>
                 ))}
               </TableRow>
@@ -349,8 +388,8 @@ export default async function ResearchPage({
                     const value = items?.[key] ?? null;
                     return (
                       <TableCell key={row.id} className="text-right tabular-nums">
-                        {value === null
-                          ? "Data unavailable"
+                        {value === null || !Number.isFinite(value)
+                          ? "Unavailable"
                           : key === "eps" || key === "dividendPerShare" || key === "navPerShare"
                             ? value.toFixed(3)
                             : formatMyr(value)}
@@ -359,31 +398,13 @@ export default async function ResearchPage({
                   })}
                 </TableRow>
               ))}
-              <TableRow>
-                <TableCell>Net margin / ROE (latest scored period)</TableCell>
-                {annuals.map((row) => (
-                  <TableCell key={row.id} className="text-right text-muted-foreground">
-                    {row.periodEnd === metricById(metrics, "net_margin")?.period
-                      ? `${fmtRatio(metricById(metrics, "net_margin"))} / ${fmtRatio(metricById(metrics, "roe"))}`
-                      : "Data unavailable"}
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell>ROIC</TableCell>
-                {annuals.map((row) => (
-                  <TableCell key={row.id} className="text-right">
-                    Data unavailable
-                  </TableCell>
-                ))}
-              </TableRow>
             </TableBody>
           </Table>
         )}
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold">Price</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Price</h2>
         <Table>
           <TableHeader>
             <TableRow>
@@ -398,7 +419,7 @@ export default async function ResearchPage({
             </TableRow>
             <TableRow>
               <TableCell>Last trade date</TableCell>
-              <TableCell className="text-right">{lastTrade?.period ?? "Data unavailable"}</TableCell>
+              <TableCell className="text-right">{formatDateSafe(lastTrade?.period)}</TableCell>
             </TableRow>
             <TableRow>
               <TableCell>52-week high</TableCell>
@@ -416,106 +437,54 @@ export default async function ResearchPage({
             </TableRow>
             <TableRow>
               <TableCell>50-day average (stored bars)</TableCell>
-              <TableCell className="text-right">{sma50 === null ? "Data unavailable" : formatMyr(sma50)}</TableCell>
+              <TableCell className="text-right">
+                {sma50 === null || !Number.isFinite(sma50) ? "Unavailable" : formatMyr(sma50)}
+              </TableCell>
             </TableRow>
             <TableRow>
               <TableCell>200-day average (stored bars)</TableCell>
-              <TableCell className="text-right">{sma200 === null ? "Data unavailable" : formatMyr(sma200)}</TableCell>
+              <TableCell className="text-right">
+                {sma200 === null || !Number.isFinite(sma200) ? "Unavailable" : formatMyr(sma200)}
+              </TableCell>
             </TableRow>
             <TableRow>
               <TableCell>Last volume</TableCell>
               <TableCell className="text-right">
-                {lastVolume === null ? "Data unavailable" : lastVolume.toLocaleString("en-MY")}
+                {lastVolume === null || !Number.isFinite(lastVolume)
+                  ? "Unavailable"
+                  : lastVolume.toLocaleString("en-MY")}
               </TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>Price chart</TableCell>
-              <TableCell className="text-right">Data unavailable (charts later)</TableCell>
             </TableRow>
           </TableBody>
         </Table>
       </section>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold">Recent Events</h2>
-        <p className="text-sm text-muted-foreground">
-          Stored normalized events only (Phase 16). Not live-scraped on page load. Classification and
-          sentiment are rule-based labels — not buy/sell signals. Events do not change Research Score
-          or Absolute Valuation Score in this phase. Open the original source.
-        </p>
-        {scored.events.length === 0 ? (
-          <p className="text-sm">
-            Data unavailable — run{" "}
-            <code className="text-xs">npm run events:ingest</code> (curated fixture) or import{" "}
-            <code className="text-xs">data/raw/announcements-sample.csv</code>.
-          </p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Headline</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead>Confidence</TableHead>
-                <TableHead className="hidden md:table-cell">Sentiment</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {scored.events.map((event, index) => {
-                const when = (event.publishedAt ?? event.occurredAt).slice(0, 10);
-                return (
-                  <TableRow key={`${event.sourceId ?? event.occurredAt}-${index}`}>
-                    <TableCell className="whitespace-nowrap">{when}</TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {event.eventType ?? "UNKNOWN"}
-                    </TableCell>
-                    <TableCell>
-                      {event.sourceUrl ? (
-                        <a
-                          href={event.sourceUrl}
-                          className="underline underline-offset-4"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {event.headline}
-                        </a>
-                      ) : (
-                        event.headline
-                      )}
-                    </TableCell>
-                    <TableCell>{event.source}</TableCell>
-                    <TableCell>{event.eventConfidence ?? "UNKNOWN"}</TableCell>
-                    <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
-                      {event.sentiment ?? event.classification}
-                      {event.materiality ? ` · materiality ${event.materiality}` : ""}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </section>
+      <RecentEventsSection events={scored.events} />
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold">Score history</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Score history</h2>
         {history.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Data unavailable — no persisted score runs yet.</p>
+          <p className="text-sm text-muted-foreground">Unavailable — no persisted score runs yet.</p>
         ) : (
           <p className="text-sm">
             Research:{" "}
             {history
-              .map((row) => (row.researchScore === null ? "—" : row.researchScore.toFixed(0)))
+              .map((row) =>
+                row.researchScore === null || !Number.isFinite(row.researchScore)
+                  ? "Unavailable"
+                  : row.researchScore.toFixed(0),
+              )
               .reverse()
               .join(" → ")}
-            <span className="block text-muted-foreground">
-              Latest run {history[0]?.asOf}. Charting why a score moved is later; open a category
-              above for this run’s evidence.
+            <span className="mt-1 block text-muted-foreground">
+              Latest stored run {formatDateSafe(history[0]?.asOf)}. Open score breakdown above for
+              this run&apos;s evidence.
             </span>
           </p>
         )}
       </section>
+
+      <ExportActions ticker={instrument.ticker} />
     </main>
   );
 }

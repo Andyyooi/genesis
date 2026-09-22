@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { isFiniteNumber } from "@/lib/display";
 import { formatContextHeadline } from "@/lib/research-copy";
 import type { ContextLabel, ValuationContextBlock } from "@/scoring/valuation-context";
 
@@ -21,7 +22,7 @@ function badgeVariant(
 }
 
 function fmt(metricId: string, value: number | null): string {
-  if (value === null) return "Data unavailable";
+  if (!isFiniteNumber(value)) return "Unavailable";
   if (metricId === "dividend_yield" || metricId === "roe" || metricId === "book_nav_premium") {
     return `${(value * 100).toFixed(1)}%`;
   }
@@ -32,13 +33,14 @@ export function ValuationContextCard({ block }: { block: ValuationContextBlock }
   const title = block.kind === "historical" ? "Historical Context" : "Peer Context";
   const blurb =
     block.kind === "historical"
-      ? "This name versus its own stored annuals. It is not a second Valuation Score and not a buy signal."
-      : "This name versus a constructed peer set. It is not a cheapness verdict and not a buy signal.";
+      ? "This name versus its own stored annuals. Separate from Absolute Valuation Score — not a buy signal."
+      : "This name versus a constructed peer set. Separate from Absolute Valuation Score — not a cheapness verdict.";
   const quality = block.peerQuality;
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex flex-wrap items-center gap-2">
+        <CardTitle className="flex flex-wrap items-center gap-2 text-base">
           {title}
           <Badge variant={badgeVariant(block.label)}>{formatContextHeadline(block.label)}</Badge>
           {block.kind === "historical" ? (
@@ -52,16 +54,19 @@ export function ValuationContextCard({ block }: { block: ValuationContextBlock }
       <CardContent className="flex flex-col gap-2 text-sm">
         {block.kind === "peer" && quality ? (
           <p>
-            Peer group: <span className="font-medium">{quality.usableCount} usable peers</span>
-            {` (${quality.eligibleCount} eligible, min ${quality.minRequired}). `}
-            {quality.selectionPath}.
+            {quality.groupType.replaceAll("_", " ")}
+            {quality.selectionPath ? ` — ${quality.selectionPath}` : ""}.{" "}
+            <span className="font-medium">{quality.usableCount} usable</span>
+            {` of ${quality.eligibleCount} eligible (min ${quality.minRequired}).`}
           </p>
         ) : block.groupDescription ? (
           <p className="text-muted-foreground">{block.groupDescription}</p>
         ) : null}
         {block.limitation ? <p>{block.limitation}</p> : null}
         {block.lookAheadSafe ? (
-          <p className="text-muted-foreground">Series uses filing dates (available_at) for price alignment.</p>
+          <p className="text-muted-foreground">
+            Series uses filing availability dates (available_at) for price alignment.
+          </p>
         ) : block.kind === "historical" ? (
           <p className="text-muted-foreground">
             Status {block.historicalValuationStatus.replaceAll("_", " ")}. Look-ahead-safe
@@ -69,10 +74,10 @@ export function ValuationContextCard({ block }: { block: ValuationContextBlock }
           </p>
         ) : null}
         <p className="text-muted-foreground">
-          Data confidence {block.confidenceLevel ?? "not attached"} · freshness{" "}
-          {block.freshness ?? "UNKNOWN"}
+          Attached confidence {block.confidenceLevel ?? "Unavailable"} · freshness{" "}
+          {block.freshness ?? "Unavailable"}
         </p>
-        {block.kind === "peer" && quality && quality.metrics.length ? (
+        {block.kind === "peer" && quality && quality.metrics.length > 0 ? (
           <Table>
             <TableHeader>
               <TableRow>
@@ -94,6 +99,34 @@ export function ValuationContextCard({ block }: { block: ValuationContextBlock }
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground sm:table-cell">
                     {row.usableCount}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : null}
+        {block.kind === "historical" && block.metrics.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Metric</TableHead>
+                <TableHead className="text-right">This name</TableHead>
+                <TableHead className="text-right">Historical median</TableHead>
+                <TableHead className="hidden sm:table-cell">Label</TableHead>
+                <TableHead className="hidden sm:table-cell">Sample</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {block.metrics.map((row) => (
+                <TableRow key={row.metricId}>
+                  <TableCell>{row.label}</TableCell>
+                  <TableCell className="text-right tabular-nums">{fmt(row.metricId, row.current)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{fmt(row.metricId, row.median)}</TableCell>
+                  <TableCell className="hidden text-muted-foreground sm:table-cell">
+                    {formatContextHeadline(row.labelForMetric)}
+                  </TableCell>
+                  <TableCell className="hidden text-muted-foreground sm:table-cell">
+                    {row.sampleSize}
                   </TableCell>
                 </TableRow>
               ))}

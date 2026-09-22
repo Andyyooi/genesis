@@ -10,7 +10,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export function formatScore100(value: number | null): string {
-  if (value === null) return "Data unavailable";
+  if (value === null || !Number.isFinite(value)) return "Unavailable";
   return `${value.toFixed(0)}/100`;
 }
 
