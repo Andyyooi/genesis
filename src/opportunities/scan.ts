@@ -39,6 +39,8 @@ export function scanWatchlist(): OpportunityRow[] {
       marketCap: metric(scored.metrics, "market_cap")?.available
         ? (metric(scored.metrics, "market_cap")?.value ?? null)
         : null,
+      sector: scored.instrument.sector ?? null,
+      researchProfile: scored.result.researchProfile,
       price: lastClose?.available ? lastClose.value : null,
       lastTradeDate: lastTrade?.period ?? item.lastTradeDate,
       fundamentalsPeriod: latestAnnualPeriod(scored.periods),
@@ -48,6 +50,7 @@ export function scanWatchlist(): OpportunityRow[] {
       growthScore: categoryScore(scored.result, "growth"),
       healthScore: categoryScore(scored.result, "financial_health"),
       coverage: liveCoverage(scored.result),
+      coreCoverageRatio: scored.result.dataCoverage.coverageRatio,
       freshness: scored.result.dataCoverage.freshness,
       confidence: scored.result.dataConfidence.level,
       needsVerification: scored.result.dataConfidence.needsVerification,
@@ -69,6 +72,8 @@ export function scanWatchlist(): OpportunityRow[] {
         );
         return hit ? `${hit.classification}: ${hit.headline}` : null;
       })(),
+      hasEvents: scored.events.length > 0,
+      eventCount: scored.events.length,
       result: scored.result,
     });
   }

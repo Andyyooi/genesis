@@ -77,6 +77,8 @@ export type OpportunityRow = {
   shariahCompliant: boolean | null;
   listingBoard: string | null;
   marketCap: number | null;
+  sector: string | null;
+  researchProfile: string;
   price: number | null;
   lastTradeDate: string | null;
   fundamentalsPeriod: string | null;
@@ -86,6 +88,8 @@ export type OpportunityRow = {
   growthScore: number | null;
   healthScore: number | null;
   coverage: number | null;
+  /** Core coverage ratio from dataCoverage (0–1). */
+  coreCoverageRatio: number | null;
   freshness: string | null;
   confidence: string | null;
   needsVerification: boolean;
@@ -97,14 +101,41 @@ export type OpportunityRow = {
   persistedResearchScores: (number | null)[];
   catalystWatch: boolean;
   catalystLabel: string | null;
+  hasEvents: boolean;
+  eventCount: number;
   result: ScoreResult;
 };
+
+export type DashboardSortId =
+  | "ticker"
+  | "research"
+  | "valuation"
+  | "confidence"
+  | "coverage"
+  | "freshness"
+  | "profile"
+  | "sector";
+
+export const DASHBOARD_SORT_IDS: DashboardSortId[] = [
+  "ticker",
+  "research",
+  "valuation",
+  "confidence",
+  "coverage",
+  "freshness",
+  "profile",
+  "sector",
+];
 
 export type DashboardFlagFilter = {
   instrumentType?: "COMMON_STOCK" | "REIT";
   shariah?: boolean;
   board?: string;
   cap?: "large" | "mid" | "small";
+  confidence?: "HIGH" | "MEDIUM" | "LOW" | "VERY_LOW";
+  freshness?: string;
+  profile?: string;
+  events?: "yes";
 };
 
 /** Cap buckets in MYR. Not a scored factor. Missing market cap is excluded when a cap filter is on. */
@@ -119,13 +150,91 @@ export function parseDashboardFilters(params: {
   shariah?: string;
   board?: string;
   cap?: string;
+  confidence?: string;
+  freshness?: string;
+  profile?: string;
+  events?: string;
 }): DashboardFlagFilter {
   const filters: DashboardFlagFilter = {};
   if (params.type === "REIT" || params.type === "COMMON_STOCK") filters.instrumentType = params.type;
   if (params.shariah === "yes") filters.shariah = true;
   if (params.board && params.board.trim()) filters.board = params.board.trim().toUpperCase();
   if (params.cap === "large" || params.cap === "mid" || params.cap === "small") filters.cap = params.cap;
+  if (
+    params.confidence === "HIGH" ||
+    params.confidence === "MEDIUM" ||
+    params.confidence === "LOW" ||
+    params.confidence === "VERY_LOW"
+  ) {
+    filters.confidence = params.confidence;
+  }
+  if (params.freshness && params.freshness.trim()) filters.freshness = params.freshness.trim().toUpperCase();
+  if (params.profile && params.profile.trim()) filters.profile = params.profile.trim().toUpperCase();
+  if (params.events === "yes") filters.events = "yes";
   return filters;
+}
+
+export function parseDashboardSort(value: string | undefined): DashboardSortId {
+  if (value && (DASHBOARD_SORT_IDS as readonly string[]).includes(value)) {
+    return value as DashboardSortId;
+  }
+  return "ticker";
+}
+
+const CONFIDENCE_RANK: Record<string, number> = {
+  HIGH: 4,
+  MEDIUM: 3,
+  LOW: 2,
+  VERY_LOW: 1,
+};
+
+const FRESHNESS_RANK: Record<string, number> = {
+  FRESH: 4,
+  AGING: 3,
+  STALE: 2,
+  VERY_STALE: 1,
+  UNKNOWN: 0,
+};
+
+function nullsLast(a: number | null, b: number | null): number {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return b - a;
+}
+
+export function sortOpportunityRows(rows: OpportunityRow[], sort: DashboardSortId): OpportunityRow[] {
+  const copy = [...rows];
+  copy.sort((a, b) => {
+    switch (sort) {
+      case "research":
+        return nullsLast(a.researchScore, b.researchScore) || a.ticker.localeCompare(b.ticker);
+      case "valuation":
+        return nullsLast(a.valuationScore, b.valuationScore) || a.ticker.localeCompare(b.ticker);
+      case "confidence": {
+        const diff =
+          (CONFIDENCE_RANK[b.confidence ?? ""] ?? 0) - (CONFIDENCE_RANK[a.confidence ?? ""] ?? 0);
+        return diff || a.ticker.localeCompare(b.ticker);
+      }
+      case "coverage":
+        return (
+          nullsLast(a.coreCoverageRatio, b.coreCoverageRatio) || a.ticker.localeCompare(b.ticker)
+        );
+      case "freshness": {
+        const diff =
+          (FRESHNESS_RANK[b.freshness ?? ""] ?? -1) - (FRESHNESS_RANK[a.freshness ?? ""] ?? -1);
+        return diff || a.ticker.localeCompare(b.ticker);
+      }
+      case "profile":
+        return a.researchProfile.localeCompare(b.researchProfile) || a.ticker.localeCompare(b.ticker);
+      case "sector":
+        return (a.sector ?? "").localeCompare(b.sector ?? "") || a.ticker.localeCompare(b.ticker);
+      case "ticker":
+      default:
+        return a.ticker.localeCompare(b.ticker);
+    }
+  });
+  return copy;
 }
 
 export function rowMatchesFilters(row: OpportunityRow, filters: DashboardFlagFilter): boolean {
@@ -136,6 +245,10 @@ export function rowMatchesFilters(row: OpportunityRow, filters: DashboardFlagFil
     if (row.marketCap === null) return false;
     if (capBucket(row.marketCap) !== filters.cap) return false;
   }
+  if (filters.confidence && row.confidence !== filters.confidence) return false;
+  if (filters.freshness && (row.freshness ?? "").toUpperCase() !== filters.freshness) return false;
+  if (filters.profile && row.researchProfile !== filters.profile) return false;
+  if (filters.events === "yes" && !row.hasEvents) return false;
   return true;
 }
 

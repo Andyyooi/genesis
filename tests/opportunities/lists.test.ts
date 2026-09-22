@@ -5,6 +5,7 @@ import {
   liveCoverage,
   rowMatchesFilters,
   rowMatchesList,
+  sortOpportunityRows,
   type OpportunityRow,
 } from "@/opportunities/lists";
 
@@ -124,6 +125,8 @@ function row(over: Partial<OpportunityRow> = {}): OpportunityRow {
     shariahCompliant: null,
     listingBoard: "MAIN",
     marketCap: null,
+    sector: "Consumer Cyclical",
+    researchProfile: scored.researchProfile,
     price: 10,
     lastTradeDate: "2026-09-18",
     fundamentalsPeriod: "2024-12-31",
@@ -133,6 +136,7 @@ function row(over: Partial<OpportunityRow> = {}): OpportunityRow {
     growthScore: 70,
     healthScore: null,
     coverage: liveCoverage(scored),
+    coreCoverageRatio: scored.dataCoverage.coverageRatio,
     freshness: scored.dataCoverage.freshness,
     confidence: scored.dataConfidence.level,
     needsVerification: scored.dataConfidence.needsVerification,
@@ -143,6 +147,8 @@ function row(over: Partial<OpportunityRow> = {}): OpportunityRow {
     persistedResearchScores: [],
     catalystWatch: false,
     catalystLabel: null,
+    hasEvents: false,
+    eventCount: 0,
     result: scored,
     ...over,
   };
@@ -204,5 +210,25 @@ describe("opportunity lists", () => {
     expect(rowMatchesFilters(row({ marketCap: null }), { cap: "large" })).toBe(false);
     expect(rowMatchesFilters(row({ instrumentType: "REIT" }), { instrumentType: "REIT" })).toBe(true);
     expect(rowMatchesFilters(row({ listingBoard: "MAIN" }), { board: "MAIN" })).toBe(true);
+  });
+
+  it("filters by confidence, freshness, profile, and event presence", () => {
+    expect(rowMatchesFilters(row({ confidence: "HIGH" }), { confidence: "HIGH" })).toBe(true);
+    expect(rowMatchesFilters(row({ confidence: "LOW" }), { confidence: "HIGH" })).toBe(false);
+    expect(rowMatchesFilters(row({ freshness: "FRESH" }), { freshness: "FRESH" })).toBe(true);
+    expect(rowMatchesFilters(row({ researchProfile: "BANK" }), { profile: "BANK" })).toBe(true);
+    expect(rowMatchesFilters(row({ hasEvents: true }), { events: "yes" })).toBe(true);
+    expect(rowMatchesFilters(row({ hasEvents: false }), { events: "yes" })).toBe(false);
+  });
+
+  it("sorts by factual attributes without inventing a best-stock rank", () => {
+    const rows = [
+      row({ ticker: "B", researchScore: 40, confidence: "HIGH", coreCoverageRatio: 0.4 }),
+      row({ ticker: "A", researchScore: 70, confidence: "LOW", coreCoverageRatio: 0.9 }),
+    ];
+    expect(sortOpportunityRows(rows, "research").map((r) => r.ticker)).toEqual(["A", "B"]);
+    expect(sortOpportunityRows(rows, "confidence").map((r) => r.ticker)).toEqual(["B", "A"]);
+    expect(sortOpportunityRows(rows, "coverage").map((r) => r.ticker)).toEqual(["A", "B"]);
+    expect(sortOpportunityRows(rows, "ticker").map((r) => r.ticker)).toEqual(["A", "B"]);
   });
 });
