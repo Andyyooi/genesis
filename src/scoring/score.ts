@@ -22,14 +22,21 @@ function categoryAverage(factors: { score: number | null; weight: number; availa
   totalWeight: number;
 } {
   const totalWeight = factors.reduce((sum, f) => sum + f.weight, 0);
-  const available = factors.filter((f) => f.available && f.score !== null);
+  const available = factors.filter(
+    (f) => f.available && f.score !== null && Number.isFinite(f.score),
+  );
   const availableWeight = available.reduce((sum, f) => sum + f.weight, 0);
   const coverage = totalWeight === 0 ? 0 : availableWeight / totalWeight;
   if (availableWeight === 0) {
     return { score: null, coverage, availableWeight, totalWeight };
   }
   const score = available.reduce((sum, f) => sum + (f.score as number) * f.weight, 0) / availableWeight;
-  return { score, coverage, availableWeight, totalWeight };
+  return {
+    score: Number.isFinite(score) ? score : null,
+    coverage,
+    availableWeight,
+    totalWeight,
+  };
 }
 
 export function scoreFromMetrics(args: {
@@ -97,7 +104,9 @@ export function scoreFromMetrics(args: {
 
   const live = categories.filter(
     (c) =>
-      !args.config.unavailable_until_data.includes(c.id as CategoryKey) && c.score !== null,
+      !args.config.unavailable_until_data.includes(c.id as CategoryKey) &&
+      c.score !== null &&
+      Number.isFinite(c.score),
   );
   const liveWeightSum = live.reduce((sum, c) => sum + c.configuredWeight, 0);
   for (const category of categories) {

@@ -262,4 +262,34 @@ describe("scoring engine", () => {
     expect(flagged.researchScore).toBe(clean.researchScore);
     expect(config.concerns.apply_score_penalty).toBe(false);
   });
+
+  it("does not let a non-finite growth metric poison Research Score (OPPSTAR/PCHEM-style)", () => {
+    // Profit→loss PAT CAGR historically produced NaN via Math.pow; defensive path treats
+    // non-finite metric values as unavailable and renormalizes remaining growth weight.
+    const poisoned = m("pat_cagr", Number.NaN, true);
+    poisoned.reason = null;
+    const result = scoreFromMetrics({
+      config,
+      instrumentType: "COMMON_STOCK",
+      ticker: "OPPSTAR",
+      metrics: [
+        m("price_to_earnings", null, false),
+        m("dividend_yield", 0.005),
+        m("roe", 0.01),
+        m("net_margin", 0.01),
+        m("debt_to_equity", 0.2),
+        m("fcf", -1),
+        m("revenue_cagr", -0.15),
+        poisoned,
+      ],
+    });
+    const pat = byCat(result, "growth").factors.find((f) => f.id === "pat_cagr");
+    expect(pat?.available).toBe(false);
+    expect(pat?.score).toBeNull();
+    expect(Number.isFinite(byCat(result, "growth").score as number)).toBe(true);
+    expect(byCat(result, "growth").score).not.toBeNull();
+    expect(Number.isFinite(result.researchScore as number)).toBe(true);
+    expect(result.researchScore).not.toBeNull();
+    expect(result.valuationScore).toBe(0);
+  });
 });

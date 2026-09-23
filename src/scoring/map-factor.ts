@@ -15,17 +15,20 @@ export function scoreFactor(factor: FactorConfig, metrics: MetricValue[]): Facto
   const metric = metrics.find((row) => row.id === factor.metric);
   const notes = `direction ${factor.direction}; 0 at ${factor.worse}, 100 at ${factor.better}`;
 
-  if (!metric || !metric.available || metric.value === null) {
+  if (!metric || !metric.available || metric.value === null || !Number.isFinite(metric.value)) {
     return {
       id: factor.id,
       label: factor.label,
       category: "",
       weight: factor.weight,
       metricId: factor.metric,
-      value: metric?.value ?? null,
+      value: metric?.value !== undefined && Number.isFinite(metric.value) ? metric.value : null,
       score: null,
       available: false,
-      reason: metric?.reason ?? `Metric ${factor.metric} is unavailable`,
+      reason:
+        metric?.available && metric.value !== null && !Number.isFinite(metric.value)
+          ? `Metric ${factor.metric} is non-finite`
+          : (metric?.reason ?? `Metric ${factor.metric} is unavailable`),
       period: metric?.period ?? null,
       formula: metric?.formula ?? "config threshold map",
       inputs: metric?.inputs ?? [],
@@ -34,6 +37,23 @@ export function scoreFactor(factor: FactorConfig, metrics: MetricValue[]): Facto
   }
 
   const score = linearScore(metric.value, factor.worse, factor.better);
+  if (!Number.isFinite(score)) {
+    return {
+      id: factor.id,
+      label: factor.label,
+      category: "",
+      weight: factor.weight,
+      metricId: factor.metric,
+      value: metric.value,
+      score: null,
+      available: false,
+      reason: `Mapped score for ${factor.metric} is non-finite`,
+      period: metric.period,
+      formula: metric.formula ?? "config threshold map",
+      inputs: metric.inputs,
+      notes,
+    };
+  }
   return {
     id: factor.id,
     label: factor.label,
