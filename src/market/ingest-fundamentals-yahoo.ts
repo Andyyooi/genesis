@@ -34,8 +34,14 @@ export type YahooFundamentalsReport = {
   upserted: number;
   inserted: number;
   filled: number;
+  /** Period rows that matched existing Yahoo data with nothing new to fill. */
+  unchanged: number;
   skippedHadFilings: number;
   skippedOtherSource: number;
+  /** Instruments where at least one period was inserted or filled. */
+  instrumentsUpdated: number;
+  /** Instruments contacted successfully with no period changes (or skipped as already filed). */
+  instrumentsUnchanged: number;
   failed: TypedFundamentalFailure[];
 };
 
@@ -80,8 +86,11 @@ export async function importYahooFundamentals(
   let upserted = 0;
   let inserted = 0;
   let filled = 0;
+  let unchanged = 0;
   let skippedHadFilings = 0;
   let skippedOtherSource = 0;
+  let instrumentsUpdated = 0;
+  let instrumentsUnchanged = 0;
   const failed: TypedFundamentalFailure[] = [];
   const retrievedAt = new Date().toISOString();
 
@@ -93,6 +102,7 @@ export async function importYahooFundamentals(
       .all();
     if (skipIfAny && existing.length > 0) {
       skippedHadFilings += 1;
+      instrumentsUnchanged += 1;
       continue;
     }
     if (isUnsupportedYahooListing(instrument.name)) {
@@ -160,20 +170,28 @@ export async function importYahooFundamentals(
         };
         failed.push(row);
         recordIngestFailure("fundamentals", instrument.ticker, mappingTried[0] ?? null, row.reason, code);
+        continue;
       }
 
+      let instrumentChanged = false;
       for (const period of periods) {
         const result = persistAnnualPeriod(instrument.id, period, retrievedAt);
         if (result === "inserted") {
           inserted += 1;
           upserted += 1;
+          instrumentChanged = true;
         } else if (result === "filled") {
           filled += 1;
           upserted += 1;
+          instrumentChanged = true;
         } else if (result === "skipped_other_source") {
           skippedOtherSource += 1;
+        } else if (result === "unchanged") {
+          unchanged += 1;
         }
       }
+      if (instrumentChanged) instrumentsUpdated += 1;
+      else instrumentsUnchanged += 1;
     } catch (error) {
       const code: FundamentalFailureCode =
         error instanceof FundamentalIngestError ? error.code : "UNKNOWN";
@@ -198,8 +216,11 @@ export async function importYahooFundamentals(
     upserted,
     inserted,
     filled,
+    unchanged,
     skippedHadFilings,
     skippedOtherSource,
+    instrumentsUpdated,
+    instrumentsUnchanged,
     failed,
   };
   db.insert(ingestReports)

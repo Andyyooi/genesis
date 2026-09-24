@@ -234,3 +234,40 @@ export const marketScanRows = sqliteTable("market_scan_rows", {
   payloadJson: text("payload_json").notNull(),
 });
 
+/**
+ * Phase 18B dataset/provider refresh provenance.
+ * last_successful_at advances only on SUCCESS / PARTIAL / UNCHANGED / NO_DATA with usable contact.
+ * Never confuse started_at/completed_at with published_at / available_at.
+ */
+export const REFRESH_STATUSES = [
+  "SUCCESS",
+  "PARTIAL",
+  "NO_SOURCE",
+  "SOURCE_FAILED",
+  "NO_DATA",
+  "UNCHANGED",
+] as const;
+export type RefreshStatus = (typeof REFRESH_STATUSES)[number];
+
+export const REFRESH_DATASETS = ["prices", "fundamentals", "events", "news", "scores"] as const;
+export type RefreshDataset = (typeof REFRESH_DATASETS)[number];
+
+export const refreshRuns = sqliteTable("refresh_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: text("run_id").notNull(),
+  dataset: text("dataset").notNull(),
+  source: text("source").notNull(),
+  status: text("status").notNull(),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at").notNull(),
+  marketDate: text("market_date"),
+  attemptedCount: integer("attempted_count").notNull().default(0),
+  updatedCount: integer("updated_count").notNull().default(0),
+  unchangedCount: integer("unchanged_count").notNull().default(0),
+  failedCount: integer("failed_count").notNull().default(0),
+  unavailableCount: integer("unavailable_count").notNull().default(0),
+  lastSuccessfulAt: text("last_successful_at"),
+  errorSummary: text("error_summary"),
+  metadataJson: text("metadata_json"),
+});
+

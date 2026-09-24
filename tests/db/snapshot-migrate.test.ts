@@ -39,4 +39,21 @@ describe("snapshot schema migration", () => {
     expect(() => sqlite.prepare("SELECT published_at FROM events").all()).not.toThrow();
     sqlite.close();
   });
+
+  it("creates refresh_runs table via migrateSqliteSchema", () => {
+    const sqlite = new Database(":memory:");
+    migrateSqliteSchema(sqlite);
+    const tables = (
+      sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]
+    ).map((r) => r.name);
+    expect(tables).toContain("refresh_runs");
+    expect(() =>
+      sqlite
+        .prepare(
+          "SELECT run_id, dataset, source, status, last_successful_at FROM refresh_runs LIMIT 1",
+        )
+        .all(),
+    ).not.toThrow();
+    sqlite.close();
+  });
 });

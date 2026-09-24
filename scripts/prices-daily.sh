@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Daily Yahoo EOD prices for the universe. Not live ticks. Not Cursor usage.
-# Stop: kill "$(cat data/.prices-daily.pid)"
+# Local post-market daily refresh daemon (Asia/Kuala_Lumpur).
+# Runs `npm run refresh:daily` after 18:00 MYT — does not duplicate Yahoo ingest logic.
+# Not a Vercel Cron. Not live ticks. Stop: kill "$(cat data/.prices-daily.pid)"
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -38,6 +39,7 @@ if tz is None:
     raise SystemExit
 now = datetime.now(tz)
 min_wait = timedelta(hours=12)
+# After Bursa cash-market close; 18:00 MYT is the intended local slot.
 target = now.replace(hour=18, minute=0, second=0, microsecond=0)
 if target <= now:
     target += timedelta(days=1)
@@ -48,13 +50,13 @@ print(target.isoformat(), file=__import__("sys").stderr)
 PY
 }
 
-run_prices() {
-  local tmp errfile code next_iso
+run_refresh() {
+  local tmp errfile code
   tmp="$(mktemp)"
   errfile="$(mktemp)"
-  log "starting Yahoo EOD ingest (npm run ingest:prices)"
+  log "starting daily refresh (npm run refresh:daily)"
   set +e
-  npm run --silent ingest:prices >"$tmp" 2>"$errfile"
+  npm run --silent refresh:daily >"$tmp" 2>"$errfile"
   code=$?
   local result
   result="$(python3 - "$tmp" "$errfile" "$code" "$LASTFILE" <<'PY'
@@ -66,28 +68,28 @@ stderr = Path(err_path).read_text(encoding="utf-8", errors="replace")
 report = None
 text = stdout.strip()
 if text:
-    try:
-        report = json.loads(text)
-    except json.JSONDecodeError:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start >= 0 and end > start:
-            try:
-                report = json.loads(text[start : end + 1])
-            except json.JSONDecodeError:
-                report = None
-failed = []
-if isinstance(report, dict):
-    failed = report.get("failed") or []
-ok = code == 0 and isinstance(report, dict) and len(failed) == 0
+    # refresh:daily prints a human summary then a JSON blob; take the last object.
+    start = text.rfind("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            report = json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            report = None
+status = report.get("overallStatus") if isinstance(report, dict) else None
+ok = code == 0 and status in {"SUCCESS", "PARTIAL", "UNCHANGED", "NO_DATA"}
 payload = {
     "ranAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "ok": ok,
     "exitCode": code,
-    "failedCount": len(failed) if isinstance(failed, list) else None,
+    "overallStatus": status,
     "report": report,
     "stderr": stderr.strip()[:4000] if stderr.strip() else None,
-    "note": "Missed Yahoo tickers stay listed; prices are never invented. Fundamentals are not fetched here.",
+    "note": (
+        "Local daemon only (Asia/Kuala_Lumpur, after 18:00 MYT). "
+        "Uses npm run refresh:daily — no duplicated ingest. "
+        "Failed/NO_SOURCE datasets preserve prior valid rows via refresh_runs."
+    ),
 }
 Path(last_path).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 print("ok" if ok else "fail")
@@ -95,15 +97,15 @@ PY
   )"
   rm -f "$tmp" "$errfile"
   if [[ "$result" == "ok" ]]; then
-    log "Yahoo EOD ingest ok — see $LASTFILE"
+    log "daily refresh ok — see $LASTFILE"
   else
-    log "Yahoo EOD ingest FAILED or partial — see $LASTFILE (no prices invented)"
+    log "daily refresh FAILED or unusable overall status — see $LASTFILE (prior valid data preserved)"
   fi
 }
 
-log "pid $$ — daily Yahoo EOD prices after 18:00 MYT (min 12h). Manual: npm run ingest:prices"
+log "pid $$ — local refresh after 18:00 Asia/Kuala_Lumpur (min 12h). Manual: npm run refresh:daily"
 while true; do
-  run_prices
+  run_refresh
   wait_s="$(seconds_until_next_slot 2>"$ROOT/data/logs/prices-daily.next.txt" || echo 86400)"
   if ! [[ "$wait_s" =~ ^[0-9]+$ ]]; then
     wait_s=86400
@@ -119,7 +121,7 @@ if p.exists():
     data["nextWakeAt"] = nxt or None
     p.write_text(json.dumps(data, indent=2) + "\n")
 PY
-  log "sleeping ${wait_s}s until next slot ${next:-unknown} (not a live feed)"
+  log "sleeping ${wait_s}s until next slot ${next:-unknown} (not a live feed; not Vercel Cron)"
   sleep "$wait_s" &
   CHILD=$!
   wait "$CHILD" || true

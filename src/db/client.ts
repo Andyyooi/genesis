@@ -149,6 +149,25 @@ function ensureSchema(sqlite: Database.Database) {
       ticker TEXT NOT NULL,
       payload_json TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS refresh_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id TEXT NOT NULL,
+      dataset TEXT NOT NULL,
+      source TEXT NOT NULL,
+      status TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      completed_at TEXT NOT NULL,
+      market_date TEXT,
+      attempted_count INTEGER NOT NULL DEFAULT 0,
+      updated_count INTEGER NOT NULL DEFAULT 0,
+      unchanged_count INTEGER NOT NULL DEFAULT 0,
+      failed_count INTEGER NOT NULL DEFAULT 0,
+      unavailable_count INTEGER NOT NULL DEFAULT 0,
+      last_successful_at TEXT,
+      error_summary TEXT,
+      metadata_json TEXT
+    );
   `);
 
   addColumn(sqlite, "instruments", "watchlist", "INTEGER NOT NULL DEFAULT 0");
