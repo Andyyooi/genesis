@@ -90,7 +90,15 @@ export function persistAnnualPeriod(
       availableAtSource: dates.availableAtSource,
       fiscalPeriod: dates.fiscalPeriod,
     });
-    if (before === after) return "unchanged";
+    if (before === after) {
+      // Provenance only: record that Yahoo confirmed the row without changing values.
+      // Daily freshness gate keys off retrieved_at; scoring freshness does not.
+      db.update(financialPeriods)
+        .set({ retrievedAt })
+        .where(eq(financialPeriods.id, yahooRow.id))
+        .run();
+      return "unchanged";
+    }
     db.update(financialPeriods)
       .set({
         lineItemsJson: afterItems,

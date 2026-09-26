@@ -50,6 +50,16 @@ Yahoo fundamentals-timeseries (+ optional secondary stub)
 
 Unchanged annuals count as **UNCHANGED**, not a fake “new” statement.
 
+**Daily freshness gate (Phase 18B perf):** `npm run refresh:daily` passes
+`freshnessGate` with `DAILY_FUNDAMENTALS_RECHECK_DAYS = 14`. For each listed
+instrument, Yahoo HTTP is skipped when:
+
+1. at least one Yahoo `annual` row exists, and
+2. the latest Yahoo annual by `period_end` is **full** (revenue + PAT + equity), and
+3. the newest Yahoo annual `retrieved_at` is fewer than 14 UTC calendar days before the run `asOf`.
+
+Otherwise Yahoo is contacted (missing, incomplete, due for recheck, prior NO_DATA gaps, new listings). The gate uses existing `financial_periods.retrieved_at` provenance — not a second state store. Scoring freshness bands are unchanged. Manual `importYahooFundamentals()` without `freshnessGate` still fetches every ticker.
+
 ### Structured events
 
 ```text
@@ -128,7 +138,8 @@ Overall status derives primarily from **prices + fundamentals**.
 | Dataset | Cadence | Notes |
 |---------|---------|-------|
 | Prices | Daily after ~18:00 MYT | EOD bars; 1mo window upsert keeps history |
-| Fundamentals | Daily check | Only persists inserts/fills; else UNCHANGED |
+| Fundamentals | Daily check with 14-day Yahoo recheck gate | Skip HTTP when latest Yahoo annual is complete and `retrieved_at` is within 14 days; otherwise fetch. Manual import remains full backfill |
+
 | Events | Unresolved live | Manual `events:ingest` fixture only |
 | News | Unresolved | — |
 | Scores | After price/fund refresh | Rescore snapshot |

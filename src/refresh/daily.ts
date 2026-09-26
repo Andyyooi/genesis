@@ -7,9 +7,11 @@ import type { PricesImportReport } from "@/ingest/types";
 import { refuseSnapshotWrites } from "@/lib/data-mode";
 import {
   importYahooFundamentals,
+  type YahooFundamentalsImportOptions,
   type YahooFundamentalsReport,
 } from "@/market/ingest-fundamentals-yahoo";
 import { rescoreListedMarket } from "@/market/scan";
+import { DAILY_FUNDAMENTALS_RECHECK_DAYS } from "@/refresh/fundamentals-freshness";
 import { persistDatasetRefresh } from "@/refresh/persist";
 import {
   combineOverallStatus,
@@ -22,7 +24,9 @@ import {
 
 export type DailyRefreshDeps = {
   importPrices?: (opts?: PriceIngestOptions) => Promise<PricesImportReport>;
-  importFundamentals?: () => Promise<YahooFundamentalsReport>;
+  importFundamentals?: (
+    options?: YahooFundamentalsImportOptions,
+  ) => Promise<YahooFundamentalsReport>;
   eventsProvider?: EventSourceProvider | null;
   /** null / undefined → NO_SOURCE for news (no production news table yet). */
   newsAvailable?: boolean;
@@ -122,7 +126,12 @@ async function refreshFundamentals(
   const startedAt = (deps.now?.() ?? new Date()).toISOString();
   const importFundamentals = deps.importFundamentals ?? importYahooFundamentals;
   try {
-    const report = await importFundamentals();
+    const report = await importFundamentals({
+      freshnessGate: {
+        asOf: deps.now?.() ?? new Date(),
+        recheckAfterDays: DAILY_FUNDAMENTALS_RECHECK_DAYS,
+      },
+    });
     const completedAt = (deps.now?.() ?? new Date()).toISOString();
     return persistDatasetRefresh(runId, {
       dataset: "fundamentals",
@@ -146,6 +155,9 @@ async function refreshFundamentals(
         filled: report.filled,
         unchangedPeriods: report.unchanged,
         skippedOtherSource: report.skippedOtherSource,
+        instrumentsSkippedFresh: report.instrumentsSkippedFresh,
+        instrumentsFetched: report.instrumentsFetched,
+        recheckAfterDays: DAILY_FUNDAMENTALS_RECHECK_DAYS,
       },
     });
   } catch (error) {

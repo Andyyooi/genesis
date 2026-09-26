@@ -110,6 +110,8 @@ function emptyFundReport(over: Partial<YahooFundamentalsReport> = {}): YahooFund
     skippedOtherSource: 0,
     instrumentsUpdated: 0,
     instrumentsUnchanged: 1,
+    instrumentsSkippedFresh: 0,
+    instrumentsFetched: 1,
     failed: [],
     ...over,
   };

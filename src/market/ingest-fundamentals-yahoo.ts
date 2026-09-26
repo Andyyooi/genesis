@@ -13,6 +13,10 @@ import {
 import type { FundamentalProvider } from "@/providers/types";
 import { YahooFundamentalProvider } from "@/providers/yahoo-fundamentals";
 import { yahooSymbolCandidates } from "@/providers/yahoo-symbol-map";
+import {
+  DAILY_FUNDAMENTALS_RECHECK_DAYS,
+  evaluateFundamentalsFreshness,
+} from "@/refresh/fundamentals-freshness";
 
 function sleep(ms: number) {
   return Promise.resolve().then(() => new Promise((resolve) => setTimeout(resolve, ms)));
@@ -42,7 +46,28 @@ export type YahooFundamentalsReport = {
   instrumentsUpdated: number;
   /** Instruments contacted successfully with no period changes (or skipped as already filed). */
   instrumentsUnchanged: number;
+  /**
+   * Daily freshness gate only: Yahoo HTTP skipped because complete annuals were
+   * still within the recheck window. Counted in instrumentsUnchanged.
+   */
+  instrumentsSkippedFresh: number;
+  /** Instruments that made at least one Yahoo fundamentals HTTP attempt. */
+  instrumentsFetched: number;
   failed: TypedFundamentalFailure[];
+};
+
+export type YahooFundamentalsImportOptions = {
+  rateLimitMs?: number;
+  skipIfAnyFilings?: boolean;
+  /**
+   * When set (daily refresh), skip Yahoo HTTP for instruments whose latest Yahoo
+   * annual is complete and was retrieved within `recheckAfterDays`.
+   * Default importer / manual backfill leaves this unset → full fetch.
+   */
+  freshnessGate?: {
+    asOf?: Date;
+    recheckAfterDays?: number;
+  };
 };
 
 function defaultProvider(): FundamentalProvider {
@@ -70,10 +95,27 @@ async function withRetries<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   throw last;
 }
 
+function isFundamentalProvider(value: unknown): value is FundamentalProvider {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "annualPeriods" in value &&
+    typeof (value as FundamentalProvider).annualPeriods === "function"
+  );
+}
+
+/**
+ * Full Yahoo fundamentals import (manual / backfill). Pass `freshnessGate` only from
+ * daily refresh so complete, recently retrieved annuals skip HTTP.
+ */
 export async function importYahooFundamentals(
-  provider: FundamentalProvider = defaultProvider(),
-  options?: { rateLimitMs?: number; skipIfAnyFilings?: boolean },
+  providerOrOptions?: FundamentalProvider | YahooFundamentalsImportOptions,
+  maybeOptions?: YahooFundamentalsImportOptions,
 ): Promise<YahooFundamentalsReport> {
+  const provider = isFundamentalProvider(providerOrOptions)
+    ? providerOrOptions
+    : defaultProvider();
+  const options = isFundamentalProvider(providerOrOptions) ? maybeOptions : providerOrOptions;
   const startedAt = new Date().toISOString();
   const db = getDb();
   const listed = db
@@ -83,6 +125,9 @@ export async function importYahooFundamentals(
     .filter((row) => row.listingStatus !== "inactive");
   const skipIfAny = options?.skipIfAnyFilings ?? false;
   const delay = options?.rateLimitMs ?? 200;
+  const gate = options?.freshnessGate;
+  const gateAsOf = gate?.asOf ?? new Date();
+  const recheckAfterDays = gate?.recheckAfterDays ?? DAILY_FUNDAMENTALS_RECHECK_DAYS;
   let upserted = 0;
   let inserted = 0;
   let filled = 0;
@@ -91,6 +136,8 @@ export async function importYahooFundamentals(
   let skippedOtherSource = 0;
   let instrumentsUpdated = 0;
   let instrumentsUnchanged = 0;
+  let instrumentsSkippedFresh = 0;
+  let instrumentsFetched = 0;
   const failed: TypedFundamentalFailure[] = [];
   const retrievedAt = new Date().toISOString();
 
@@ -104,6 +151,25 @@ export async function importYahooFundamentals(
       skippedHadFilings += 1;
       instrumentsUnchanged += 1;
       continue;
+    }
+    if (gate) {
+      const yahooAnnuals = existing
+        .filter((row) => row.statementType === "annual" && row.source.startsWith("yahoo"))
+        .map((row) => ({
+          periodEnd: row.periodEnd,
+          retrievedAt: row.retrievedAt,
+          lineItemsJson: row.lineItemsJson,
+        }));
+      const decision = evaluateFundamentalsFreshness({
+        yahooAnnuals,
+        asOf: gateAsOf,
+        recheckAfterDays,
+      });
+      if (!decision.needsRefresh) {
+        instrumentsSkippedFresh += 1;
+        instrumentsUnchanged += 1;
+        continue;
+      }
     }
     if (isUnsupportedYahooListing(instrument.name)) {
       const row: TypedFundamentalFailure = {
@@ -135,14 +201,18 @@ export async function importYahooFundamentals(
     try {
       let periods: Awaited<ReturnType<FundamentalProvider["annualPeriods"]>> = [];
       let lastError: unknown;
+      let fetched = false;
       for (const symbol of mappingTried) {
         try {
           periods = await withRetries(() => provider.annualPeriods(symbol));
+          fetched = true;
           if (periods.length) break;
         } catch (error) {
+          fetched = true;
           lastError = error;
         }
       }
+      if (fetched) instrumentsFetched += 1;
       if (!periods.length && lastError) throw lastError;
 
       if (provider.profile && mappingTried[0]) {
@@ -221,6 +291,8 @@ export async function importYahooFundamentals(
     skippedOtherSource,
     instrumentsUpdated,
     instrumentsUnchanged,
+    instrumentsSkippedFresh,
+    instrumentsFetched,
     failed,
   };
   db.insert(ingestReports)
@@ -232,6 +304,9 @@ export async function importYahooFundamentals(
         ...report,
         failed: report.failed.slice(0, 80),
         failedCount: report.failed.length,
+        freshnessGate: gate
+          ? { recheckAfterDays, asOf: gateAsOf.toISOString() }
+          : null,
       }),
     })
     .run();
