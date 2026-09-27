@@ -71,8 +71,8 @@ async function refreshPrices(
     const report = await importPrices({
       listedOnly: true,
       skipAlerts: true,
-      range: "1mo",
-      rateLimitMs: 200,
+      range: "5d",
+      rateLimitMs: 100,
     });
     const completedAt = (deps.now?.() ?? new Date()).toISOString();
     const status = pricesStatus(report);

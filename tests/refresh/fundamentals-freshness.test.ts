@@ -400,7 +400,7 @@ describe("daily refresh wires freshness gate without changing prices/scoring rul
     else process.env.BURSA_SQLITE_PATH = PREV_PATH;
   });
 
-  it("passes freshnessGate to fundamentals and unchanged price ingest options", async () => {
+  it("passes freshnessGate to fundamentals and daily price 5d/100ms options", async () => {
     const priceOpts: unknown[] = [];
     const fundOpts: unknown[] = [];
     const summary = await runDailyRefresh({
@@ -441,8 +441,8 @@ describe("daily refresh wires freshness gate without changing prices/scoring rul
     expect(priceOpts[0]).toMatchObject({
       listedOnly: true,
       skipAlerts: true,
-      range: "1mo",
-      rateLimitMs: 200,
+      range: "5d",
+      rateLimitMs: 100,
     });
     expect(fundOpts[0]).toMatchObject({
       freshnessGate: {

@@ -117,7 +117,7 @@ npm run refresh:daily
         ↓
 Universe = listed instruments in SQLite
         ↓
-Prices (Yahoo, range=1mo)     ─┐
+Prices (Yahoo, range=5d)      ─┐
 Fundamentals (Yahoo)          ─┼─ independent; partial OK
 Events → NO_SOURCE            ─┤
 News → NO_SOURCE              ─┘
@@ -137,7 +137,7 @@ Overall status derives primarily from **prices + fundamentals**.
 
 | Dataset | Cadence | Notes |
 |---------|---------|-------|
-| Prices | Daily after ~18:00 MYT | EOD bars; 1mo window upsert keeps history |
+| Prices | Daily after ~18:00 MYT | EOD bars; `range=5d` upsert appends recent sessions (history stays in SQLite; manual/backfill still uses longer ranges) |
 | Fundamentals | Daily check with 14-day Yahoo recheck gate | Skip HTTP when latest Yahoo annual is complete and `retrieved_at` is within 14 days; otherwise fetch. Manual import remains full backfill |
 
 | Events | Unresolved live | Manual `events:ingest` fixture only |
@@ -224,7 +224,7 @@ Requires writable local DB (`BURSA_SQLITE_PATH` or `data/sqlite/research.db`). R
 
 ## 14. Known gaps
 
-- Full-universe Yahoo run is slow (~200ms/ticker → tens of minutes).  
+- Full-universe Yahoo price stage is still sequential (~100ms/ticker throttle + one chart request each).  
 - No holiday calendar.  
 - Vercel demo stays stale until a snapshot is re-packed after a local refresh.  
 - Structured announcements still fixture/display-only.  
