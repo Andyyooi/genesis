@@ -31,6 +31,8 @@ export type DailyRefreshDeps = {
   /** null / undefined → NO_SOURCE for news (no production news table yet). */
   newsAvailable?: boolean;
   rescore?: () => unknown;
+  /** Set by `npm run refresh:daily -- --skip-rescore`. Does not call rescoreListedMarket. */
+  skipRescore?: boolean;
   now?: () => Date;
 };
 
@@ -319,6 +321,25 @@ function refreshScores(
   prior: DatasetRefreshResult[],
 ): DatasetRefreshResult {
   const startedAt = (deps.now?.() ?? new Date()).toISOString();
+  if (deps.skipRescore) {
+    const completedAt = (deps.now?.() ?? new Date()).toISOString();
+    return persistDatasetRefresh(runId, {
+      dataset: "scores",
+      source: "rescore-skipped",
+      status: "UNCHANGED",
+      startedAt,
+      completedAt,
+      marketDate,
+      attemptedCount: 0,
+      updatedCount: 0,
+      unchangedCount: 0,
+      failedCount: 0,
+      unavailableCount: 0,
+      lastSuccessfulAt: null,
+      errorSummary: "rescore skipped by --skip-rescore",
+      metadata: { note: "rescore skipped by --skip-rescore" },
+    });
+  }
   const shouldRescore = prior.some(
     (r) =>
       (r.dataset === "prices" || r.dataset === "fundamentals") &&
@@ -428,6 +449,18 @@ export async function runDailyRefresh(
   };
 }
 
+function formatDatasetCounts(dataset: DatasetRefreshResult): string {
+  const fetched = dataset.metadata?.instrumentsFetched;
+  const skippedFresh = dataset.metadata?.instrumentsSkippedFresh;
+  const showGate =
+    dataset.dataset === "fundamentals" &&
+    (typeof fetched === "number" || typeof skippedFresh === "number");
+  const gate = showGate
+    ? ` fetched=${typeof fetched === "number" ? fetched : 0} skipped_fresh=${typeof skippedFresh === "number" ? skippedFresh : 0}`
+    : "";
+  return `attempted=${dataset.attemptedCount}${gate} updated=${dataset.updatedCount} unchanged=${dataset.unchangedCount} failed=${dataset.failedCount} unavailable=${dataset.unavailableCount}`;
+}
+
 export function formatDailyRefreshSummary(summary: DailyRefreshSummary): string {
   const lines = [
     "Genesis Daily Refresh",
@@ -442,9 +475,7 @@ export function formatDailyRefreshSummary(summary: DailyRefreshSummary): string 
     lines.push(d.dataset.toUpperCase());
     lines.push(`  source: ${d.source}`);
     lines.push(`  status: ${d.status}`);
-    lines.push(
-      `  attempted=${d.attemptedCount} updated=${d.updatedCount} unchanged=${d.unchangedCount} failed=${d.failedCount} unavailable=${d.unavailableCount}`,
-    );
+    lines.push(`  ${formatDatasetCounts(d)}`);
     lines.push(`  last_successful_at: ${d.lastSuccessfulAt ?? "never"}`);
     if (d.errorSummary) lines.push(`  note: ${d.errorSummary}`);
     lines.push("");

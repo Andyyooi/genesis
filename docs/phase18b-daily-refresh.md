@@ -189,8 +189,10 @@ Do **not** enable production cron on Vercel until a writable worker + snapshot p
 
 ```bash
 npm run refresh:daily
-npm run refresh:daily -- --skip-rescore   # ingest provenance only
+npm run refresh:daily -- --skip-rescore   # prices/fundamentals/events/news still run; scores row is UNCHANGED with updated_count 0 ("rescore skipped by --skip-rescore")
 ```
+
+Fundamentals human summary keeps `attempted` as the listed universe and also prints `fetched` and `skipped_fresh` from `metadata_json` (`instrumentsFetched`, `instrumentsSkippedFresh`).
 
 Requires writable local DB (`BURSA_SQLITE_PATH` or `data/sqlite/research.db`). Refuses under `VERCEL` / `BURSA_SNAPSHOT_READONLY`.
 

@@ -9,7 +9,8 @@ import { financialPeriods, instruments, priceBars, refreshRuns } from "@/db/sche
 import type { EventDraft, EventSourceProvider } from "@/events/types";
 import type { PricesImportReport } from "@/ingest/types";
 import type { YahooFundamentalsReport } from "@/market/ingest-fundamentals-yahoo";
-import { runDailyRefresh } from "@/refresh/daily";
+import { formatDailyRefreshSummary, runDailyRefresh } from "@/refresh/daily";
+import { dailyRefreshOptionsFromArgv } from "@/refresh/cli";
 import { loadLastSuccessfulAt } from "@/refresh/persist";
 import { advancesLastSuccessful, combineOverallStatus } from "@/refresh/types";
 
@@ -301,5 +302,108 @@ describe("Phase 18B daily refresh", () => {
         },
       ]),
     ).toBe("SUCCESS");
+  });
+
+  it("records --skip-rescore as UNCHANGED with updated_count 0 and still ingests prices and fundamentals", async () => {
+    let pricesRan = false;
+    let fundamentalsRan = false;
+    let rescoreRan = false;
+    const summary = await runDailyRefresh({
+      ...dailyRefreshOptionsFromArgv(["node", "refresh:daily", "--skip-rescore"]),
+      importPrices: async () => {
+        pricesRan = true;
+        return {
+          kind: "prices",
+          startedAt: "a",
+          finishedAt: "b",
+          succeeded: ["MAYBANK"],
+          failed: [],
+          barsUpserted: 1,
+        } satisfies PricesImportReport;
+      },
+      importFundamentals: async () => {
+        fundamentalsRan = true;
+        return emptyFundReport();
+      },
+      rescore: () => {
+        rescoreRan = true;
+        return { kind: "market-scan" };
+      },
+    });
+    const scores = summary.datasets.find((d) => d.dataset === "scores")!;
+    expect(dailyRefreshOptionsFromArgv(["node", "refresh:daily"]).skipRescore).toBe(false);
+    expect(pricesRan).toBe(true);
+    expect(fundamentalsRan).toBe(true);
+    expect(rescoreRan).toBe(false);
+    expect(scores.status).toBe("UNCHANGED");
+    expect(scores.updatedCount).toBe(0);
+    expect(scores.source).toBe("rescore-skipped");
+    expect(scores.errorSummary).toBe("rescore skipped by --skip-rescore");
+    expect(scores.metadata?.note).toBe("rescore skipped by --skip-rescore");
+  });
+
+  it("records a normal daily refresh as a real rescore", async () => {
+    let rescoreRan = false;
+    const summary = await runDailyRefresh({
+      ...dailyRefreshOptionsFromArgv(["node", "refresh:daily"]),
+      importPrices: async () =>
+        ({
+          kind: "prices",
+          startedAt: "a",
+          finishedAt: "b",
+          succeeded: ["MAYBANK"],
+          failed: [],
+          barsUpserted: 1,
+        }) satisfies PricesImportReport,
+      importFundamentals: async () => emptyFundReport(),
+      rescore: () => {
+        rescoreRan = true;
+        return { kind: "market-scan" };
+      },
+    });
+    const scores = summary.datasets.find((d) => d.dataset === "scores")!;
+    expect(rescoreRan).toBe(true);
+    expect(scores.status).toBe("SUCCESS");
+    expect(scores.source).toBe("scoreTicker");
+    expect(scores.updatedCount).toBe(1);
+    expect(scores.errorSummary).toBeNull();
+  });
+
+  it("prints fundamentals fetched and skipped_fresh beside attempted", () => {
+    const text = formatDailyRefreshSummary({
+      kind: "daily-refresh",
+      runId: "refresh-test",
+      startedAt: "2026-09-26T12:20:15.488Z",
+      completedAt: "2026-09-26T12:30:58.107Z",
+      marketDate: "2026-09-26",
+      timezone: "Asia/Kuala_Lumpur",
+      universeCount: 1058,
+      overallStatus: "PARTIAL",
+      notes: [],
+      datasets: [
+        {
+          dataset: "fundamentals",
+          source: "yahoo",
+          status: "PARTIAL",
+          startedAt: "a",
+          completedAt: "b",
+          marketDate: "2026-09-26",
+          attemptedCount: 1058,
+          updatedCount: 0,
+          unchangedCount: 1054,
+          failedCount: 4,
+          unavailableCount: 4,
+          lastSuccessfulAt: "b",
+          errorSummary: "Yahoo fundamentals issues for 4 instruments (prior periods preserved).",
+          metadata: {
+            instrumentsFetched: 32,
+            instrumentsSkippedFresh: 1025,
+          },
+        },
+      ],
+    });
+    expect(text).toContain(
+      "attempted=1058 fetched=32 skipped_fresh=1025 updated=0 unchanged=1054 failed=4 unavailable=4",
+    );
   });
 });
