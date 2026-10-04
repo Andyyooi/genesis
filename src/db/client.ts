@@ -150,6 +150,26 @@ function ensureSchema(sqlite: Database.Database) {
       payload_json TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS fair_value_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      instrument_id INTEGER NOT NULL REFERENCES instruments(id),
+      ticker TEXT NOT NULL,
+      research_profile TEXT NOT NULL,
+      model_version TEXT NOT NULL,
+      valuation_date TEXT,
+      fundamentals_period_end TEXT,
+      current_price REAL,
+      fair_value_low REAL,
+      fair_value_base REAL,
+      fair_value_high REAL,
+      difference_vs_price REAL,
+      confidence TEXT NOT NULL,
+      methods_json TEXT NOT NULL,
+      assumptions_json TEXT NOT NULL,
+      unavailable_reason TEXT,
+      calculated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS refresh_runs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       run_id TEXT NOT NULL,

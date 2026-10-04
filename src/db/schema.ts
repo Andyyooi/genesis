@@ -252,6 +252,37 @@ export type RefreshStatus = (typeof REFRESH_STATUSES)[number];
 export const REFRESH_DATASETS = ["prices", "fundamentals", "events", "news", "scores"] as const;
 export type RefreshDataset = (typeof REFRESH_DATASETS)[number];
 
+/**
+ * Append-only Fair Value estimates. Separate from score_runs and valuation_context_json.
+ * Null prices mean unavailable — never a fabricated zero.
+ */
+export const FAIR_VALUE_CONFIDENCE = ["HIGH", "MEDIUM", "LOW", "UNAVAILABLE"] as const;
+export type FairValueConfidence = (typeof FAIR_VALUE_CONFIDENCE)[number];
+
+export const fairValueRuns = sqliteTable("fair_value_runs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  instrumentId: integer("instrument_id")
+    .notNull()
+    .references(() => instruments.id),
+  /** Denormalized like alerts.ticker so a row stays readable without a join. */
+  ticker: text("ticker").notNull(),
+  researchProfile: text("research_profile").notNull(),
+  modelVersion: text("model_version").notNull(),
+  /** Latest stored close date. Null when no positive close is stored. */
+  valuationDate: text("valuation_date"),
+  fundamentalsPeriodEnd: text("fundamentals_period_end"),
+  currentPrice: real("current_price"),
+  fairValueLow: real("fair_value_low"),
+  fairValueBase: real("fair_value_base"),
+  fairValueHigh: real("fair_value_high"),
+  differenceVsPrice: real("difference_vs_price"),
+  confidence: text("confidence").notNull(),
+  methodsJson: text("methods_json").notNull(),
+  assumptionsJson: text("assumptions_json").notNull(),
+  unavailableReason: text("unavailable_reason"),
+  calculatedAt: text("calculated_at").notNull(),
+});
+
 export const refreshRuns = sqliteTable("refresh_runs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   runId: text("run_id").notNull(),

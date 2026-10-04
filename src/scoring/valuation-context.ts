@@ -25,7 +25,7 @@ export const MIN_PEER_BANK_REIT = MIN_USABLE_PEERS;
 export const MIN_PEER_GENERAL = MIN_USABLE_PEERS;
 export const PRICE_ALIGN_DAYS = 21;
 
-const PERIOD_END_LIMITATION =
+export const PERIOD_END_LIMITATION =
   "Period-end price vs that period’s earnings, filing date unknown. This is not look-ahead-safe point-in-time P/E.";
 
 export type ContextDirection = "lower_better" | "higher_better";

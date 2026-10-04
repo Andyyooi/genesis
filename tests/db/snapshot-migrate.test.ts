@@ -47,6 +47,7 @@ describe("snapshot schema migration", () => {
       sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]
     ).map((r) => r.name);
     expect(tables).toContain("refresh_runs");
+    expect(tables).toContain("fair_value_runs");
     expect(() =>
       sqlite
         .prepare(
