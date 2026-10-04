@@ -6,6 +6,9 @@ import type { HistoricalValuationStatus } from "@/db/point-in-time";
 /** Relative GENERAL methods only. No macro default, no DCF, no score weights. */
 export const FAIR_VALUE_MODEL_VERSION = "general-relative-v1";
 
+/** Relative BANK methods only. No required return, no industrial cash-flow adjustment. */
+export const BANK_FAIR_VALUE_MODEL_VERSION = "bank-relative-v1";
+
 export const FAIR_VALUE_CONFIDENCE_LEVELS = ["HIGH", "MEDIUM", "LOW", "UNAVAILABLE"] as const;
 export type FairValueConfidence = (typeof FAIR_VALUE_CONFIDENCE_LEVELS)[number];
 
