@@ -9,6 +9,9 @@ export const FAIR_VALUE_MODEL_VERSION = "general-relative-v1";
 /** Relative BANK methods only. No required return, no industrial cash-flow adjustment. */
 export const BANK_FAIR_VALUE_MODEL_VERSION = "bank-relative-v1";
 
+/** Relative REIT accounting-book methods only. No reported NAV, DPU, or property DCF. */
+export const REIT_FAIR_VALUE_MODEL_VERSION = "reit-relative-v1";
+
 export const FAIR_VALUE_CONFIDENCE_LEVELS = ["HIGH", "MEDIUM", "LOW", "UNAVAILABLE"] as const;
 export type FairValueConfidence = (typeof FAIR_VALUE_CONFIDENCE_LEVELS)[number];
 
@@ -68,6 +71,11 @@ export type FairValueAssumptions = {
   freshnessAgeMonths: number | null;
   currentPriceDate: string | null;
   fundamentalsPeriodEnd: string | null;
+  /**
+   * Set by the REIT model. Approaches this version does not calculate.
+   * GENERAL and BANK results omit this field.
+   */
+  excludedApproaches?: string;
 };
 
 export type FairValueResult = {
