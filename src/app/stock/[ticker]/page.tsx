@@ -37,6 +37,8 @@ import {
 } from "@/lib/research-presentation";
 import { buildSnapshotDates, latestAnnualPeriod } from "@/lib/snapshot-dates";
 import type { MetricValue } from "@/metrics/types";
+import { EstimatedFairValue } from "@/components/research/estimated-fair-value";
+import { loadFairValueForPage } from "@/fair-value/load-for-page";
 import { scoreTicker } from "@/scoring/run-ticker";
 
 export const dynamic = "force-dynamic";
@@ -165,6 +167,7 @@ export default async function ResearchPage({
     events: scored.events,
   });
   const profileIds = profileMetricIds(result.researchProfile, isReit);
+  const fairValue = loadFairValueForPage(instrument.ticker, result.asOf);
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-8 sm:px-6">
@@ -281,6 +284,8 @@ export default async function ResearchPage({
           <ValuationContextCard block={result.valuationContext.peer} />
         </div>
       </section>
+
+      {fairValue ? <EstimatedFairValue result={fairValue} /> : null}
 
       {/* Profile metrics */}
       <section className="flex flex-col gap-3">
