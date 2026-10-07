@@ -185,8 +185,10 @@ describe("assessFairValueQuality", () => {
     const dividend = quality.methods.find((row) => row.id === "dividend_peer_yield");
     expect(quality.status).toBe("FLAGGED");
     expect(quality.baseUse).toBe("POINT_WITH_CAUTION");
-    expect(codes(earnings?.flags ?? [])).toContain("EPS_SCALE_BREAK_VS_OWN_HISTORY");
-    expect(codes(earnings?.flags ?? [])).not.toContain("EPS_VS_PAT_SHARES_UNRESOLVED");
+    expect(codes(earnings?.flags ?? [])).toEqual([
+      "EPS_SCALE_BREAK_VS_OWN_HISTORY",
+      "EPS_YOY_DISCONTINUITY",
+    ]);
     expect(book?.state).toBe("CLEAR");
     expect(book?.flags).toEqual([]);
     expect(dividend?.state).toBe("CLEAR");
@@ -625,7 +627,40 @@ describe("assessFairValueQuality", () => {
     expect(codes(earnings?.notes ?? [])).toEqual(["EPS_GAP_NOTE"]);
   });
 
-  it("flags an EPS jump of at least 20× when PAT stays in a much smaller band", () => {
+  it("does not treat a year-over-year EPS reversal as a discontinuity when latest EPS matches PAT / shares", () => {
+    const priorShares = 725_484_731;
+    const latestShares = 721_525_097;
+    const built = result({
+      ticker: "HUMEIND",
+      currentPrice: 2.65,
+      fairValueLow: 1.0143,
+      fairValueBase: 4.0345,
+      fairValueHigh: 7.0548,
+      confidence: "MEDIUM",
+      methods: [
+        method({ id: "earnings_peer_pe", label: "Earnings", methodValue: 7.0548, currentInput: 0.6 }),
+        method({
+          id: "book_peer_pb",
+          label: "Book",
+          methodValue: 1.0143,
+          currentInputName: "book_value_per_share",
+        }),
+      ],
+    });
+    const quality = assessFairValueQuality(built, [
+      annual("2025-06-30", 30.84, 223_171_000, priorShares),
+      annual("2026-06-30", 0.6, 430_559_000, latestShares),
+    ]);
+    const earnings = quality.methods.find((row) => row.id === "earnings_peer_pe");
+    expect(codes(earnings?.flags ?? [])).not.toContain("EPS_YOY_DISCONTINUITY");
+    expect(earnings?.flags).toEqual([]);
+    expect(earnings?.state).toBe("CLEAR");
+    expect(quality.status).toBe("CLEAR");
+    expect(quality.baseUse).toBe("POINT_OK");
+    expect(codes(quality.notes)).toEqual(["SPREAD_AT_LEAST_2X"]);
+  });
+
+  it("keeps a year-over-year discontinuity when latest EPS is outside 10% of PAT / shares", () => {
     const built = result({
       currentPrice: 2,
       fairValueBase: 40,
@@ -639,7 +674,76 @@ describe("assessFairValueQuality", () => {
       "EPS_VS_PAT_SHARES_UNRESOLVED",
       "EPS_YOY_DISCONTINUITY",
     ]);
+    expect(quality.status).toBe("FLAGGED");
     expect(quality.baseUse).toBe("POINT_WITHHELD");
+  });
+
+  it("keeps PWRWELL unresolved and year-over-year flags when latest EPS stays inconsistent", () => {
+    const shares = 580_552_000;
+    const built = result({
+      ticker: "PWRWELL",
+      currentPrice: 1.2,
+      fairValueLow: 0.1565,
+      fairValueBase: 27.3354,
+      fairValueHigh: 54.5143,
+      confidence: "MEDIUM",
+      methods: [
+        method({ id: "earnings_peer_pe", label: "Earnings", methodValue: 54.5143, currentInput: 2.65 }),
+        method({
+          id: "book_peer_pb",
+          label: "Book",
+          methodValue: 0.1565,
+          currentInputName: "book_value_per_share",
+        }),
+      ],
+    });
+    const quality = assessFairValueQuality(built, [
+      annual("2025-03-31", 0.0323, 19_035_000, shares),
+      annual("2026-03-31", 2.65, 24_065_000, shares),
+    ]);
+    expect(codes(quality.methods[0]?.flags ?? [])).toEqual([
+      "EPS_VS_PAT_SHARES_UNRESOLVED",
+      "EPS_YOY_DISCONTINUITY",
+    ]);
+    expect(quality.status).toBe("FLAGGED");
+    expect(quality.baseUse).toBe("POINT_WITHHELD");
+  });
+
+  it("keeps TECHSTORE scale-break and year-over-year flags when latest EPS stays inconsistent", () => {
+    const shares = 500_000_000;
+    const built = result({
+      ticker: "TECHSTORE",
+      currentPrice: 0.175,
+      fairValueLow: 0.1979,
+      fairValueBase: 0.2188,
+      fairValueHigh: 32.9875,
+      methods: [
+        method({ id: "earnings_peer_pe", label: "Earnings", methodValue: 32.9875, currentInput: 2.03 }),
+        method({
+          id: "book_peer_pb",
+          label: "Book",
+          methodValue: 0.2188,
+          currentInputName: "book_value_per_share",
+        }),
+        method({
+          id: "dividend_peer_yield",
+          label: "Dividend",
+          methodValue: 0.1979,
+          currentInputName: "dividend_per_share",
+          currentInput: 0.01,
+        }),
+      ],
+    });
+    const quality = assessFairValueQuality(built, [
+      annual("2024-12-31", 0.012576, 6_336_000, shares),
+      annual("2025-12-31", 2.03, 9_853_000, shares),
+    ]);
+    const earnings = quality.methods.find((row) => row.id === "earnings_peer_pe");
+    expect(codes(earnings?.flags ?? [])).toEqual([
+      "EPS_SCALE_BREAK_VS_OWN_HISTORY",
+      "EPS_YOY_DISCONTINUITY",
+    ]);
+    expect(quality.baseUse).toBe("POINT_WITH_CAUTION");
   });
 
   it("does not treat a near-zero EPS jump as a year-over-year discontinuity", () => {

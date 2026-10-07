@@ -240,7 +240,9 @@ function inspectEarnings(annuals: readonly FairValueQualityAnnual[]): EpsInspect
   } else if (gap > EPS_MATCH_BAND) notes.push("EPS_GAP_NOTE");
 
   const prior = ordered.length >= 2 ? ordered[ordered.length - 2] : null;
-  if (prior && yearOverYearDiscontinuity(latest, prior)) flags.push("EPS_YOY_DISCONTINUITY");
+  if (prior && yearOverYearDiscontinuity(latest, prior) && !annualMatches(latest)) {
+    flags.push("EPS_YOY_DISCONTINUITY");
+  }
   return { flags, notes, absentNotes: [] };
 }
 
