@@ -167,7 +167,12 @@ function ensureSchema(sqlite: Database.Database) {
       methods_json TEXT NOT NULL,
       assumptions_json TEXT NOT NULL,
       unavailable_reason TEXT,
-      calculated_at TEXT NOT NULL
+      calculated_at TEXT NOT NULL,
+      quality_status TEXT,
+      base_use TEXT,
+      quality_version TEXT,
+      quality_json TEXT,
+      observation_key TEXT
     );
 
     CREATE TABLE IF NOT EXISTS refresh_runs (
@@ -226,6 +231,15 @@ function ensureSchema(sqlite: Database.Database) {
   addColumn(sqlite, "events", "dedupe_key", "TEXT");
   addColumn(sqlite, "events", "updated_at", "TEXT");
   sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS events_dedupe_key ON events (dedupe_key)");
+  addColumn(sqlite, "fair_value_runs", "quality_status", "TEXT");
+  addColumn(sqlite, "fair_value_runs", "base_use", "TEXT");
+  addColumn(sqlite, "fair_value_runs", "quality_version", "TEXT");
+  addColumn(sqlite, "fair_value_runs", "quality_json", "TEXT");
+  addColumn(sqlite, "fair_value_runs", "observation_key", "TEXT");
+  sqlite.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS fair_value_runs_observation
+     ON fair_value_runs (instrument_id, model_version, quality_version, observation_key)`,
+  );
 }
 
 function addColumn(sqlite: Database.Database, table: string, name: string, ddl: string) {

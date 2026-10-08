@@ -259,29 +259,49 @@ export type RefreshDataset = (typeof REFRESH_DATASETS)[number];
 export const FAIR_VALUE_CONFIDENCE = ["HIGH", "MEDIUM", "LOW", "UNAVAILABLE"] as const;
 export type FairValueConfidence = (typeof FAIR_VALUE_CONFIDENCE)[number];
 
-export const fairValueRuns = sqliteTable("fair_value_runs", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  instrumentId: integer("instrument_id")
-    .notNull()
-    .references(() => instruments.id),
-  /** Denormalized like alerts.ticker so a row stays readable without a join. */
-  ticker: text("ticker").notNull(),
-  researchProfile: text("research_profile").notNull(),
-  modelVersion: text("model_version").notNull(),
-  /** Latest stored close date. Null when no positive close is stored. */
-  valuationDate: text("valuation_date"),
-  fundamentalsPeriodEnd: text("fundamentals_period_end"),
-  currentPrice: real("current_price"),
-  fairValueLow: real("fair_value_low"),
-  fairValueBase: real("fair_value_base"),
-  fairValueHigh: real("fair_value_high"),
-  differenceVsPrice: real("difference_vs_price"),
-  confidence: text("confidence").notNull(),
-  methodsJson: text("methods_json").notNull(),
-  assumptionsJson: text("assumptions_json").notNull(),
-  unavailableReason: text("unavailable_reason"),
-  calculatedAt: text("calculated_at").notNull(),
-});
+export const fairValueRuns = sqliteTable(
+  "fair_value_runs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    instrumentId: integer("instrument_id")
+      .notNull()
+      .references(() => instruments.id),
+    /** Denormalized like alerts.ticker so a row stays readable without a join. */
+    ticker: text("ticker").notNull(),
+    researchProfile: text("research_profile").notNull(),
+    modelVersion: text("model_version").notNull(),
+    /** Latest stored close date. Null when no positive close is stored. */
+    valuationDate: text("valuation_date"),
+    fundamentalsPeriodEnd: text("fundamentals_period_end"),
+    currentPrice: real("current_price"),
+    fairValueLow: real("fair_value_low"),
+    fairValueBase: real("fair_value_base"),
+    fairValueHigh: real("fair_value_high"),
+    differenceVsPrice: real("difference_vs_price"),
+    confidence: text("confidence").notNull(),
+    methodsJson: text("methods_json").notNull(),
+    assumptionsJson: text("assumptions_json").notNull(),
+    unavailableReason: text("unavailable_reason"),
+    calculatedAt: text("calculated_at").notNull(),
+    /**
+     * Nullable at the SQL level because ALTER TABLE cannot add NOT NULL without a default.
+     * The writer always supplies these five fields. Empty tables need no backfill.
+     */
+    qualityStatus: text("quality_status"),
+    baseUse: text("base_use"),
+    qualityVersion: text("quality_version"),
+    qualityJson: text("quality_json"),
+    observationKey: text("observation_key"),
+  },
+  (table) => [
+    uniqueIndex("fair_value_runs_observation").on(
+      table.instrumentId,
+      table.modelVersion,
+      table.qualityVersion,
+      table.observationKey,
+    ),
+  ],
+);
 
 export const refreshRuns = sqliteTable("refresh_runs", {
   id: integer("id").primaryKey({ autoIncrement: true }),

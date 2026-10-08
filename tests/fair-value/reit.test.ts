@@ -5,6 +5,7 @@ import { migrateSqliteSchema } from "@/db/client";
 import { calculateBankFairValue } from "@/fair-value/calculate-bank";
 import { calculateGeneralFairValue } from "@/fair-value/calculate";
 import { calculateReitFairValue } from "@/fair-value/calculate-reit";
+import type { FairValueQuality } from "@/fair-value/quality";
 import { insertFairValueRun, persistFairValueRun } from "@/fair-value/persist";
 import {
   BANK_FAIR_VALUE_MODEL_VERSION,
@@ -124,6 +125,21 @@ function method(result: FairValueResult, id: FairValueMethodId) {
   const row = result.methods.find((item) => item.id === id);
   if (!row) throw new Error(id);
   return row;
+}
+
+function storedQuality(result: FairValueResult): FairValueQuality {
+  return {
+    status: "CLEAR",
+    baseUse: "POINT_OK",
+    methods: result.methods.map((method) => ({
+      id: method.id,
+      state: method.available && method.methodValue != null && method.methodValue > 0 ? "CLEAR" : "ABSENT",
+      flags: [],
+      notes: [],
+    })),
+    notes: [],
+    historicalLimitation: result.assumptions.historicalLimitation,
+  };
 }
 
 function assertFiniteNumbers(value: unknown): void {
@@ -679,9 +695,11 @@ describe("REIT fair value", () => {
       periods: [annual({ periodEnd: "2025-12-31", equity: 100, shares: 10 })],
       peers: reitPeers(5, { close: 10, equity: 50, shares: 10 }),
     });
+    const quality = storedQuality(result);
     insertFairValueRun(sqlite, {
       instrumentId: Number(instrument.lastInsertRowid),
       result,
+      quality,
       calculatedAt: "2026-09-28T01:00:00.000Z",
     });
     const row = sqlite
@@ -703,7 +721,14 @@ describe("REIT fair value", () => {
     const previous = process.env.BURSA_SNAPSHOT_READONLY;
     process.env.BURSA_SNAPSHOT_READONLY = "1";
     try {
-      expect(persistFairValueRun({ instrumentId: 1, result, calculatedAt: "2026-09-28T03:00:00.000Z" })).toBeNull();
+      expect(
+        persistFairValueRun({
+          instrumentId: 1,
+          result,
+          quality,
+          calculatedAt: "2026-09-28T03:00:00.000Z",
+        }),
+      ).toBeNull();
     } finally {
       if (previous === undefined) delete process.env.BURSA_SNAPSHOT_READONLY;
       else process.env.BURSA_SNAPSHOT_READONLY = previous;

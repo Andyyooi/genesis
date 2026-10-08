@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 import { migrateSqliteSchema } from "@/db/client";
 import { calculateBankFairValue } from "@/fair-value/calculate-bank";
 import { calculateGeneralFairValue } from "@/fair-value/calculate";
+import type { FairValueQuality } from "@/fair-value/quality";
 import { insertFairValueRun } from "@/fair-value/persist";
 import { BANK_FAIR_VALUE_MODEL_VERSION, FAIR_VALUE_MODEL_VERSION, type FairValueMethodId, type FairValueResult } from "@/fair-value/types";
 import type { MetricValue, PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
@@ -115,6 +116,21 @@ function method(result: FairValueResult, id: FairValueMethodId) {
   const row = result.methods.find((item) => item.id === id);
   if (!row) throw new Error(id);
   return row;
+}
+
+function storedQuality(result: FairValueResult): FairValueQuality {
+  return {
+    status: "CLEAR",
+    baseUse: "POINT_OK",
+    methods: result.methods.map((method) => ({
+      id: method.id,
+      state: method.available && method.methodValue != null && method.methodValue > 0 ? "CLEAR" : "ABSENT",
+      flags: [],
+      notes: [],
+    })),
+    notes: [],
+    historicalLimitation: result.assumptions.historicalLimitation,
+  };
 }
 
 function assertFiniteNumbers(value: unknown): void {
@@ -511,11 +527,13 @@ describe("BANK fair value", () => {
     insertFairValueRun(sqlite, {
       instrumentId: Number(instrument.lastInsertRowid),
       result: bank,
+      quality: storedQuality(bank),
       calculatedAt: "2026-09-28T01:00:00.000Z",
     });
     insertFairValueRun(sqlite, {
       instrumentId: Number(instrument.lastInsertRowid),
       result: general,
+      quality: storedQuality(general),
       calculatedAt: "2026-09-28T02:00:00.000Z",
     });
     const rows = sqlite

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import Database from "better-sqlite3";
 import { migrateSqliteSchema } from "@/db/client";
 import { calculateGeneralFairValue } from "@/fair-value/calculate";
+import type { FairValueQuality } from "@/fair-value/quality";
 import { insertFairValueRun, persistFairValueRun } from "@/fair-value/persist";
 import type { FairValueMethodId, FairValueResult } from "@/fair-value/types";
 import type { PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
@@ -115,6 +116,21 @@ function method(result: FairValueResult, id: FairValueMethodId) {
   const row = result.methods.find((item) => item.id === id);
   if (!row) throw new Error(id);
   return row;
+}
+
+function storedQuality(result: FairValueResult): FairValueQuality {
+  return {
+    status: "CLEAR",
+    baseUse: "POINT_OK",
+    methods: result.methods.map((method) => ({
+      id: method.id,
+      state: method.available && method.methodValue != null && method.methodValue > 0 ? "CLEAR" : "ABSENT",
+      flags: [],
+      notes: [],
+    })),
+    notes: [],
+    historicalLimitation: result.assumptions.historicalLimitation,
+  };
 }
 
 function assertFiniteNumbers(value: unknown): void {
@@ -616,6 +632,11 @@ describe("GENERAL fair value", () => {
       "assumptions_json",
       "unavailable_reason",
       "calculated_at",
+      "quality_status",
+      "base_use",
+      "quality_version",
+      "quality_json",
+      "observation_key",
     ]);
     const instrument = sqlite
       .prepare(
@@ -627,14 +648,17 @@ describe("GENERAL fair value", () => {
       periods: [annual({ periodEnd: "2025-12-31", eps: 2 })],
       peers: peers(5, { close: 10, eps: 1 }),
     });
-    const id = insertFairValueRun(sqlite, {
+    const quality = storedQuality(result);
+    const first = insertFairValueRun(sqlite, {
       instrumentId: Number(instrument.lastInsertRowid),
       result,
+      quality,
       calculatedAt: "2026-09-28T01:00:00.000Z",
     });
-    insertFairValueRun(sqlite, {
+    const second = insertFairValueRun(sqlite, {
       instrumentId: Number(instrument.lastInsertRowid),
       result,
+      quality,
       calculatedAt: "2026-09-28T02:00:00.000Z",
     });
     const rows = sqlite
@@ -649,11 +673,12 @@ describe("GENERAL fair value", () => {
       assumptions_json: string;
       calculated_at: string;
     }[];
-    expect(id).toBe(1);
-    expect(rows).toHaveLength(2);
+    expect(first).toEqual({ id: 1, inserted: true });
+    expect(second).toEqual({ id: 1, inserted: false });
+    expect(rows).toHaveLength(1);
     expect(rows[0]?.fair_value_base).toBe(20);
     expect(rows[0]?.confidence).toBe("LOW");
-    expect(rows[1]?.calculated_at).toBe("2026-09-28T02:00:00.000Z");
+    expect(rows[0]?.calculated_at).toBe("2026-09-28T01:00:00.000Z");
     const storedMethods = JSON.parse(rows[0]!.methods_json) as { id: string; medianMultiple: number | null }[];
     expect(storedMethods.find((row) => row.id === "earnings_peer_pe")?.medianMultiple).toBe(10);
     const assumptions = JSON.parse(rows[0]!.assumptions_json) as { yamlScoreBandsUsed: boolean };
@@ -663,7 +688,14 @@ describe("GENERAL fair value", () => {
     const previous = process.env.BURSA_SNAPSHOT_READONLY;
     process.env.BURSA_SNAPSHOT_READONLY = "1";
     try {
-      expect(persistFairValueRun({ instrumentId: 1, result, calculatedAt: "2026-09-28T03:00:00.000Z" })).toBeNull();
+      expect(
+        persistFairValueRun({
+          instrumentId: 1,
+          result,
+          quality,
+          calculatedAt: "2026-09-28T03:00:00.000Z",
+        }),
+      ).toBeNull();
     } finally {
       if (previous === undefined) delete process.env.BURSA_SNAPSHOT_READONLY;
       else process.env.BURSA_SNAPSHOT_READONLY = previous;
