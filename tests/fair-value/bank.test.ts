@@ -656,7 +656,8 @@ describe("BANK fair value", () => {
     expect(pageSource).toContain("loadFairValueForPage");
     expect(pageSource).not.toContain("calculateBankFairValue");
     expect(pageSource).not.toContain("persistFairValueRun");
-    expect(dailySource).not.toContain("fair-value");
+    expect(dailySource).toContain("@/refresh/fair-value");
+    expect(dailySource).not.toContain("calculateGeneralFairValue");
     expect(dailySource).not.toContain("calculateBankFairValue");
     expect(generalSource).not.toContain("bank-relative");
     expect(generalSource).not.toContain("calculateBankFairValue");

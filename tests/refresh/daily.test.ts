@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { loadScoringConfig } from "@/config/load-scoring";
 import { getDb, getSqlite } from "@/db/client";
-import { financialPeriods, instruments, priceBars, refreshRuns } from "@/db/schema";
+import { fairValueRuns, financialPeriods, instruments, priceBars, refreshRuns } from "@/db/schema";
 import type { EventDraft, EventSourceProvider } from "@/events/types";
 import type { PricesImportReport } from "@/ingest/types";
 import type { YahooFundamentalsReport } from "@/market/ingest-fundamentals-yahoo";
@@ -367,6 +367,76 @@ describe("Phase 18B daily refresh", () => {
     expect(scores.source).toBe("scoreTicker");
     expect(scores.updatedCount).toBe(1);
     expect(scores.errorSummary).toBeNull();
+    const fairValue = summary.datasets.find((d) => d.dataset === "fair_value")!;
+    expect(fairValue.source).toBe("fair-value");
+    expect(fairValue.status).not.toBe("SOURCE_FAILED");
+  });
+
+  it("skips Fair Value when prices and fundamentals are not useful and leaves stored rows", async () => {
+    const summary = await runDailyRefresh({
+      importPrices: async () => {
+        throw new Error("price outage");
+      },
+      importFundamentals: async () => {
+        throw new Error("fundamentals outage");
+      },
+      rescore: () => ({ kind: "ok" }),
+    });
+    const fairValue = summary.datasets.find((d) => d.dataset === "fair_value")!;
+    expect(fairValue.status).toBe("UNCHANGED");
+    expect(fairValue.attemptedCount).toBe(0);
+    expect(fairValue.updatedCount).toBe(0);
+    expect(fairValue.source).toBe("fair-value-skipped");
+    expect(fairValue.errorSummary).toBe(
+      "Skipped Fair Value because prices/fundamentals did not complete usefully.",
+    );
+    expect(getDb().select().from(fairValueRuns).all()).toHaveLength(0);
+    expect(summary.overallStatus).toBe("SOURCE_FAILED");
+  });
+
+  it("keeps overall status on prices and fundamentals when Fair Value fails", async () => {
+    const summary = await runDailyRefresh({
+      importPrices: async () =>
+        ({
+          kind: "prices",
+          startedAt: "a",
+          finishedAt: "b",
+          succeeded: ["MAYBANK"],
+          failed: [{ ticker: "OTHER", yahooTicker: "OTHER.KL", reason: "fixture" }],
+          barsUpserted: 1,
+        }) satisfies PricesImportReport,
+      importFundamentals: async () => emptyFundReport(),
+      rescore: () => ({ kind: "ok" }),
+      persistFairValues: () => ({
+        attempted: 1,
+        inserted: 0,
+        unchanged: 0,
+        failed: [{ ticker: "MAYBANK", stage: "calculation", message: "fixture calc" }],
+        unsupported: 0,
+        noValue: 0,
+        flagged: 0,
+        caution: 0,
+        withheld: 0,
+        persistenceRefused: false,
+      }),
+    });
+    const fairValue = summary.datasets.find((d) => d.dataset === "fair_value")!;
+    expect(summary.datasets.find((d) => d.dataset === "prices")?.status).toBe("PARTIAL");
+    expect(summary.overallStatus).toBe("PARTIAL");
+    expect(fairValue.status).toBe("SOURCE_FAILED");
+    expect(fairValue.source).toBe("fair-value");
+    expect(fairValue.errorSummary).toContain("Stage: calculation");
+    expect(fairValue.errorSummary).not.toContain("Yahoo");
+    expect(fairValue.metadata?.failureStage).toBe("calculation");
+    expect(summary.notes.some((note) => note.includes("Fair Value dataset SOURCE_FAILED"))).toBe(true);
+  });
+
+  it("refuses the daily refresh before Fair Value writes in snapshot mode", async () => {
+    process.env.BURSA_SNAPSHOT_READONLY = "1";
+    await expect(runDailyRefresh({ rescore: () => ({ kind: "ok" }) })).rejects.toThrow(
+      /read-only snapshot/,
+    );
+    expect(getDb().select().from(fairValueRuns).all()).toHaveLength(0);
   });
 
   it("prints fundamentals fetched and skipped_fresh beside attempted", () => {

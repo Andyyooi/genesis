@@ -673,7 +673,8 @@ describe("REIT fair value", () => {
     expect(runnerSource).not.toContain("fair-value");
     expect(pageSource).not.toContain("calculateReitFairValue");
     expect(dailySource).not.toContain("calculateReitFairValue");
-    expect(dailySource).not.toContain("fair-value");
+    expect(dailySource).toContain("@/refresh/fair-value");
+    expect(dailySource).not.toContain("calculateGeneralFairValue");
     expect(generalSource).not.toContain("reit-relative");
     expect(bankSource).not.toContain("calculateReitFairValue");
     expect(reitSource).not.toContain("yahoo");
