@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { liveSqlitePath, resolveSqliteFile } from "@/db/snapshot-file";
+import { liveSqlitePath, refuseLiveResearchDatabase, resolveSqliteFile } from "@/db/snapshot-file";
 import { calculateFairValue } from "@/fair-value/orchestrate";
 import type { FairValueResult } from "@/fair-value/types";
 import { loadScoringConfig, resolveResearchProfile } from "@/config/load-scoring";
@@ -83,8 +83,9 @@ export function loadFairValueForPage(ticker: string, asOf = new Date().toISOStri
 }
 
 function openReadOnly(): Database.Database | null {
+  const path = isSnapshotReadOnly() ? resolveSqliteFile().path : liveSqlitePath();
+  if (process.env.VITEST === "true") refuseLiveResearchDatabase(path);
   try {
-    const path = isSnapshotReadOnly() ? resolveSqliteFile().path : liveSqlitePath();
     return new Database(path, { readonly: true, fileMustExist: true });
   } catch {
     return null;

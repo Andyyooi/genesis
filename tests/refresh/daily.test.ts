@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { loadScoringConfig } from "@/config/load-scoring";
-import { getDb, getSqlite } from "@/db/client";
+import { getDb } from "@/db/client";
 import { fairValueRuns, financialPeriods, instruments, priceBars, refreshRuns } from "@/db/schema";
 import type { EventDraft, EventSourceProvider } from "@/events/types";
 import type { PricesImportReport } from "@/ingest/types";
@@ -18,12 +18,12 @@ const PREV_PATH = process.env.BURSA_SQLITE_PATH;
 let tempDir = "";
 
 function resetDb() {
+  const g = globalThis as { sqlite?: { close: () => void } };
   try {
-    getSqlite().close();
+    g.sqlite?.close();
   } catch {
-    /* ignore */
+    /* The singleton may already be closed. */
   }
-  const g = globalThis as { sqlite?: unknown };
   delete g.sqlite;
 }
 

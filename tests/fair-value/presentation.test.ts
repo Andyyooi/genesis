@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createElement } from "react";
@@ -444,6 +444,7 @@ describe("Fair Value page loader", () => {
     } finally {
       if (previous === undefined) delete process.env.BURSA_SQLITE_PATH;
       else process.env.BURSA_SQLITE_PATH = previous;
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 

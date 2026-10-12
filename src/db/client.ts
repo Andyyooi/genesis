@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/db/schema";
-import { resolveSqliteFile } from "@/db/snapshot-file";
+import { refuseLiveResearchDatabase, resolveSqliteFile } from "@/db/snapshot-file";
 
 const globalForDb = globalThis as unknown as {
   sqlite?: Database.Database;
@@ -262,6 +262,7 @@ export function getSqlite() {
 export function getDb() {
   if (!globalForDb.sqlite) {
     const resolved = resolveSqliteFile();
+    if (process.env.VITEST === "true") refuseLiveResearchDatabase(resolved.path);
     // Snapshot DBs are packed from older schema tips. Migrate the /tmp copy in place
     // (additive columns only) so Drizzle selects for new fields do not crash on Vercel.
     if (resolved.readonly) {
