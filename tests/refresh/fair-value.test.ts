@@ -8,7 +8,7 @@ import type { PricesImportReport } from "@/ingest/types";
 import type { YahooFundamentalsReport } from "@/market/ingest-fundamentals-yahoo";
 import type { FairValueResult } from "@/fair-value/types";
 import type { FairValueQuality } from "@/fair-value/quality";
-import { persistFairValueRun } from "@/fair-value/persist";
+import { FAIR_VALUE_QUALITY_VERSION, persistFairValueRun } from "@/fair-value/persist";
 import { runDailyRefresh } from "@/refresh/daily";
 import { fairValueRefreshOutcome, refreshFairValueUniverse } from "@/refresh/fair-value";
 
@@ -189,6 +189,7 @@ describe("fair value daily refresh", () => {
     const rows = getDb().select().from(fairValueRuns).all();
     expect(rows.map((row) => row.modelVersion).sort()).toEqual(["general-relative-v1", "unsupported"]);
     expect(rows.every((row) => row.fairValueBase == null)).toBe(true);
+    expect(rows.every((row) => row.qualityStatus === "NO_VALUE" && row.baseUse === "NO_POINT")).toBe(true);
   });
 
   it("isolates a calculation failure from a successful ticker", () => {
@@ -366,5 +367,77 @@ describe("fair value daily refresh", () => {
       "scores",
       "fair_value",
     ]);
+  });
+
+  it("persists unsupported and missing-input Fair Value through daily refresh", async () => {
+    seed("INSURE", "Insurance", "Financial Services");
+    seed("WIDGET", "Industrial Products");
+    const deps = {
+      now: () => new Date(AS_OF),
+      importPrices: async () =>
+        ({
+          kind: "prices",
+          startedAt: AS_OF,
+          finishedAt: AS_OF,
+          succeeded: ["INSURE", "WIDGET"],
+          failed: [],
+          barsUpserted: 1,
+        }) satisfies PricesImportReport,
+      importFundamentals: async () =>
+        ({
+          kind: "fundamentals-yahoo",
+          startedAt: AS_OF,
+          finishedAt: AS_OF,
+          attempted: 2,
+          upserted: 0,
+          inserted: 0,
+          filled: 0,
+          unchanged: 2,
+          skippedHadFilings: 0,
+          skippedOtherSource: 0,
+          instrumentsUpdated: 0,
+          instrumentsUnchanged: 2,
+          instrumentsSkippedFresh: 2,
+          instrumentsFetched: 0,
+          failed: [],
+        }) satisfies YahooFundamentalsReport,
+      rescore: () => ({ kind: "ok" }),
+    };
+    const first = await runDailyRefresh(deps);
+    const fairValue = first.datasets.find((row) => row.dataset === "fair_value")!;
+    expect(first.overallStatus).toBe("SUCCESS");
+    expect(fairValue.status).toBe("SUCCESS");
+    expect(fairValue.updatedCount).toBe(2);
+    expect(fairValue.failedCount).toBe(0);
+    expect(fairValue.unavailableCount).toBe(0);
+    expect(fairValue.metadata).toMatchObject({
+      unsupported: 1,
+      noValue: 2,
+      flagged: 0,
+      caution: 0,
+      withheld: 0,
+    });
+    const stored = getDb().select().from(fairValueRuns).all();
+    expect(stored).toHaveLength(2);
+    const insure = stored.find((row) => row.ticker === "INSURE")!;
+    const widget = stored.find((row) => row.ticker === "WIDGET")!;
+    expect(insure.modelVersion).toBe("unsupported");
+    expect(widget.modelVersion).toBe("general-relative-v1");
+    for (const row of [insure, widget]) {
+      expect(row.fairValueBase).toBeNull();
+      expect(row.qualityStatus).toBe("NO_VALUE");
+      expect(row.baseUse).toBe("NO_POINT");
+      expect(row.qualityVersion).toBe(FAIR_VALUE_QUALITY_VERSION);
+      expect(row.calculatedAt).toBe(AS_OF);
+    }
+
+    const second = await runDailyRefresh(deps);
+    const replay = second.datasets.find((row) => row.dataset === "fair_value")!;
+    expect(replay.status).toBe("UNCHANGED");
+    expect(replay.updatedCount).toBe(0);
+    expect(replay.unchangedCount).toBe(2);
+    const again = getDb().select().from(fairValueRuns).all();
+    expect(again.map((row) => row.id).sort()).toEqual(stored.map((row) => row.id).sort());
+    expect(again.every((row) => row.calculatedAt === AS_OF)).toBe(true);
   });
 });
