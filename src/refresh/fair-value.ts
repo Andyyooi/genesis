@@ -1,6 +1,10 @@
 import { loadScoringConfig, resolveResearchProfile } from "@/config/load-scoring";
 import { getSqlite } from "@/db/client";
-import { calculateFairValue, type FairValueInput } from "@/fair-value/orchestrate";
+import {
+  calculateFairValue,
+  UNSUPPORTED_FAIR_VALUE_MODEL_VERSION,
+  type FairValueInput,
+} from "@/fair-value/orchestrate";
 import { persistFairValueRun } from "@/fair-value/persist";
 import {
   assessFairValueQuality,
@@ -27,6 +31,10 @@ export type FairValueRefreshReport = {
   attempted: number;
   inserted: number;
   unchanged: number;
+  /** Newly stored rows whose model produced a finite value. */
+  valuedInserted?: number;
+  /** Repeated rows whose model had already produced a finite value. */
+  valuedUnchanged?: number;
   failed: FairValueRefreshFailure[];
   unsupported: number;
   noValue: number;
@@ -81,13 +89,15 @@ export function fairValueRefreshOutcome(report: FairValueRefreshReport): {
   unavailableCount: number;
 } {
   const stored = report.inserted + report.unchanged;
+  const valued = splitValued(report);
   let status: RefreshStatus;
   if (report.attempted === 0 && !report.persistenceRefused) status = "NO_DATA";
   else if (report.persistenceRefused && stored === 0) status = "SOURCE_FAILED";
   else if (report.persistenceRefused) status = "PARTIAL";
-  else if (report.failed.length === 0 && report.inserted > 0) status = "SUCCESS";
-  else if (report.failed.length === 0) status = "UNCHANGED";
-  else if (stored === 0) status = "SOURCE_FAILED";
+  else if (report.failed.length === 0 && valued.valuedInserted > 0) status = "SUCCESS";
+  else if (report.failed.length === 0 && valued.valuedUnchanged > 0) status = "UNCHANGED";
+  else if (report.failed.length === 0) status = "NO_DATA";
+  else if (valued.valuedInserted + valued.valuedUnchanged === 0) status = "SOURCE_FAILED";
   else status = "PARTIAL";
 
   const stages = [...new Set(report.failed.map((row) => row.stage))];
@@ -100,17 +110,19 @@ export function fairValueRefreshOutcome(report: FairValueRefreshReport): {
         : null;
   const errorSummary = report.persistenceRefused
     ? "Fair Value persistence refused: read-only snapshot. Stage: persistence."
-    : report.failed.length === 0
-      ? null
-      : `Fair Value failed for ${report.failed.length} instruments. Stage: ${stages.join(", ")}.`;
+    : report.failed.length > 0
+      ? `Fair Value failed for ${report.failed.length} instruments. Stage: ${stages.join(", ")}.`
+      : status === "NO_DATA" && report.attempted > 0
+        ? fairValueUnavailableDetail(report)
+        : null;
 
   return {
     status,
     errorSummary,
-    updatedCount: report.inserted,
-    unchangedCount: report.unchanged,
+    updatedCount: valued.valuedInserted,
+    unchangedCount: valued.valuedUnchanged,
     failedCount: report.failed.length + (report.persistenceRefused ? 1 : 0),
-    unavailableCount: 0,
+    unavailableCount: valued.withoutValue,
     metadata: {
       unsupported: report.unsupported,
       noValue: report.noValue,
@@ -145,6 +157,8 @@ export function refreshFairValueUniverse(args: {
     attempted: listed.length,
     inserted: 0,
     unchanged: 0,
+    valuedInserted: 0,
+    valuedUnchanged: 0,
     failed: [],
     unsupported: 0,
     noValue: 0,
@@ -219,6 +233,10 @@ export function refreshFairValueUniverse(args: {
     }
     if (saved.inserted) report.inserted += 1;
     else report.unchanged += 1;
+    if (producedFairValue(result, quality)) {
+      if (saved.inserted) report.valuedInserted = (report.valuedInserted ?? 0) + 1;
+      else report.valuedUnchanged = (report.valuedUnchanged ?? 0) + 1;
+    }
     if (result.assumptions.modelVersion === "unsupported") report.unsupported += 1;
     if (quality.status === "NO_VALUE") report.noValue += 1;
     if (quality.status === "FLAGGED") report.flagged += 1;
@@ -227,6 +245,50 @@ export function refreshFairValueUniverse(args: {
   }
 
   return report;
+}
+
+function producedFairValue(result: FairValueResult, quality: FairValueQuality): boolean {
+  return (
+    result.assumptions.modelVersion !== UNSUPPORTED_FAIR_VALUE_MODEL_VERSION &&
+    quality.status !== "NO_VALUE" &&
+    typeof result.fairValueBase === "number" &&
+    Number.isFinite(result.fairValueBase)
+  );
+}
+
+function splitValued(report: FairValueRefreshReport): {
+  valuedInserted: number;
+  valuedUnchanged: number;
+  withoutValue: number;
+} {
+  if (typeof report.valuedInserted === "number" && typeof report.valuedUnchanged === "number") {
+    const valued = report.valuedInserted + report.valuedUnchanged;
+    return {
+      valuedInserted: report.valuedInserted,
+      valuedUnchanged: report.valuedUnchanged,
+      withoutValue: Math.max(0, report.inserted + report.unchanged - valued),
+    };
+  }
+  const stored = report.inserted + report.unchanged;
+  const withoutValue = Math.min(stored, Math.max(report.unsupported, report.noValue));
+  const valued = Math.max(0, stored - withoutValue);
+  const valuedInserted = Math.min(report.inserted, valued);
+  return {
+    valuedInserted,
+    valuedUnchanged: valued - valuedInserted,
+    withoutValue,
+  };
+}
+
+function fairValueUnavailableDetail(report: FairValueRefreshReport): string {
+  const supportedMissing = Math.max(0, report.noValue - report.unsupported);
+  if (report.unsupported > 0 && supportedMissing > 0) {
+    return `No Fair Value model applies to ${report.unsupported} research profile(s). Fair Value did not produce a value from the stored inputs for ${supportedMissing} other name(s). Nothing was invented.`;
+  }
+  if (report.unsupported > 0) {
+    return "No Fair Value model applies to this research profile. Nothing was invented.";
+  }
+  return "Fair Value did not produce a value from the stored inputs.";
 }
 
 function concise(error: unknown): string {

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { fairValueRuns, instruments, priceBars } from "@/db/schema";
+import { fairValueRuns, instruments, priceBars, scoreRuns } from "@/db/schema";
 import { importYahooPrices } from "@/ingest/import-prices";
 import type { PricesImportReport } from "@/ingest/types";
 import { importYahooFundamentals, type YahooFundamentalsReport } from "@/market/ingest-fundamentals-yahoo";
@@ -256,6 +256,13 @@ describe("on-demand refresh and research", () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]?.currentPrice).toBe(12);
     expect(saved[0]?.valuationDate).toBe("2026-10-12");
+    const scoreRows = getDb().select().from(scoreRuns).all();
+    expect(scoreRows).toHaveLength(1);
+    expect(scoreRows[0]?.researchScore).toBeNull();
+    scoreTicker("MAYBANK");
+    const appended = getDb().select().from(scoreRuns).all();
+    expect(appended).toHaveLength(2);
+    expect(appended.every((row) => row.researchScore == null)).toBe(true);
 
     const stored = loadOnDemandCategoryStatus("MAYBANK");
     expect(stored.prices?.status).toBe("SUCCESS");

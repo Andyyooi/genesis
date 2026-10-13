@@ -10,7 +10,8 @@ import type { FairValueResult } from "@/fair-value/types";
 import type { FairValueQuality } from "@/fair-value/quality";
 import { FAIR_VALUE_QUALITY_VERSION, persistFairValueRun } from "@/fair-value/persist";
 import { runDailyRefresh } from "@/refresh/daily";
-import { fairValueRefreshOutcome, refreshFairValueUniverse } from "@/refresh/fair-value";
+import { fairValueRefreshOutcome, refreshFairValueUniverse, type FairValueRefreshReport } from "@/refresh/fair-value";
+import { resetRefreshAndResearchLockForTests, runRefreshAndResearch } from "@/refresh/on-demand";
 
 const PREV_PATH = process.env.BURSA_SQLITE_PATH;
 const AS_OF = "2026-10-08T00:00:00.000Z";
@@ -171,14 +172,20 @@ describe("fair value daily refresh", () => {
     const second = refreshFairValueUniverse({ asOf: AS_OF });
     expect(second.inserted).toBe(0);
     expect(second.unchanged).toBe(1);
-    expect(fairValueRefreshOutcome(second).status).toBe("UNCHANGED");
+    expect(second.valuedInserted).toBe(0);
+    expect(second.valuedUnchanged).toBe(0);
+    const replay = fairValueRefreshOutcome(second);
+    expect(replay.status).toBe("NO_DATA");
+    expect(replay.updatedCount).toBe(0);
+    expect(replay.unavailableCount).toBe(1);
+    expect(replay.errorSummary).toContain("did not produce a value");
     const again = getDb().select().from(fairValueRuns).all();
     expect(again).toHaveLength(1);
     expect(again[0]!.id).toBe(rows[0]!.id);
     expect(again[0]!.calculatedAt).toBe(AS_OF);
   });
 
-  it("stores unsupported and supported NO_VALUE observations as successes", () => {
+  it("stores unsupported and supported NO_VALUE observations without calling them valuations", () => {
     seed("INSURE", "Insurance", "Financial Services");
     seed("WIDGET", "Industrial Products");
     const report = refreshFairValueUniverse({ asOf: AS_OF });
@@ -190,6 +197,12 @@ describe("fair value daily refresh", () => {
     expect(rows.map((row) => row.modelVersion).sort()).toEqual(["general-relative-v1", "unsupported"]);
     expect(rows.every((row) => row.fairValueBase == null)).toBe(true);
     expect(rows.every((row) => row.qualityStatus === "NO_VALUE" && row.baseUse === "NO_POINT")).toBe(true);
+    const outcome = fairValueRefreshOutcome(report);
+    expect(outcome.status).toBe("NO_DATA");
+    expect(outcome.updatedCount).toBe(0);
+    expect(outcome.unavailableCount).toBe(2);
+    expect(outcome.errorSummary).toContain("No Fair Value model");
+    expect(outcome.errorSummary).toContain("did not produce a value");
   });
 
   it("isolates a calculation failure from a successful ticker", () => {
@@ -265,6 +278,10 @@ describe("fair value daily refresh", () => {
       "POINT_WITHHELD",
       "POINT_WITH_CAUTION",
     ]);
+    const outcome = fairValueRefreshOutcome(report);
+    expect(outcome.status).toBe("SUCCESS");
+    expect(outcome.updatedCount).toBe(3);
+    expect(outcome.unavailableCount).toBe(0);
   });
 
   it("reports a null persistence result as failure and keeps earlier rows", () => {
@@ -406,10 +423,12 @@ describe("fair value daily refresh", () => {
     const first = await runDailyRefresh(deps);
     const fairValue = first.datasets.find((row) => row.dataset === "fair_value")!;
     expect(first.overallStatus).toBe("SUCCESS");
-    expect(fairValue.status).toBe("SUCCESS");
-    expect(fairValue.updatedCount).toBe(2);
+    expect(fairValue.status).toBe("NO_DATA");
+    expect(fairValue.updatedCount).toBe(0);
     expect(fairValue.failedCount).toBe(0);
-    expect(fairValue.unavailableCount).toBe(0);
+    expect(fairValue.unavailableCount).toBe(2);
+    expect(fairValue.errorSummary).toContain("No Fair Value model");
+    expect(fairValue.errorSummary).toContain("did not produce a value");
     expect(fairValue.metadata).toMatchObject({
       unsupported: 1,
       noValue: 2,
@@ -433,11 +452,145 @@ describe("fair value daily refresh", () => {
 
     const second = await runDailyRefresh(deps);
     const replay = second.datasets.find((row) => row.dataset === "fair_value")!;
-    expect(replay.status).toBe("UNCHANGED");
+    expect(replay.status).toBe("NO_DATA");
     expect(replay.updatedCount).toBe(0);
-    expect(replay.unchangedCount).toBe(2);
+    expect(replay.unchangedCount).toBe(0);
+    expect(replay.unavailableCount).toBe(2);
     const again = getDb().select().from(fairValueRuns).all();
     expect(again.map((row) => row.id).sort()).toEqual(stored.map((row) => row.id).sort());
     expect(again.every((row) => row.calculatedAt === AS_OF)).toBe(true);
   });
+
+  it("reports a produced value as success and a repeat as unchanged", () => {
+    seed("GOOD", "Industrial Products");
+    const clear: FairValueQuality = {
+      status: "CLEAR",
+      baseUse: "POINT_OK",
+      methods: [],
+      notes: [],
+      historicalLimitation: null,
+    };
+    const run = () =>
+      refreshFairValueUniverse({
+        asOf: AS_OF,
+        calculate: (input) => valuedResult(input.ticker),
+        assess: () => clear,
+      });
+    const first = run();
+    expect(first.valuedInserted).toBe(1);
+    expect(first.noValue).toBe(0);
+    expect(fairValueRefreshOutcome(first)).toMatchObject({
+      status: "SUCCESS",
+      updatedCount: 1,
+      unchangedCount: 0,
+      unavailableCount: 0,
+      errorSummary: null,
+    });
+    const second = run();
+    expect(second.inserted).toBe(0);
+    expect(second.valuedUnchanged).toBe(1);
+    expect(fairValueRefreshOutcome(second).status).toBe("UNCHANGED");
+    expect(getDb().select().from(fairValueRuns).all()).toHaveLength(1);
+  });
+
+  it("uses the same Fair Value status for daily refresh and on-demand research", async () => {
+    seed("WIDGET", "Industrial Products");
+    const cases: Array<{ name: string; report: FairValueRefreshReport; status: string }> = [
+      {
+        name: "unsupported",
+        status: "NO_DATA",
+        report: outcomeReport({ inserted: 1, valuedInserted: 0, unsupported: 1, noValue: 1 }),
+      },
+      {
+        name: "no value",
+        status: "NO_DATA",
+        report: outcomeReport({ inserted: 1, valuedInserted: 0, noValue: 1 }),
+      },
+      {
+        name: "valued",
+        status: "SUCCESS",
+        report: outcomeReport({ inserted: 1, valuedInserted: 1 }),
+      },
+      {
+        name: "valued replay",
+        status: "UNCHANGED",
+        report: outcomeReport({ unchanged: 1, valuedUnchanged: 1 }),
+      },
+    ];
+    for (const item of cases) {
+      expect(fairValueRefreshOutcome(item.report).status, item.name).toBe(item.status);
+      const daily = await runDailyRefresh({
+        now: () => new Date(AS_OF),
+        importPrices: async () => priceDeps(),
+        importFundamentals: async () => fundamentalDeps(),
+        rescore: () => ({ kind: "ok" }),
+        persistFairValues: () => item.report,
+      });
+      resetRefreshAndResearchLockForTests();
+      const onDemand = await runRefreshAndResearch(
+        { ticker: "WIDGET" },
+        {
+          now: () => new Date(AS_OF),
+          readPriceDate: () => "2026-09-18",
+          importPrices: async () => priceDeps(),
+          importFundamentals: async () => fundamentalDeps(),
+          score: () => ({ metrics: [], result: { asOf: AS_OF, researchScore: 40 } }),
+          fairValue: () => item.report,
+        },
+      );
+      const dailyStatus = daily.datasets.find((row) => row.dataset === "fair_value")?.status;
+      expect(dailyStatus, item.name).toBe(item.status);
+      expect(onDemand.categories.fairValue.status, item.name).toBe(dailyStatus);
+      expect(onDemand.categories.fairValue.detail, item.name).toBe(fairValueRefreshOutcome(item.report).errorSummary);
+    }
+  });
 });
+
+function outcomeReport(overrides: Partial<FairValueRefreshReport>): FairValueRefreshReport {
+  return {
+    attempted: 1,
+    inserted: 0,
+    unchanged: 0,
+    valuedInserted: 0,
+    valuedUnchanged: 0,
+    failed: [],
+    unsupported: 0,
+    noValue: 0,
+    flagged: 0,
+    caution: 0,
+    withheld: 0,
+    persistenceRefused: false,
+    ...overrides,
+  };
+}
+
+function priceDeps(): PricesImportReport {
+  return {
+    kind: "prices",
+    startedAt: AS_OF,
+    finishedAt: AS_OF,
+    succeeded: ["WIDGET"],
+    failed: [],
+    barsUpserted: 1,
+  };
+}
+
+function fundamentalDeps(): YahooFundamentalsReport {
+  return {
+    kind: "fundamentals-yahoo",
+    startedAt: AS_OF,
+    finishedAt: AS_OF,
+    attempted: 1,
+    upserted: 0,
+    inserted: 0,
+    filled: 0,
+    unchanged: 1,
+    skippedHadFilings: 0,
+    skippedOtherSource: 0,
+    instrumentsUpdated: 0,
+    instrumentsUnchanged: 1,
+    instrumentsSkippedFresh: 1,
+    instrumentsFetched: 0,
+    failed: [],
+  };
+}

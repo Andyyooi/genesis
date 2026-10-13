@@ -206,20 +206,116 @@ describe("refresh price integrity", () => {
     }
   });
 
-  it("keeps a newer stored bar when the provider returns only older data", async () => {
+  it("adds a missing historical session without moving the latest close", async () => {
     seedBar("MAYBANK", "2026-10-12", 12);
     vi.mocked(fetchYahooDailyBars).mockResolvedValue([yahooBar("2026-09-01", 1)]);
+    const imported = await importYahooPrices({
+      onlyTicker: "MAYBANK",
+      listedOnly: true,
+      skipAlerts: true,
+      range: "5d",
+      rateLimitMs: 0,
+      skipUniverseSeed: true,
+    });
+    expect(imported.barsInserted).toBe(1);
+    expect(imported.barsReimported).toBe(0);
+    expect(imported.conflicts).toEqual([]);
+    expect(storedBars("MAYBANK")).toEqual([
+      { barDate: "2026-09-01", close: 1 },
+      { barDate: "2026-09-18", close: 10 },
+      { barDate: "2026-10-12", close: 12 },
+    ]);
+
     const report = await runRefreshAndResearch(
       { ticker: "MAYBANK" },
       { importFundamentals: async () => fundamentals(), score: () => scored(40, "2026-10-12", 12), fairValue: () => fairValue() },
     );
-    expect(storedBars("MAYBANK")).toEqual([
-      { barDate: "2026-09-18", close: 10 },
-      { barDate: "2026-10-12", close: 12 },
-    ]);
     expect(report.categories.prices.status).toBe("UNCHANGED");
+    expect(report.categories.prices.detail).toBeNull();
     expect(report.market.updatedThisRun).toBe(false);
     expect(report.market.latestDate).toBe("2026-10-12");
+    expect(storedBars("MAYBANK")).toHaveLength(3);
+  });
+
+  it("keeps a conflicting historical close and still stores the new sessions around it", async () => {
+    seedBar("MAYBANK", "2026-10-12", 12);
+    vi.mocked(fetchYahooDailyBars).mockResolvedValue([
+      yahooBar("2026-09-02", 7),
+      yahooBar("2026-09-18", 4),
+      yahooBar("2026-10-12", 12),
+      yahooBar("2026-10-13", 13),
+    ]);
+    const imported = await importYahooPrices({
+      onlyTicker: "MAYBANK",
+      listedOnly: true,
+      skipAlerts: true,
+      range: "5d",
+      rateLimitMs: 0,
+      skipUniverseSeed: true,
+    });
+    expect(imported.succeeded).toEqual(["MAYBANK"]);
+    expect(imported.barsInserted).toBe(2);
+    expect(imported.barsReimported).toBe(1);
+    expect(imported.conflicts).toEqual([
+      { ticker: "MAYBANK", barDate: "2026-09-18", storedClose: 10, incomingClose: 4 },
+    ]);
+    expect(storedBars("MAYBANK")).toEqual([
+      { barDate: "2026-09-02", close: 7 },
+      { barDate: "2026-09-18", close: 10 },
+      { barDate: "2026-10-12", close: 12 },
+      { barDate: "2026-10-13", close: 13 },
+    ]);
+    const kept = getDb().select().from(priceBars).all().find((bar) => bar.barDate === "2026-09-18");
+    const repeated = getDb().select().from(priceBars).all().find((bar) => bar.barDate === "2026-10-12");
+    expect(kept?.retrievedAt).toBe("2026-09-18T00:00:00.000Z");
+    expect(repeated?.retrievedAt).toBe("2026-09-18T00:00:00.000Z");
+
+    const report = await runRefreshAndResearch(
+      { ticker: "MAYBANK" },
+      { importFundamentals: async () => fundamentals(), score: () => scored(40, "2026-10-13", 13), fairValue: () => fairValue() },
+    );
+    expect(report.categories.prices.status).toBe("UNCHANGED");
+    expect(report.categories.prices.detail).toContain("2026-09-18 kept 10");
+    expect(report.market.latestDate).toBe("2026-10-13");
+    expect(storedBars("MAYBANK").find((bar) => bar.barDate === "2026-09-18")?.close).toBe(10);
+  });
+
+  it("revises the latest stored session and ignores an unusable stored date", async () => {
+    seedBar("MAYBANK", "9999-99-99", 50);
+    vi.mocked(fetchYahooDailyBars).mockResolvedValue([
+      yahooBar("2026-09-18", 10),
+      yahooBar("2026-10-13", 13),
+    ]);
+    const imported = await importYahooPrices({
+      onlyTicker: "MAYBANK",
+      listedOnly: true,
+      skipAlerts: true,
+      range: "5d",
+      rateLimitMs: 0,
+      skipUniverseSeed: true,
+    });
+    expect(imported.barsInserted).toBe(1);
+    expect(imported.barsReimported).toBe(1);
+    expect(imported.conflicts).toEqual([]);
+    expect(storedBars("MAYBANK")).toEqual([
+      { barDate: "2026-09-18", close: 10 },
+      { barDate: "2026-10-13", close: 13 },
+      { barDate: "9999-99-99", close: 50 },
+    ]);
+
+    vi.mocked(fetchYahooDailyBars).mockResolvedValue([yahooBar("2026-10-13", 14)]);
+    const revised = await importYahooPrices({
+      onlyTicker: "MAYBANK",
+      listedOnly: true,
+      skipAlerts: true,
+      range: "5d",
+      rateLimitMs: 0,
+      skipUniverseSeed: true,
+    });
+    expect(revised.barsInserted).toBe(0);
+    expect(revised.barsUpserted).toBe(1);
+    expect(revised.conflicts).toEqual([]);
+    expect(storedBars("MAYBANK").find((bar) => bar.barDate === "2026-10-13")?.close).toBe(14);
   });
 
   it("rolls back a newer bar when persistence fails before the ticker is saved", async () => {
@@ -241,6 +337,8 @@ describe("refresh price integrity", () => {
     });
     expect(imported.failed.map((row) => row.ticker)).toEqual(["MAYBANK"]);
     expect(imported.succeeded).toEqual([]);
+    expect(imported.conflicts).toEqual([]);
+    expect(imported.barsInserted).toBe(0);
     expect(storedBars("MAYBANK")).toEqual([{ barDate: "2026-09-18", close: 10 }]);
 
     vi.mocked(fetchYahooDailyBars).mockResolvedValue([yahooBar("2026-10-13", 11), yahooBar("2026-10-14", 12)]);

@@ -3,7 +3,8 @@ import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { instruments, priceBars, refreshRuns, type RefreshStatus } from "@/db/schema";
 import { importYahooPrices, type PriceIngestOptions } from "@/ingest/import-prices";
-import type { PricesImportReport } from "@/ingest/types";
+import { yahooBarDateUtc } from "@/ingest/price-bar";
+import type { PriceBarConflict, PricesImportReport } from "@/ingest/types";
 import { refuseSnapshotWrites } from "@/lib/data-mode";
 import {
   importYahooFundamentals,
@@ -348,6 +349,8 @@ function runScores(
     }
     const close = scored.metrics.find((metric) => metric.id === "last_close");
     const trade = scored.metrics.find((metric) => metric.id === "last_trade_date");
+    // A null research score stays in score_runs. That table is append-only audit history.
+    // This report uses NO_DATA and does not treat the row as a successful score.
     const scoreReady = typeof scored.result.researchScore === "number" && Number.isFinite(scored.result.researchScore);
     const categoryReport = persistStage(runId, {
       dataset: "scores",
@@ -435,7 +438,7 @@ function runFairValue(
     const report = fairValue({ asOf, onlyTicker: ticker });
     const completedAt = now().toISOString();
     const outcome = fairValueRefreshOutcome(report);
-    const interpreted = interpretFairValueStatus(report.attempted, outcome);
+    const interpreted = { status: outcome.status, detail: outcome.errorSummary };
     return persistStage(runId, {
       dataset: "fair_value",
       source: "stored-snapshots",
@@ -520,8 +523,9 @@ async function runPrices(
       );
     }
     const latestDate = safePriceDate(readPriceDate, ticker) ?? previousDate;
-    const advanced = Boolean(latestDate && (!previousDate || latestDate > previousDate));
+    const advanced = priceDateAdvanced(previousDate, latestDate);
     const status: RefreshStatus = advanced ? "SUCCESS" : "UNCHANGED";
+    const conflictDetail = priceConflictDetail(report.conflicts);
     return {
       latestDate,
       category: persistStage(runId, {
@@ -537,8 +541,13 @@ async function runPrices(
         failedCount: 0,
         unavailableCount: 0,
         lastSuccessfulAt: null,
-        errorSummary: null,
-        metadata: scopeMetadata(ticker, advanced),
+        errorSummary: conflictDetail,
+        metadata: {
+          ...scopeMetadata(ticker, advanced),
+          barsInserted: report.barsInserted ?? 0,
+          barsReimported: report.barsReimported ?? 0,
+          conflicts: report.conflicts ?? [],
+        },
       }),
     };
   } catch (error) {
@@ -676,25 +685,23 @@ function interpretFundamentals(report: YahooFundamentalsReport): { status: Refre
   return { status: "UNCHANGED", detail: null };
 }
 
-function interpretFairValueStatus(
-  attempted: number,
-  outcome: ReturnType<typeof fairValueRefreshOutcome>,
-): { status: RefreshStatus; detail: string | null } {
-  if (attempted === 0) {
-    return { status: "SOURCE_FAILED", detail: "Fair Value did not calculate this instrument." };
-  }
-  if (outcome.status === "SOURCE_FAILED" || outcome.status === "PARTIAL") {
-    return { status: outcome.status, detail: outcome.errorSummary };
-  }
-  const unsupported = Number(outcome.metadata.unsupported ?? 0);
-  const noValue = Number(outcome.metadata.noValue ?? 0);
-  if (unsupported > 0) {
-    return { status: "NO_DATA", detail: "No Fair Value model applies to this research profile. Nothing was invented." };
-  }
-  if (noValue > 0) {
-    return { status: "NO_DATA", detail: "Fair Value did not produce a value from the stored inputs." };
-  }
-  return { status: outcome.status, detail: outcome.errorSummary };
+function priceDateAdvanced(previousDate: string | null, latestDate: string | null): boolean {
+  if (!latestDate) return false;
+  if (!previousDate) return true;
+  const latest = yahooBarDateUtc(latestDate);
+  const previous = yahooBarDateUtc(previousDate);
+  if (latest == null || previous == null) return false;
+  return latest > previous;
+}
+
+function priceConflictDetail(conflicts: PriceBarConflict[] | undefined): string | null {
+  if (!conflicts?.length) return null;
+  const sample = conflicts
+    .slice(0, 5)
+    .map((row) => `${row.barDate} kept ${row.storedClose} (incoming ${row.incomingClose})`)
+    .join("; ");
+  const extra = conflicts.length > 5 ? `; +${conflicts.length - 5} more` : "";
+  return `Historical close conflicts were not applied: ${sample}${extra}.`;
 }
 
 function overallStatus(categories: Record<RefreshCategoryId, RefreshCategoryReport>): OnDemandOverall {
