@@ -112,7 +112,7 @@ function fairReport(): FairValueRefreshReport {
     unchanged: 0,
     failed: [],
     unsupported: 0,
-    noValue: 1,
+    noValue: 0,
     flagged: 0,
     caution: 0,
     withheld: 0,

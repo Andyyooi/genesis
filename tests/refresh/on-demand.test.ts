@@ -132,7 +132,7 @@ function fairReport(overrides: Partial<FairValueRefreshReport> = {}): FairValueR
     unchanged: 0,
     failed: [],
     unsupported: 0,
-    noValue: 1,
+    noValue: 0,
     flagged: 0,
     caution: 0,
     withheld: 0,
@@ -246,8 +246,11 @@ describe("on-demand refresh and research", () => {
     expect(report.research.priceDateUsed).toBe("2026-10-12");
     expect(report.research.priceUsed).toBe(12);
     expect(report.research.ranAt).not.toBe(report.market.latestDate);
-    expect(report.calculations.scores).toBe(true);
-    expect(report.calculations.fairValue).toBe(true);
+    expect(report.categories.scores.status).toBe("NO_DATA");
+    expect(report.calculations.scores).toBe(false);
+    expect(report.categories.fairValue.status).toBe("NO_DATA");
+    expect(report.categories.fairValue.updatedThisRun).toBe(false);
+    expect(report.categories.fairValue.detail).toContain("did not produce a value");
 
     const saved = getDb().select().from(fairValueRuns).all();
     expect(saved).toHaveLength(1);

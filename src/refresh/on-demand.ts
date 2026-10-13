@@ -348,22 +348,23 @@ function runScores(
     }
     const close = scored.metrics.find((metric) => metric.id === "last_close");
     const trade = scored.metrics.find((metric) => metric.id === "last_trade_date");
+    const scoreReady = typeof scored.result.researchScore === "number" && Number.isFinite(scored.result.researchScore);
     const categoryReport = persistStage(runId, {
       dataset: "scores",
       source: "stored-snapshots",
-      status: "SUCCESS",
+      status: scoreReady ? "SUCCESS" : "NO_DATA",
       startedAt,
       completedAt,
       marketDate: trade?.period ?? marketDate,
       attemptedCount: 1,
-      updatedCount: 1,
+      updatedCount: scoreReady ? 1 : 0,
       unchangedCount: 0,
       failedCount: 0,
-      unavailableCount: 0,
+      unavailableCount: scoreReady ? 0 : 1,
       lastSuccessfulAt: null,
-      errorSummary: null,
+      errorSummary: scoreReady ? null : "Research score is unavailable from the stored inputs.",
       metadata: {
-        ...scopeMetadata(ticker, true),
+        ...scopeMetadata(ticker, scoreReady),
         researchRunAt: scored.result.asOf,
         priceUsed: close?.value ?? null,
         priceDateUsed: trade?.period ?? null,
@@ -434,23 +435,22 @@ function runFairValue(
     const report = fairValue({ asOf, onlyTicker: ticker });
     const completedAt = now().toISOString();
     const outcome = fairValueRefreshOutcome(report);
-    const status: RefreshStatus = report.attempted === 0 ? "SOURCE_FAILED" : outcome.status;
+    const interpreted = interpretFairValueStatus(report.attempted, outcome);
     return persistStage(runId, {
       dataset: "fair_value",
       source: "stored-snapshots",
-      status,
+      status: interpreted.status,
       startedAt,
       completedAt,
       marketDate,
       attemptedCount: report.attempted,
-      updatedCount: outcome.updatedCount,
-      unchangedCount: outcome.unchangedCount,
+      updatedCount: interpreted.status === "SUCCESS" ? outcome.updatedCount : 0,
+      unchangedCount: interpreted.status === "UNCHANGED" ? outcome.unchangedCount : 0,
       failedCount: outcome.failedCount,
-      unavailableCount: outcome.unavailableCount,
+      unavailableCount: interpreted.status === "NO_DATA" ? 1 : outcome.unavailableCount,
       lastSuccessfulAt: null,
-      errorSummary:
-        report.attempted === 0 ? "Fair Value did not calculate this instrument." : outcome.errorSummary,
-      metadata: { ...scopeMetadata(ticker, status === "SUCCESS"), ...outcome.metadata },
+      errorSummary: interpreted.detail,
+      metadata: { ...scopeMetadata(ticker, interpreted.status === "SUCCESS"), ...outcome.metadata },
     });
   } catch (error) {
     const completedAt = now().toISOString();
@@ -565,28 +565,23 @@ async function runFundamentals(
       freshnessGate: { asOf: now(), recheckAfterDays: DAILY_FUNDAMENTALS_RECHECK_DAYS },
     });
     const completedAt = now().toISOString();
-    let status = fundamentalsStatus(report);
-    if (report.attempted === 0) status = "SOURCE_FAILED";
-    const updated = status === "SUCCESS";
+    const interpreted = interpretFundamentals(report);
     return persistStage(runId, {
       dataset: "fundamentals",
       source: "yahoo",
-      status,
+      status: interpreted.status,
       startedAt,
       completedAt,
       marketDate,
       attemptedCount: report.attempted,
       updatedCount: report.instrumentsUpdated,
       unchangedCount: report.instrumentsUnchanged,
-      failedCount: report.failed.length,
-      unavailableCount: report.failed.length,
+      failedCount: interpreted.status === "SOURCE_FAILED" || interpreted.status === "PARTIAL" ? report.failed.length : 0,
+      unavailableCount: interpreted.status === "NO_DATA" ? report.attempted : report.failed.length,
       lastSuccessfulAt: null,
-      errorSummary:
-        status === "SOURCE_FAILED"
-          ? report.failed.map((row) => row.reason).join("; ") || "Yahoo fundamentals were not updated."
-          : null,
+      errorSummary: interpreted.detail,
       metadata: {
-        ...scopeMetadata(ticker, updated),
+        ...scopeMetadata(ticker, interpreted.status === "SUCCESS"),
         instrumentsSkippedFresh: report.instrumentsSkippedFresh,
         instrumentsFetched: report.instrumentsFetched,
       },
@@ -656,22 +651,62 @@ function persistStage(runId: string, result: DatasetRefreshResult): RefreshCateg
   };
 }
 
-function fundamentalsStatus(report: YahooFundamentalsReport): RefreshStatus {
-  if (report.attempted === 0) return "NO_DATA";
-  if (report.failed.length === report.attempted) return "SOURCE_FAILED";
-  if (report.failed.length > 0) return "PARTIAL";
-  if (report.instrumentsUpdated > 0 || report.upserted > 0) return "SUCCESS";
-  return "UNCHANGED";
+function interpretFundamentals(report: YahooFundamentalsReport): { status: RefreshStatus; detail: string | null } {
+  if (report.attempted === 0) {
+    return { status: "SOURCE_FAILED", detail: "Yahoo fundamentals did not attempt this instrument." };
+  }
+  if (report.failed.length === report.attempted) {
+    const detail = report.failed.map((row) => row.reason).join("; ") || "Yahoo fundamentals were not updated.";
+    const missing = report.failed.every((row) => row.code === "NO_DATA" || row.code === "UNSUPPORTED");
+    return { status: missing ? "NO_DATA" : "SOURCE_FAILED", detail };
+  }
+  if (report.failed.length > 0) {
+    return {
+      status: "PARTIAL",
+      detail: report.failed.map((row) => row.reason).join("; "),
+    };
+  }
+  if (report.instrumentsUpdated > 0 || report.upserted > 0) return { status: "SUCCESS", detail: null };
+  if (report.instrumentsSkippedFresh > 0) {
+    return {
+      status: "UNCHANGED",
+      detail: "Stored Yahoo fundamentals are still inside the recheck window and were kept.",
+    };
+  }
+  return { status: "UNCHANGED", detail: null };
+}
+
+function interpretFairValueStatus(
+  attempted: number,
+  outcome: ReturnType<typeof fairValueRefreshOutcome>,
+): { status: RefreshStatus; detail: string | null } {
+  if (attempted === 0) {
+    return { status: "SOURCE_FAILED", detail: "Fair Value did not calculate this instrument." };
+  }
+  if (outcome.status === "SOURCE_FAILED" || outcome.status === "PARTIAL") {
+    return { status: outcome.status, detail: outcome.errorSummary };
+  }
+  const unsupported = Number(outcome.metadata.unsupported ?? 0);
+  const noValue = Number(outcome.metadata.noValue ?? 0);
+  if (unsupported > 0) {
+    return { status: "NO_DATA", detail: "No Fair Value model applies to this research profile. Nothing was invented." };
+  }
+  if (noValue > 0) {
+    return { status: "NO_DATA", detail: "Fair Value did not produce a value from the stored inputs." };
+  }
+  return { status: outcome.status, detail: outcome.errorSummary };
 }
 
 function overallStatus(categories: Record<RefreshCategoryId, RefreshCategoryReport>): OnDemandOverall {
   const active = [categories.prices, categories.fundamentals, categories.scores, categories.fairValue];
-  const failed = active.filter((row) => row.status === "SOURCE_FAILED" || row.status === "NOT_RUN");
+  const failed = active.filter((row) => row.status === "SOURCE_FAILED" || row.status === "PARTIAL" || row.status === "NOT_RUN");
   if (failed.length === 0 && active.every((row) => row.status === "UNCHANGED" || row.status === "NO_DATA")) {
     return "UNCHANGED";
   }
   if (failed.length === 0) return "SUCCESS";
-  const completed = active.some((row) => row.status === "SUCCESS" || row.status === "UNCHANGED" || row.status === "PARTIAL");
+  const completed = active.some(
+    (row) => row.status === "SUCCESS" || row.status === "UNCHANGED" || row.status === "PARTIAL" || row.status === "NO_DATA",
+  );
   return completed ? "PARTIAL" : "SOURCE_FAILED";
 }
 

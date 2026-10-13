@@ -1,10 +1,12 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { refreshAlertsForTicker } from "@/alerts/refresh";
-import { getDb } from "@/db/client";
+import { getDb, getSqlite } from "@/db/client";
 import { ingestReports, instruments, priceBars } from "@/db/schema";
 import { seedUniverseFromYaml } from "@/db/seed";
-import { fetchYahooDailyBars } from "@/ingest/providers/yahoo-prices";
+import { usableYahooDailyBar } from "@/ingest/price-bar";
+import { fetchYahooDailyBars, type YahooBar } from "@/ingest/providers/yahoo-prices";
 import type { PriceImportFailure, PricesImportReport } from "@/ingest/types";
 import { recordIngestFailure } from "@/market/refresh-universe";
 
@@ -80,43 +82,25 @@ export async function importYahooPrices(
       continue;
     }
     try {
-      const bars = await fetchYahooDailyBars(yahooTicker, range);
-      for (const bar of bars) {
-        db.insert(priceBars)
-          .values({
-            instrumentId: instrument.id,
-            barDate: bar.barDate,
-            open: bar.open,
-            high: bar.high,
-            low: bar.low,
-            close: bar.close,
-            volume: bar.volume,
-            adjClose: bar.adjClose,
-            asOf: `${bar.barDate}T16:00:00+08:00`,
-            source: "yahoo",
-            adjusted: bar.adjClose != null,
-            retrievedAt,
-          })
-          .onConflictDoUpdate({
-            target: [priceBars.instrumentId, priceBars.barDate, priceBars.source],
-            set: {
-              open: bar.open,
-              high: bar.high,
-              low: bar.low,
-              close: bar.close,
-              volume: bar.volume,
-              adjClose: bar.adjClose,
-              asOf: `${bar.barDate}T16:00:00+08:00`,
-              retrievedAt,
-            },
-          })
-          .run();
-        barsUpserted += 1;
+      const fetched = await fetchYahooDailyBars(yahooTicker, range);
+      const accepted = fetched.filter((bar) => usableYahooDailyBar(bar));
+      if (accepted.length === 0) {
+        throw new Error(`Yahoo missed ${yahooTicker}: no usable daily bars`);
       }
-      succeeded.push(instrument.ticker);
-      done.add(instrument.ticker);
-      saveCheckpoint(options.checkpointPath, done);
-      if (!options.skipAlerts) refreshAlertsForTicker(instrument.ticker);
+      const newest = accepted.map((bar) => bar.barDate).sort().at(-1) ?? null;
+      const storedLatest = latestStoredCloseDate(instrument.id);
+      if (storedLatest && newest && newest < storedLatest) {
+        succeeded.push(instrument.ticker);
+      } else {
+        getSqlite().transaction(() => {
+          for (const bar of accepted) writePriceBar(instrument.id, bar, retrievedAt);
+        })();
+        barsUpserted += accepted.length;
+        succeeded.push(instrument.ticker);
+        done.add(instrument.ticker);
+        saveCheckpoint(options.checkpointPath, done);
+        if (!options.skipAlerts) refreshAlertsForTicker(instrument.ticker);
+      }
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Yahoo request failed";
       failed.push({ ticker: instrument.ticker, yahooTicker, reason });
@@ -147,4 +131,48 @@ export async function importYahooPrices(
     .run();
 
   return report;
+}
+
+function latestStoredCloseDate(instrumentId: number): string | null {
+  const row = getDb()
+    .select({ barDate: priceBars.barDate })
+    .from(priceBars)
+    .where(and(eq(priceBars.instrumentId, instrumentId), isNotNull(priceBars.close)))
+    .orderBy(desc(priceBars.barDate))
+    .get();
+  const barDate = row?.barDate ?? null;
+  return barDate && /^\d{4}-\d{2}-\d{2}$/.test(barDate) ? barDate : null;
+}
+
+function writePriceBar(instrumentId: number, bar: YahooBar, retrievedAt: string) {
+  getDb()
+    .insert(priceBars)
+    .values({
+      instrumentId,
+      barDate: bar.barDate,
+      open: bar.open,
+      high: bar.high,
+      low: bar.low,
+      close: bar.close,
+      volume: bar.volume,
+      adjClose: bar.adjClose,
+      asOf: `${bar.barDate}T16:00:00+08:00`,
+      source: "yahoo",
+      adjusted: bar.adjClose != null,
+      retrievedAt,
+    })
+    .onConflictDoUpdate({
+      target: [priceBars.instrumentId, priceBars.barDate, priceBars.source],
+      set: {
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+        volume: bar.volume,
+        adjClose: bar.adjClose,
+        asOf: `${bar.barDate}T16:00:00+08:00`,
+        retrievedAt,
+      },
+    })
+    .run();
 }
