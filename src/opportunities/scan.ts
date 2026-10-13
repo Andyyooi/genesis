@@ -80,3 +80,7 @@ export function scanWatchlist(): OpportunityRow[] {
   scanCache = { at: Date.now(), rows };
   return rows;
 }
+
+export function clearOpportunityScanCache() {
+  scanCache = null;
+}

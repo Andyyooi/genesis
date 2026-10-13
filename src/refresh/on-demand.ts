@@ -17,6 +17,7 @@ import type { DatasetRefreshResult } from "@/refresh/types";
 import { scoreTicker } from "@/scoring/run-ticker";
 
 const inFlight = new Set<string>();
+let watchlistActive = false;
 
 export const PRICE_CADENCE = "end-of-day" as const;
 
@@ -110,6 +111,23 @@ const ANNOUNCEMENTS_DETAIL =
 
 export function resetRefreshAndResearchLockForTests() {
   inFlight.clear();
+  watchlistActive = false;
+}
+
+export function markWatchlistRefreshActive(active: boolean) {
+  watchlistActive = active;
+}
+
+export function refreshInFlightCount() {
+  return inFlight.size;
+}
+
+export function claimRefreshTickers(tickers: readonly string[]) {
+  for (const ticker of tickers) inFlight.add(ticker);
+}
+
+export function releaseRefreshTickers(tickers: readonly string[]) {
+  for (const ticker of tickers) inFlight.delete(ticker);
 }
 
 export function loadOnDemandCategoryStatus(ticker: string): Record<RefreshCategoryId, RefreshCategoryReport | null> {
@@ -145,7 +163,7 @@ export function loadOnDemandCategoryStatus(ticker: string): Record<RefreshCatego
 }
 
 export async function runRefreshAndResearch(
-  args: { ticker: string; knownMarketPriceDate?: string | null },
+  args: { ticker: string; knownMarketPriceDate?: string | null; joined?: boolean },
   deps: RefreshAndResearchDeps = {},
 ): Promise<RefreshAndResearchReport> {
   const symbol = args.ticker.trim().toUpperCase();
@@ -175,7 +193,24 @@ export async function runRefreshAndResearch(
     });
   }
 
-  if (!symbol || inFlight.has(symbol)) {
+  if (!args.joined && watchlistActive) {
+    return finish({
+      ticker: symbol,
+      startedAt,
+      completedAt: now().toISOString(),
+      durable: false,
+      persistence: "not-written",
+      overall: "ALREADY_RUNNING",
+      marketDate: null,
+      previousDate: null,
+      priceUpdated: false,
+      categories: notRunCategories(null),
+      research: emptyResearch(),
+      notes: ["A watchlist Refresh & Research is already running. This instrument was not fetched again."],
+    });
+  }
+
+  if (!args.joined && (!symbol || inFlight.has(symbol))) {
     return finish({
       ticker: symbol,
       startedAt,
@@ -196,7 +231,7 @@ export async function runRefreshAndResearch(
     });
   }
 
-  inFlight.add(symbol);
+  if (!args.joined) inFlight.add(symbol);
   try {
     const previousDate = safePriceDate(readPriceDate, symbol);
     const instrument = getDb().select().from(instruments).where(eq(instruments.ticker, symbol)).get();
@@ -276,7 +311,7 @@ export async function runRefreshAndResearch(
       notes,
     });
   } finally {
-    inFlight.delete(symbol);
+    if (!args.joined) inFlight.delete(symbol);
   }
 }
 
