@@ -11,9 +11,10 @@ import {
   resolveSqliteFile,
   targetsLiveResearchDatabase,
 } from "@/db/snapshot-file";
+import { isCliEntrypoint } from "@/cli/entrypoint";
 import { loadFairValueForPage } from "@/fair-value/load-for-page";
 import { refreshFairValueUniverse } from "@/refresh/fair-value";
-import { dailyRefreshOptionsFromArgv, isRefreshCliProcess } from "@/refresh/cli";
+import { dailyRefreshOptionsFromArgv } from "@/refresh/cli";
 
 const PREV_PATH = process.env.BURSA_SQLITE_PATH;
 let tempDir = "";
@@ -116,8 +117,8 @@ describe("sqlite test isolation", () => {
 
   it("imports the refresh CLI without starting a refresh", () => {
     const cliPath = resolve("src/refresh/cli.ts");
-    expect(isRefreshCliProcess(cliPath, pathToFileURL(realpathSync(cliPath)).href)).toBe(true);
-    expect(isRefreshCliProcess()).toBe(false);
+    expect(isCliEntrypoint(pathToFileURL(realpathSync(cliPath)).href, cliPath)).toBe(true);
+    expect(isCliEntrypoint(import.meta.url)).toBe(false);
     expect(dailyRefreshOptionsFromArgv(["--skip-rescore"])).toEqual({ skipRescore: true });
     expect((globalThis as { sqlite?: unknown }).sqlite).toBeUndefined();
   });

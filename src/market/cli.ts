@@ -1,3 +1,4 @@
+import { isCliEntrypoint } from "@/cli/entrypoint";
 import { refuseSnapshotWrites } from "@/lib/data-mode";
 import { importYahooFundamentals } from "./ingest-fundamentals-yahoo";
 import {
@@ -43,7 +44,9 @@ async function main() {
   console.log(JSON.stringify(summary, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (isCliEntrypoint(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}

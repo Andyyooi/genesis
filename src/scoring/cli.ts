@@ -1,3 +1,4 @@
+import { isCliEntrypoint } from "@/cli/entrypoint";
 import { scoreTicker } from "./run-ticker";
 
 function main() {
@@ -38,4 +39,4 @@ function main() {
   );
 }
 
-main();
+if (isCliEntrypoint(import.meta.url)) main();

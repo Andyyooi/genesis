@@ -2,6 +2,7 @@ import { createReadStream, createWriteStream, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { createGzip } from "node:zlib";
+import { isCliEntrypoint } from "@/cli/entrypoint";
 import { getSqlite } from "@/db/client";
 
 async function main() {
@@ -15,7 +16,9 @@ async function main() {
   console.log(JSON.stringify({ kind: "snapshot", src, dest }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (isCliEntrypoint(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}

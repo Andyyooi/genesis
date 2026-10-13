@@ -11,6 +11,7 @@ import { existsSync, mkdtempSync, realpathSync, rmSync, statSync } from "node:fs
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import Database from "better-sqlite3";
+import { isCliEntrypoint } from "@/cli/entrypoint";
 import { loadScoringConfig, resolveResearchProfile } from "@/config/load-scoring";
 import { liveSqlitePath } from "@/db/snapshot-file";
 import { calculateFairValue } from "@/fair-value/orchestrate";
@@ -625,7 +626,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (isCliEntrypoint(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}
