@@ -7,6 +7,7 @@ import {
   ScoreWithConfidence,
 } from "@/components/research/data-confidence";
 import { DataLagBanner } from "@/components/research/data-lag-banner";
+import { RefreshResearchPanel } from "@/components/research/refresh-research-panel";
 import { ExportActions } from "@/components/research/export-actions";
 import { RecentEventsSection } from "@/components/research/recent-events";
 import { ValuationContextCard } from "@/components/research/valuation-context";
@@ -27,6 +28,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { loadScoreHistory } from "@/db/queries";
+import { isSnapshotReadOnly } from "@/lib/data-mode";
+import { loadOnDemandCategoryStatus } from "@/refresh/on-demand";
 import type { LineItems } from "@/ingest/types";
 import { formatDateSafe } from "@/lib/display";
 import { formatMetricValue } from "@/lib/format-metric";
@@ -212,6 +215,13 @@ export default async function ResearchPage({
           </div>
         </dl>
         <DataLagBanner dates={snapshotDates} />
+        <RefreshResearchPanel
+          ticker={instrument.ticker}
+          readOnly={isSnapshotReadOnly()}
+          marketPriceDate={lastTrade?.period ?? null}
+          researchRunAt={result.asOf}
+          storedCategories={loadOnDemandCategoryStatus(instrument.ticker)}
+        />
         {isReit ? (
           <p className="text-sm text-muted-foreground">
             REIT profile: distribution yield, book NAV, DPU growth, gearing and related REIT

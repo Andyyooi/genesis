@@ -68,6 +68,8 @@ export type YahooFundamentalsImportOptions = {
     asOf?: Date;
     recheckAfterDays?: number;
   };
+  /** Limit the fetch to one listed instrument. Unset keeps the full listed universe. */
+  onlyTicker?: string;
 };
 
 function defaultProvider(): FundamentalProvider {
@@ -118,11 +120,13 @@ export async function importYahooFundamentals(
   const options = isFundamentalProvider(providerOrOptions) ? maybeOptions : providerOrOptions;
   const startedAt = new Date().toISOString();
   const db = getDb();
+  const requested = options?.onlyTicker?.trim().toUpperCase();
   const listed = db
     .select()
     .from(instruments)
     .all()
-    .filter((row) => row.listingStatus !== "inactive");
+    .filter((row) => row.listingStatus !== "inactive")
+    .filter((row) => !requested || row.ticker.toUpperCase() === requested);
   const skipIfAny = options?.skipIfAnyFilings ?? false;
   const delay = options?.rateLimitMs ?? 200;
   const gate = options?.freshnessGate;

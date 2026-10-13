@@ -19,6 +19,8 @@ export type PriceIngestOptions = {
   listedOnly?: boolean;
   rateLimitMs?: number;
   checkpointPath?: string;
+  /** On-demand refresh sets this so one ticker does not rewrite every YAML instrument. */
+  skipUniverseSeed?: boolean;
 };
 
 type Checkpoint = { done: string[] };
@@ -48,7 +50,7 @@ export async function importYahooPrices(
       ? onlyTicker
       : { ...maybeOptions, onlyTicker: onlyTicker };
   const startedAt = new Date().toISOString();
-  seedUniverseFromYaml();
+  if (!options.skipUniverseSeed) seedUniverseFromYaml();
   const db = getDb();
   let rows = db.select().from(instruments).all();
   if (options.listedOnly) rows = rows.filter((row) => row.listingStatus !== "inactive");

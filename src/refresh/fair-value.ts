@@ -126,6 +126,8 @@ export function fairValueRefreshOutcome(report: FairValueRefreshReport): {
 
 export function refreshFairValueUniverse(args: {
   asOf: string;
+  /** Calculate one ticker. Peer rows still come from the stored universe. */
+  onlyTicker?: string;
   calculate?: (input: FairValueInput) => FairValueResult;
   assess?: (result: FairValueResult, annuals: readonly FairValueQualityAnnual[]) => FairValueQuality;
   persist?: typeof persistFairValueRun;
@@ -133,7 +135,12 @@ export function refreshFairValueUniverse(args: {
   const calculate = args.calculate ?? calculateFairValue;
   const assess = args.assess ?? assessFairValueQuality;
   const persist = args.persist ?? persistFairValueRun;
-  const { listed, snapshots, bars, peers } = loadStoredUniverse();
+  const loaded = loadStoredUniverse();
+  const requested = args.onlyTicker?.trim().toUpperCase();
+  const listed = requested
+    ? loaded.listed.filter((row) => row.ticker.toUpperCase() === requested)
+    : loaded.listed;
+  const { snapshots, bars, peers } = loaded;
   const report: FairValueRefreshReport = {
     attempted: listed.length,
     inserted: 0,
