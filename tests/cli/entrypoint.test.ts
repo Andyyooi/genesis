@@ -100,6 +100,7 @@ const cliFiles = [
   "src/research/cli.ts",
   "src/refresh/cli.ts",
   "scripts/pack-snapshot.ts",
+  "scripts/snapshot-report.ts",
   "scripts/validate-fair-value-one.ts",
 ] as const;
 
@@ -165,6 +166,7 @@ describe("CLI entrypoints", () => {
     await importModule("@/research/cli");
     await importModule("@/refresh/cli");
     await importModule(pathToFileURL(cliPath("scripts/pack-snapshot.ts")).href);
+    await importModule(pathToFileURL(cliPath("scripts/snapshot-report.ts")).href);
     await importModule(pathToFileURL(cliPath("scripts/validate-fair-value-one.ts")).href);
     await settle();
 
@@ -228,15 +230,17 @@ describe("CLI entrypoints", () => {
 
     await importModule(pathToFileURL(cliPath("scripts/pack-snapshot.ts")).href, "scripts/pack-snapshot.ts");
     await settle();
-    expect(jobs.getSqlite).toHaveBeenCalledTimes(1);
+    expect(jobs.getSqlite).not.toHaveBeenCalled();
     expect(jobs.getDb).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
 
     await importModule(
       pathToFileURL(cliPath("scripts/validate-fair-value-one.ts")).href,
       "scripts/validate-fair-value-one.ts",
     );
     await settle();
-    expect(jobs.getSqlite).toHaveBeenCalledTimes(1);
+    expect(jobs.getSqlite).not.toHaveBeenCalled();
     expect(jobs.getDb).not.toHaveBeenCalled();
     const errors = vi.mocked(console.error).mock.calls.map((call) => String(call[0]));
     expect(errors.some((line) => line.includes("--ticker"))).toBe(true);

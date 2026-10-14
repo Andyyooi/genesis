@@ -118,8 +118,15 @@ For a **test deploy**, the app ships a **read-only gzip snapshot** of the curren
 ### Refresh the snapshot (local only)
 
 ```bash
-# after ingest/scores on this machine
-npm run snapshot:pack
+# validate the local database without writing a snapshot
+npm run snapshot:pack -- --dry-run
+
+# write a candidate artifact. This does not update the website.
+npm run snapshot:pack -- --dest data/snapshots/candidate.db.gz
+npm run snapshot:report -- --artifact data/snapshots/candidate.db.gz --source data/sqlite/research.db
+
+# only when that report looks right, replace the committed snapshot and deploy
+npm run snapshot:pack -- --dest data/snapshots/research.db.gz --write-production
 git add data/snapshots/research.db.gz
 ```
 
@@ -129,7 +136,7 @@ Do not commit `.env*`, `data/sqlite/research.db`, or WAL/SHM.
 
 1. In [Vercel](https://vercel.com) create a project and import **andy-yooi/genesis** if GitHub/Origin is connected, **or** from a machine with `vercel login` run `npx vercel` in this repo (Origin is not GitHub; you may need a GitHub mirror or CLI deploy).
 2. Framework: Next.js. No env secrets required for the snapshot demo.
-3. Deploy. The site shows a banner: static snapshot, writes disabled.
+3. Deploy. The site shows a banner: it is serving a published snapshot, and Refresh & Research does not fetch prices there.
 4. `better-sqlite3` is a native addon. If the build fails on the serverless image, check the Vercel build log; local `npm run build` must succeed with Node 20+.
 
 Local default stays **writable** `data/sqlite/research.db` on `npm run dev`. To simulate Vercel: `BURSA_SNAPSHOT_READONLY=1 npm run dev` (needs the gzip present).

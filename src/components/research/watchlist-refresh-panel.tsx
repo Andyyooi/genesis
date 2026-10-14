@@ -74,8 +74,9 @@ export function WatchlistRefreshPanel({
         <div>
           <h2 className="text-lg font-semibold tracking-tight">Refresh & Research</h2>
           <p className="text-sm text-muted-foreground">
-            Refreshes the saved watchlist ({watchlistCount} names), one at a time. Yahoo prices are end-of-day bars, not a live quote.
-            This writes the local research database. It does not update the deployed website.
+            {readOnly
+              ? `This website is serving a published snapshot of ${watchlistCount} watched names. Refresh & Research stops before any price request because this host cannot save results.`
+              : `Refreshes the saved watchlist (${watchlistCount} names), one at a time. Yahoo prices are end-of-day bars, not a live quote. This writes the local research database. It does not update the deployed website. Pack a snapshot when you are ready to publish.`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -91,7 +92,7 @@ export function WatchlistRefreshPanel({
       </div>
       {readOnly ? (
         <p className="text-sm text-muted-foreground">
-          This deployed copy reads a frozen snapshot. A watchlist refresh here cannot save prices. A local refresh stays on that computer until a new snapshot is packed and deployed.
+          A local refresh stays on your computer until you pack a snapshot and deploy it.
         </p>
       ) : null}
       {progress ? (

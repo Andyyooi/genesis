@@ -68,7 +68,9 @@ export function RefreshResearchPanel({
         <div>
           <h2 className="text-lg font-semibold tracking-tight">Refresh & Research</h2>
           <p className="text-sm text-muted-foreground">
-            Fetches this instrument only. Yahoo prices are end-of-day bars, not a live quote.
+            {readOnly
+              ? "This website is serving a published snapshot. Refresh & Research stops before any price request because this host cannot save results."
+              : "Fetches this instrument only and writes the local research database. Yahoo prices are end-of-day bars, not a live quote. This does not update the deployed website."}
           </p>
         </div>
         <Button type="button" onClick={onRefresh} disabled={pending} aria-busy={pending}>
@@ -77,7 +79,7 @@ export function RefreshResearchPanel({
       </div>
       {readOnly ? (
         <p className="text-sm text-muted-foreground">
-          This deployed copy reads a frozen snapshot. A refresh here cannot save new prices.
+          Publishing the updated database is a separate snapshot pack and deploy on your computer.
         </p>
       ) : null}
       <dl className="grid gap-2 text-sm sm:grid-cols-3">

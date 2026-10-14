@@ -188,7 +188,7 @@ export async function runRefreshAndResearch(
       research: emptyResearch(),
       notes: [
         "This process uses a read-only SQLite snapshot. Refresh & Research did not fetch or save anything.",
-        "The deployed app cannot durably store a new price. Local SQLite is the writable path.",
+        "The deployed app cannot durably store a new price. Local SQLite is the writable path. Publishing it is a separate snapshot pack and deploy.",
         "Yahoo prices are end-of-day daily bars, not a live quote.",
       ],
     });

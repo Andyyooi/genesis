@@ -1,24 +1,27 @@
-import { createReadStream, createWriteStream, mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { pipeline } from "node:stream/promises";
-import { createGzip } from "node:zlib";
 import { isCliEntrypoint } from "@/cli/entrypoint";
-import { getSqlite } from "@/db/client";
+import { liveSqlitePath } from "@/db/snapshot-file";
+import { parseSnapshotArgs } from "@/snapshot/args";
+import { formatSnapshotReport, packSnapshot, SnapshotRejected } from "@/snapshot/publish";
 
 async function main() {
-  const sqlite = getSqlite();
-  sqlite.pragma("wal_checkpoint(TRUNCATE)");
-  const src = join(process.cwd(), "data", "sqlite", "research.db");
-  const destDir = join(process.cwd(), "data", "snapshots");
-  mkdirSync(destDir, { recursive: true });
-  const dest = join(destDir, "research.db.gz");
-  await pipeline(createReadStream(src), createGzip({ level: 9 }), createWriteStream(dest));
-  console.log(JSON.stringify({ kind: "snapshot", src, dest }, null, 2));
+  const args = parseSnapshotArgs(process.argv.slice(2));
+  const report = await packSnapshot({
+    sourcePath: args.source ?? liveSqlitePath(),
+    destPath: args.dest,
+    dryRun: args.dryRun,
+    writeProduction: args.writeProduction,
+    currentSnapshotPath: args.current,
+  });
+  console.log(formatSnapshotReport(report));
 }
 
 if (isCliEntrypoint(import.meta.url)) {
   main().catch((error) => {
-    console.error(error);
+    if (error instanceof SnapshotRejected) {
+      console.error(formatSnapshotReport(error.report));
+    } else {
+      console.error(error instanceof Error ? error.message : error);
+    }
     process.exitCode = 1;
   });
 }
