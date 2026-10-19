@@ -125,6 +125,9 @@ npm run snapshot:pack -- --dry-run
 npm run snapshot:pack -- --dest data/snapshots/candidate.db.gz
 npm run snapshot:report -- --artifact data/snapshots/candidate.db.gz --source data/sqlite/research.db
 
+# open that candidate the same way Vercel opens a snapshot (still local, still not published)
+BURSA_SNAPSHOT_READONLY=1 BURSA_SNAPSHOT_GZ_PATH=data/snapshots/candidate.db.gz npm run dev
+
 # only when that report looks right, replace the committed snapshot and deploy
 npm run snapshot:pack -- --dest data/snapshots/research.db.gz --write-production
 git add data/snapshots/research.db.gz

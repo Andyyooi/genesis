@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+  copyFileSync,
   createReadStream,
   createWriteStream,
   existsSync,
@@ -18,6 +19,7 @@ import { dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { createGzip, gunzipSync } from "node:zlib";
 import Database from "better-sqlite3";
+import { migrateSqliteSchema } from "@/db/client";
 import { snapshotGzPath } from "@/db/snapshot-file";
 
 const REQUIRED_TABLES = [
@@ -49,12 +51,18 @@ export type SnapshotReport = {
   integrity: "ok" | "failed" | "not-read";
   instrumentCount: number | null;
   watchlistCount: number | null;
+  /** Watchlist size after the existing schema migration that read-only hosts apply on /tmp. */
+  effectiveWatchlistCount: number | null;
+  financialPeriodCount: number | null;
   priceBarCount: number | null;
   latestPriceDate: string | null;
+  latestFinancialPeriod: string | null;
   scoreRunCount: number | null;
   fairValueRunCount: number | null;
   unsupportedFairValueCount: number | null;
   noValueFairValueCount: number | null;
+  /** True when a disposable copy of the packaged image accepts migrateSqliteSchema. */
+  loaderCompatible: boolean | null;
   artifactBytes: number | null;
   differsFromCurrent: boolean | null;
   currentSnapshotPath: string | null;
@@ -87,14 +95,22 @@ type Census = {
   integrityDetail: string;
   instrumentCount: number;
   watchlistCount: number;
+  effectiveWatchlistCount: number;
   instrumentSet: string;
   watchlistSet: string;
+  effectiveWatchlistSet: string;
+  financialPeriodCount: number;
   priceBarCount: number;
   latestPriceDate: string | null;
+  latestFinancialPeriod: string | null;
   scoreRunCount: number;
   fairValueRunCount: number;
   unsupportedFairValueCount: number | null;
   noValueFairValueCount: number | null;
+  financialFingerprint: string;
+  priceFingerprint: string;
+  scoreFingerprint: string;
+  fairValueFingerprint: string;
   warnings: string[];
   blockers: string[];
 };
@@ -114,7 +130,8 @@ export function sameSnapshotPath(left: string, right: string) {
 }
 
 export function formatSnapshotReport(report: SnapshotReport) {
-  const line = (label: string, value: string | number | null) => `${label}: ${value ?? "unavailable"}`;
+  const line = (label: string, value: string | number | null | boolean) =>
+    `${label}: ${value == null ? "unavailable" : String(value)}`;
   const lines = [
     "Snapshot report",
     line("Stage", report.stage),
@@ -124,11 +141,15 @@ export function formatSnapshotReport(report: SnapshotReport) {
     line("Candidate artifact", report.artifactPath),
     line("Source can be packaged", report.sourcePackable ? "yes" : "no"),
     line("Artifact passed validation", report.artifactValidated ? "yes" : "no"),
+    line("Loader-compatible", report.loaderCompatible == null ? null : report.loaderCompatible ? "yes" : "no"),
     line("Integrity", report.integrity),
     line("Instruments", report.instrumentCount),
-    line("Watchlist", report.watchlistCount),
+    line("Watchlist (stored)", report.watchlistCount),
+    line("Watchlist (after schema open)", report.effectiveWatchlistCount),
+    line("Financial periods", report.financialPeriodCount),
     line("Price bars", report.priceBarCount),
     line("Latest stored price date", report.latestPriceDate),
+    line("Latest financial period", report.latestFinancialPeriod),
     line("Score runs", report.scoreRunCount),
     line("Fair Value runs", report.fairValueRunCount),
     line("Unsupported Fair Value rows", report.unsupportedFairValueCount),
@@ -143,7 +164,7 @@ export function formatSnapshotReport(report: SnapshotReport) {
   lines.push(report.warnings.length ? `Warnings: ${report.warnings.join(" ")}` : "Warnings: none");
   lines.push(report.blockers.length ? `Blockers: ${report.blockers.join(" ")}` : "Blockers: none");
   lines.push(
-    "Counts, ticker sets, and the latest price date do not prove every row is identical. A read-only open can refresh the source shared-memory file without writing the database or its WAL.",
+    "Fingerprints cover instrument tickers, watchlist tickers, financial-period keys, price bars (instrument, date, close, source), score runs, and Fair Value rows. They catch omissions and value changes in those fields. They do not prove every text column or related table is identical. Packaging does not run schema migration on the source; read-only hosts migrate a /tmp copy when the app opens the snapshot. A read-only open can refresh the source shared-memory file without writing the database or its WAL.",
   );
   return lines.join("\n");
 }
@@ -184,22 +205,24 @@ export async function packSnapshot(options: PackSnapshotOptions): Promise<Snapsh
   }
 
   const source = readCensus(sourcePath);
-  const sourceReport = reportFromCensus({
-    stage: "source-checked",
-    sourcePath,
-    artifactPath: options.destPath ? resolve(options.destPath) : null,
-    census: source,
-    artifactValidated: false,
-    artifactBytes: null,
-    differsFromCurrent: null,
-    currentSnapshotPath: currentPath,
-  });
-  if (!sourceReport.sourcePackable) throw new SnapshotRejected(sourceReport);
-  if (options.dryRun || !options.destPath) return sourceReport;
+  if (source.blockers.length) {
+    throw new SnapshotRejected(
+      reportFromCensus({
+        stage: "source-checked",
+        sourcePath,
+        artifactPath: options.destPath ? resolve(options.destPath) : null,
+        census: source,
+        artifactValidated: false,
+        artifactBytes: null,
+        differsFromCurrent: null,
+        currentSnapshotPath: currentPath,
+        loaderCompatible: null,
+      }),
+    );
+  }
 
-  const destPath = resolve(options.destPath);
   const work = mkdtempSync(join(tmpdir(), "genesis-snapshot-"));
-  const partial = `${destPath}.partial`;
+  const partial = options.destPath ? `${resolve(options.destPath)}.partial` : null;
   try {
     const imagePath = join(work, "image.db");
     await backupReadOnly(sourcePath, imagePath);
@@ -210,20 +233,56 @@ export async function packSnapshot(options: PackSnapshotOptions): Promise<Snapsh
         reportFromCensus({
           stage: "source-checked",
           sourcePath,
-          artifactPath: destPath,
+          artifactPath: options.destPath ? resolve(options.destPath) : null,
           census: image,
           artifactValidated: false,
           artifactBytes: null,
           differsFromCurrent: null,
           currentSnapshotPath: currentPath,
           extraBlockers: drift,
+          loaderCompatible: false,
         }),
       );
     }
+
+    const loader = verifyLoaderCompatibility(imagePath);
+    const censusForReport = applyLoaderWatchlist(image, loader);
+    if (!loader.ok) {
+      throw new SnapshotRejected(
+        reportFromCensus({
+          stage: "source-checked",
+          sourcePath,
+          artifactPath: options.destPath ? resolve(options.destPath) : null,
+          census: censusForReport,
+          artifactValidated: false,
+          artifactBytes: null,
+          differsFromCurrent: null,
+          currentSnapshotPath: currentPath,
+          extraBlockers: [loader.error ?? "Application loader cannot open this snapshot"],
+          loaderCompatible: false,
+        }),
+      );
+    }
+
+    if (options.dryRun || !options.destPath) {
+      return reportFromCensus({
+        stage: "source-checked",
+        sourcePath,
+        artifactPath: options.destPath ? resolve(options.destPath) : null,
+        census: censusForReport,
+        artifactValidated: false,
+        artifactBytes: null,
+        differsFromCurrent: null,
+        currentSnapshotPath: currentPath,
+        loaderCompatible: true,
+      });
+    }
+
+    const destPath = resolve(options.destPath);
     mkdirSync(dirname(destPath), { recursive: true });
-    await gzipFile(imagePath, partial);
+    await gzipFile(imagePath, partial!);
     const roundTripPath = join(work, "roundtrip.db");
-    writeFileSync(roundTripPath, gunzipSync(readFileSync(partial)));
+    writeFileSync(roundTripPath, gunzipSync(readFileSync(partial!)));
     const roundTrip = readCensus(roundTripPath);
     const roundTripDrift = censusDrift("compressed artifact", source, roundTrip);
     if (roundTrip.blockers.length || roundTripDrift.length) {
@@ -234,33 +293,52 @@ export async function packSnapshot(options: PackSnapshotOptions): Promise<Snapsh
           artifactPath: destPath,
           census: roundTrip,
           artifactValidated: false,
-          artifactBytes: existsSync(partial) ? statSync(partial).size : null,
+          artifactBytes: existsSync(partial!) ? statSync(partial!).size : null,
           differsFromCurrent: null,
           currentSnapshotPath: currentPath,
           extraBlockers: roundTripDrift,
+          loaderCompatible: true,
         }),
       );
     }
-    renameSync(partial, destPath);
-    const artifactBytes = statSync(destPath).size;
+    const roundTripLoader = verifyLoaderCompatibility(roundTripPath);
+    const roundTripReport = applyLoaderWatchlist(roundTrip, roundTripLoader);
+    if (!roundTripLoader.ok) {
+      throw new SnapshotRejected(
+        reportFromCensus({
+          stage: "source-checked",
+          sourcePath,
+          artifactPath: destPath,
+          census: roundTripReport,
+          artifactValidated: false,
+          artifactBytes: existsSync(partial!) ? statSync(partial!).size : null,
+          differsFromCurrent: null,
+          currentSnapshotPath: currentPath,
+          extraBlockers: [roundTripLoader.error ?? "Compressed artifact failed loader migration"],
+          loaderCompatible: false,
+        }),
+      );
+    }
+    renameSync(partial!, destPath);
     return reportFromCensus({
       stage: "packaged",
       sourcePath,
       artifactPath: destPath,
-      census: roundTrip,
+      census: roundTripReport,
       artifactValidated: true,
-      artifactBytes,
+      artifactBytes: statSync(destPath).size,
       differsFromCurrent: differsFromSnapshot(destPath, currentPath),
       currentSnapshotPath: currentPath,
+      loaderCompatible: true,
     });
   } catch (error) {
-    if (existsSync(partial)) unlinkSync(partial);
+    if (partial && existsSync(partial)) unlinkSync(partial);
     if (error instanceof SnapshotRejected) throw error;
     throw new SnapshotRejected(
       emptyReport({
         stage: "refused",
         sourcePath,
-        artifactPath: destPath,
+        artifactPath: options.destPath ? resolve(options.destPath) : null,
         currentSnapshotPath: currentPath,
         blockers: [error instanceof Error ? error.message : "Snapshot packaging failed"],
       }),
@@ -300,16 +378,23 @@ export function validateSnapshotArtifact(options: {
     }
     const census = readCensus(databasePath);
     const extra = sourcePath ? censusDrift("candidate artifact", readCensus(sourcePath), census) : [];
+    const loader = verifyLoaderCompatibility(databasePath);
+    const withLoader = applyLoaderWatchlist(census, loader);
+    const blockers = [
+      ...extra,
+      ...(loader.ok ? [] : [loader.error ?? "Application loader cannot open this snapshot"]),
+    ];
     const report = reportFromCensus({
       stage: "validated",
       sourcePath,
       artifactPath,
-      census,
-      artifactValidated: census.blockers.length === 0 && extra.length === 0,
+      census: withLoader,
+      artifactValidated: census.blockers.length === 0 && blockers.length === 0,
       artifactBytes: statSync(artifactPath).size,
       differsFromCurrent: differsFromSnapshot(artifactPath, currentPath),
       currentSnapshotPath: currentPath,
-      extraBlockers: extra,
+      extraBlockers: blockers,
+      loaderCompatible: loader.ok,
     });
     if (!report.artifactValidated) throw new SnapshotRejected(report);
     return report;
@@ -329,6 +414,54 @@ async function backupReadOnly(sourcePath: string, imagePath: string) {
 
 async function gzipFile(sourcePath: string, destPath: string) {
   await pipeline(createReadStream(sourcePath), createGzip({ level: 9 }), createWriteStream(destPath));
+}
+
+function verifyLoaderCompatibility(imagePath: string): {
+  ok: boolean;
+  error: string | null;
+  effectiveWatchlistCount: number | null;
+  effectiveWatchlistSet: string | null;
+} {
+  const migratePath = `${imagePath}.migrate-check`;
+  try {
+    copyFileSync(imagePath, migratePath);
+    const migrator = new Database(migratePath);
+    try {
+      migrateSqliteSchema(migrator);
+      const rows = migrator
+        .prepare("SELECT ticker FROM instruments WHERE watchlist = 1 ORDER BY ticker")
+        .all() as { ticker: string }[];
+      return {
+        ok: true,
+        error: null,
+        effectiveWatchlistCount: rows.length,
+        effectiveWatchlistSet: digest(rows.map((row) => row.ticker)),
+      };
+    } finally {
+      migrator.close();
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: `Application loader cannot migrate this snapshot${
+        error instanceof Error ? `: ${error.message}` : ""
+      }`,
+      effectiveWatchlistCount: null,
+      effectiveWatchlistSet: null,
+    };
+  } finally {
+    if (existsSync(migratePath)) unlinkSync(migratePath);
+  }
+}
+
+function applyLoaderWatchlist(census: Census, loader: ReturnType<typeof verifyLoaderCompatibility>): Census {
+  if (!loader.ok || loader.effectiveWatchlistCount == null || !loader.effectiveWatchlistSet) return census;
+  return {
+    ...census,
+    effectiveWatchlistCount: loader.effectiveWatchlistCount,
+    effectiveWatchlistSet: loader.effectiveWatchlistSet,
+    warnings: census.warnings,
+  };
 }
 
 function readCensus(filePath: string): Census {
@@ -381,8 +514,15 @@ function readCensus(filePath: string): Census {
     const watchlistRows = sqlite
       .prepare("SELECT ticker FROM instruments WHERE watchlist = 1 ORDER BY ticker")
       .all() as { ticker: string }[];
-    const priceBarCount = count(sqlite, "price_bars");
-    const latestPriceDate = latestUsablePriceDate(sqlite);
+    const instrumentColumns = new Set(
+      (sqlite.pragma("table_info(instruments)") as { name: string }[]).map((column) => column.name),
+    );
+    const effectiveWatchlistRows = predictedEffectiveWatchlist(sqlite, instrumentColumns.has("universe_source"));
+    if (effectiveWatchlistRows.length !== watchlistRows.length) {
+      warnings.push(
+        `${effectiveWatchlistRows.length - watchlistRows.length} additional name(s) become watched when the application opens this snapshot. Stored watchlist ${watchlistRows.length}; after schema open ${effectiveWatchlistRows.length}.`,
+      );
+    }
     const fairValueColumns = new Set(
       (sqlite.pragma("table_info(fair_value_runs)") as { name: string }[]).map((column) => column.name),
     );
@@ -406,44 +546,92 @@ function readCensus(filePath: string): Census {
     } else {
       warnings.push("Fair Value quality_status is unavailable, so no-value rows were not counted.");
     }
-    const instrumentColumns = new Set(
-      (sqlite.pragma("table_info(instruments)") as { name: string }[]).map((column) => column.name),
-    );
-    if (instrumentColumns.has("universe_source")) {
-      const unmarked = numbered(
-        sqlite
-          .prepare("SELECT COUNT(*) AS n FROM instruments WHERE watchlist = 0 AND universe_source IS NULL")
-          .get() as { n: number },
-      );
-      if (unmarked > 0) {
-        warnings.push(
-          `${unmarked} instruments are unwatched and have no universe source. Opening the snapshot applies the existing schema migration, which marks those rows watched. The watchlist count above is the stored value before that migration.`,
-        );
-      }
-    } else if (watchlistRows.length < instrumentRows.length) {
-      warnings.push(
-        "instruments.universe_source is missing. Opening the snapshot adds it as null, and the existing schema migration then marks unwatched rows as watched. The watchlist count above is the stored value before that migration.",
-      );
-    }
+    const financialRows = sqlite
+      .prepare(
+        "SELECT instrument_id AS instrumentId, period_end AS periodEnd, statement_type AS statementType FROM financial_periods ORDER BY instrument_id, period_end, statement_type",
+      )
+      .all() as { instrumentId: number; periodEnd: string; statementType: string }[];
+    const priceRows = sqlite
+      .prepare(
+        "SELECT instrument_id AS instrumentId, bar_date AS barDate, close AS close, source AS source FROM price_bars ORDER BY instrument_id, bar_date, source",
+      )
+      .all() as { instrumentId: number; barDate: string; close: number | null; source: string }[];
+    const scoreRows = sqlite
+      .prepare("SELECT instrument_id AS instrumentId, research_score AS researchScore FROM score_runs ORDER BY instrument_id, research_score")
+      .all() as { instrumentId: number; researchScore: number | null }[];
+    const fairValueRows = sqlite
+      .prepare(
+        `SELECT instrument_id AS instrumentId, ticker AS ticker, model_version AS modelVersion,
+                fair_value_base AS fairValueBase, ${
+                  fairValueColumns.has("quality_status") ? "quality_status" : "NULL"
+                } AS qualityStatus
+         FROM fair_value_runs
+         ORDER BY instrument_id, ticker, model_version, fair_value_base`,
+      )
+      .all() as {
+      instrumentId: number;
+      ticker: string;
+      modelVersion: string;
+      fairValueBase: number | null;
+      qualityStatus: string | null;
+    }[];
     return {
       integrity,
       integrityDetail,
       instrumentCount: instrumentRows.length,
       watchlistCount: watchlistRows.length,
+      effectiveWatchlistCount: effectiveWatchlistRows.length,
       instrumentSet: digest(instrumentRows.map((row) => row.ticker)),
       watchlistSet: digest(watchlistRows.map((row) => row.ticker)),
-      priceBarCount,
-      latestPriceDate,
-      scoreRunCount: count(sqlite, "score_runs"),
-      fairValueRunCount: count(sqlite, "fair_value_runs"),
+      effectiveWatchlistSet: digest(effectiveWatchlistRows),
+      financialPeriodCount: financialRows.length,
+      priceBarCount: priceRows.length,
+      latestPriceDate: latestUsablePriceDate(sqlite),
+      latestFinancialPeriod: latestUsableFinancialPeriod(financialRows.map((row) => row.periodEnd)),
+      scoreRunCount: scoreRows.length,
+      fairValueRunCount: fairValueRows.length,
       unsupportedFairValueCount,
       noValueFairValueCount,
+      financialFingerprint: digest(
+        financialRows.map((row) => `${row.instrumentId}|${row.periodEnd}|${row.statementType}`),
+      ),
+      priceFingerprint: digest(
+        priceRows.map(
+          (row) => `${row.instrumentId}|${row.barDate}|${formatNumber(row.close)}|${row.source}`,
+        ),
+      ),
+      scoreFingerprint: digest(
+        scoreRows.map((row) => `${row.instrumentId}|${formatNumber(row.researchScore)}`),
+      ),
+      fairValueFingerprint: digest(
+        fairValueRows.map(
+          (row) =>
+            `${row.instrumentId}|${row.ticker}|${row.modelVersion}|${formatNumber(row.fairValueBase)}|${row.qualityStatus ?? ""}`,
+        ),
+      ),
       warnings,
       blockers,
     };
   } finally {
     sqlite.close();
   }
+}
+
+function predictedEffectiveWatchlist(sqlite: Database.Database, hasUniverseSource: boolean) {
+  if (!hasUniverseSource) {
+    return (sqlite.prepare("SELECT ticker FROM instruments ORDER BY ticker").all() as { ticker: string }[]).map(
+      (row) => row.ticker,
+    );
+  }
+  return (
+    sqlite
+      .prepare(
+        `SELECT ticker FROM instruments
+         WHERE watchlist = 1 OR watchlist IS NULL OR (watchlist = 0 AND universe_source IS NULL)
+         ORDER BY ticker`,
+      )
+      .all() as { ticker: string }[]
+  ).map((row) => row.ticker);
 }
 
 function latestUsablePriceDate(sqlite: Database.Database) {
@@ -457,6 +645,10 @@ function latestUsablePriceDate(sqlite: Database.Database) {
     )
     .all() as { barDate: string }[];
   return rows.map((row) => row.barDate).find(isRealCalendarDate) ?? null;
+}
+
+function latestUsableFinancialPeriod(values: string[]) {
+  return [...values].filter(isRealCalendarDate).sort().at(-1) ?? null;
 }
 
 function isRealCalendarDate(value: string) {
@@ -478,13 +670,23 @@ function censusDrift(label: string, source: Census, copy: Census) {
   if (copy.watchlistCount !== source.watchlistCount || copy.watchlistSet !== source.watchlistSet) {
     problems.push(`${label} does not contain the same watchlist as the source`);
   }
-  if (copy.priceBarCount !== source.priceBarCount) problems.push(`${label} price-bar count differs from the source`);
+  if (copy.financialPeriodCount !== source.financialPeriodCount || copy.financialFingerprint !== source.financialFingerprint) {
+    problems.push(`${label} financial-period fingerprint differs from the source`);
+  }
+  if (copy.priceBarCount !== source.priceBarCount || copy.priceFingerprint !== source.priceFingerprint) {
+    problems.push(`${label} price-bar fingerprint differs from the source`);
+  }
   if (copy.latestPriceDate !== source.latestPriceDate) {
     problems.push(`${label} latest price date differs from the source`);
   }
-  if (copy.scoreRunCount !== source.scoreRunCount) problems.push(`${label} score-run count differs from the source`);
-  if (copy.fairValueRunCount !== source.fairValueRunCount) {
-    problems.push(`${label} Fair Value row count differs from the source`);
+  if (copy.latestFinancialPeriod !== source.latestFinancialPeriod) {
+    problems.push(`${label} latest financial period differs from the source`);
+  }
+  if (copy.scoreRunCount !== source.scoreRunCount || copy.scoreFingerprint !== source.scoreFingerprint) {
+    problems.push(`${label} score-run fingerprint differs from the source`);
+  }
+  if (copy.fairValueRunCount !== source.fairValueRunCount || copy.fairValueFingerprint !== source.fairValueFingerprint) {
+    problems.push(`${label} Fair Value fingerprint differs from the source`);
   }
   return problems;
 }
@@ -505,6 +707,7 @@ function reportFromCensus(args: {
   differsFromCurrent: boolean | null;
   currentSnapshotPath: string | null;
   extraBlockers?: string[];
+  loaderCompatible: boolean | null;
 }): SnapshotReport {
   const blockers = [...args.census.blockers, ...(args.extraBlockers ?? [])];
   return {
@@ -512,17 +715,21 @@ function reportFromCensus(args: {
     deployed: false,
     sourcePath: args.sourcePath,
     artifactPath: args.artifactPath,
-    sourcePackable: args.census.blockers.length === 0,
+    sourcePackable: args.census.blockers.length === 0 && args.loaderCompatible !== false,
     artifactValidated: args.artifactValidated && blockers.length === 0,
     integrity: args.census.integrity,
     instrumentCount: args.census.instrumentCount,
     watchlistCount: args.census.watchlistCount,
+    effectiveWatchlistCount: args.census.effectiveWatchlistCount,
+    financialPeriodCount: args.census.financialPeriodCount,
     priceBarCount: args.census.priceBarCount,
     latestPriceDate: args.census.latestPriceDate,
+    latestFinancialPeriod: args.census.latestFinancialPeriod,
     scoreRunCount: args.census.scoreRunCount,
     fairValueRunCount: args.census.fairValueRunCount,
     unsupportedFairValueCount: args.census.unsupportedFairValueCount,
     noValueFairValueCount: args.census.noValueFairValueCount,
+    loaderCompatible: args.loaderCompatible,
     artifactBytes: args.artifactBytes,
     differsFromCurrent: args.differsFromCurrent,
     currentSnapshotPath: args.currentSnapshotPath,
@@ -548,12 +755,16 @@ function emptyReport(args: {
     integrity: "not-read",
     instrumentCount: null,
     watchlistCount: null,
+    effectiveWatchlistCount: null,
+    financialPeriodCount: null,
     priceBarCount: null,
     latestPriceDate: null,
+    latestFinancialPeriod: null,
     scoreRunCount: null,
     fairValueRunCount: null,
     unsupportedFairValueCount: null,
     noValueFairValueCount: null,
+    loaderCompatible: null,
     artifactBytes: null,
     differsFromCurrent: null,
     currentSnapshotPath: args.currentSnapshotPath ?? null,
@@ -568,25 +779,34 @@ function failedCensus(blockers: string[]): Census {
     integrityDetail: blockers[0] ?? "failed",
     instrumentCount: 0,
     watchlistCount: 0,
+    effectiveWatchlistCount: 0,
     instrumentSet: "",
     watchlistSet: "",
+    effectiveWatchlistSet: "",
+    financialPeriodCount: 0,
     priceBarCount: 0,
     latestPriceDate: null,
+    latestFinancialPeriod: null,
     scoreRunCount: 0,
     fairValueRunCount: 0,
     unsupportedFairValueCount: null,
     noValueFairValueCount: null,
+    financialFingerprint: "",
+    priceFingerprint: "",
+    scoreFingerprint: "",
+    fairValueFingerprint: "",
     warnings: [],
     blockers,
   };
 }
 
-function count(sqlite: Database.Database, table: string) {
-  return numbered(sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number });
-}
-
 function numbered(row: { n: number } | undefined) {
   return row?.n ?? 0;
+}
+
+function formatNumber(value: number | null) {
+  if (value == null || !Number.isFinite(value)) return "";
+  return Number(value).toFixed(6);
 }
 
 function digest(values: string[]) {
