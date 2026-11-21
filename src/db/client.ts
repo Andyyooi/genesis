@@ -196,6 +196,7 @@ function ensureSchema(sqlite: Database.Database) {
   `);
 
   addColumn(sqlite, "instruments", "watchlist", "INTEGER NOT NULL DEFAULT 0");
+  addColumn(sqlite, "instruments", "warning_flag", "INTEGER NOT NULL DEFAULT 0");
   addColumn(sqlite, "instruments", "listing_status", "TEXT NOT NULL DEFAULT 'listed'");
   addColumn(sqlite, "instruments", "universe_source", "TEXT");
   addColumn(sqlite, "instruments", "universe_synced_at", "TEXT");

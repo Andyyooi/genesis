@@ -2,15 +2,19 @@ import { countDistinct, desc, eq } from "drizzle-orm";
 import { join } from "node:path";
 import { importFundamentalsCsv } from "@/ingest/import-fundamentals";
 import { importYahooPrices } from "@/ingest/import-prices";
-import { getDb } from "@/db/client";
+import { getDb, getSqlite } from "@/db/client";
 import { financialPeriods, instruments, marketScanRows, marketScanRuns, priceBars } from "@/db/schema";
 import { importYahooFundamentals } from "@/market/ingest-fundamentals-yahoo";
 import { refreshUniverse } from "@/market/refresh-universe";
 import { latestAnnualPeriod } from "@/lib/snapshot-dates";
 import { liveCoverage } from "@/opportunities/lists";
 import { scoreTicker } from "@/scoring/run-ticker";
+import { persistUniverseScores } from "@/scoring/universe";
+import { clearOpportunityScanCache } from "@/opportunities/scan";
 
 export type MarketScanRowPayload = {
+  eligible: boolean;
+  exclusionReasons: string[];
   ticker: string;
   name: string;
   instrumentType: string;
@@ -131,6 +135,21 @@ function persistListedScores(meta: {
   fundamentalsCsv: { upserted: number; rejected: number };
   fundamentalsYahoo: { upserted: number; skippedHadFilings: number; failed: number };
 }): MarketScanSummary {
+  const summary = getSqlite().transaction(() => {
+    persistUniverseScores(meta.asOf);
+    return publishListedScores(meta);
+  })();
+  clearOpportunityScanCache();
+  return summary;
+}
+
+function publishListedScores(meta: {
+  asOf: string;
+  universe: { fetched: number; upserted: number; inactivated: number };
+  prices: { succeeded: number; failed: number; barsUpserted: number };
+  fundamentalsCsv: { upserted: number; rejected: number };
+  fundamentalsYahoo: { upserted: number; skippedHadFilings: number; failed: number };
+}): MarketScanSummary {
   const db = getDb();
   const listed = db
     .select()
@@ -166,6 +185,8 @@ function persistListedScores(meta: {
     const confidence = scoredRow.result.dataConfidence;
     const dataCoverage = scoredRow.result.dataCoverage;
     const payload: MarketScanRowPayload = {
+      eligible: scoredRow.result.eligibility?.eligible ?? false,
+      exclusionReasons: scoredRow.result.eligibility?.reasons ?? ["Eligibility not verified"],
       ticker: instrument.ticker,
       name: instrument.name,
       instrumentType: scoredRow.instrumentType,
@@ -203,7 +224,7 @@ function persistListedScores(meta: {
         confidence: payload.confidence,
         freshness: payload.freshness,
       });
-    } else {
+    } else if (payload.eligible) {
       highestResearch.push({
         ticker: instrument.ticker,
         score: payload.researchScore,

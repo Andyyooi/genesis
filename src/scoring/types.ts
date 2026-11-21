@@ -2,6 +2,8 @@ import type { ResearchProfile } from "@/research/profiles";
 import type { ValuationContextResult } from "@/scoring/valuation-context";
 
 export type FactorEvidence = {
+  explanation?: string;
+  percentile?: import("@/scoring/rank").PercentileEvidence;
   id: string;
   label: string;
   category: string;
@@ -67,6 +69,8 @@ export type DataConfidence = {
 };
 
 export type ScoreResult = {
+  methodology?: "cross-sectional-v2";
+  eligibility?: import("@/scoring/eligibility").Eligibility;
   asOf: string;
   configHash: string;
   profile: "default" | "reit" | "bank";

@@ -19,6 +19,7 @@ export const instruments = sqliteTable("instruments", {
   researchProfile: text("research_profile"),
   /** PN17/GN3-style status: warning in the UI, never a silent score deduction. */
   pn17: integer("pn17", { mode: "boolean" }).notNull().default(false),
+  warningFlag: integer("warning_flag", { mode: "boolean" }).notNull().default(false),
   currency: text("currency").notNull().default("MYR"),
   shariahCompliant: integer("shariah_compliant", { mode: "boolean" }),
   watchlist: integer("watchlist", { mode: "boolean" }).notNull().default(false),
@@ -321,4 +322,3 @@ export const refreshRuns = sqliteTable("refresh_runs", {
   errorSummary: text("error_summary"),
   metadataJson: text("metadata_json"),
 });
-

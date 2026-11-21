@@ -1,6 +1,7 @@
 import type { LineItems } from "@/ingest/types";
 import { computeMetrics } from "@/metrics/compute";
 import type { EventSnapshot, PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
+import type { ScoringConfig } from "@/config/load-scoring";
 
 type PeriodRow = {
   actualOrEstimate?: string;
@@ -58,6 +59,7 @@ export function snapshotsToMetrics(args: {
   bars: BarRow[];
   events?: EventSnapshot[];
   asOf?: string;
+  config?: ScoringConfig;
 }) {
   const periods: StatementSnapshot[] = args.periods.map((row) => {
     let items = emptyItems();
@@ -103,5 +105,6 @@ export function snapshotsToMetrics(args: {
     bars,
     events,
     asOf,
+    config: args.config,
   });
 }

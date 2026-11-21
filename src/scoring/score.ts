@@ -1,179 +1,72 @@
-import {
-  CATEGORY_KEYS,
-  getFactorProfile,
-  profileName,
-  resolveResearchProfile,
-  type CategoryKey,
-  type ScoringConfig,
-} from "@/config/load-scoring";
+import { CATEGORY_KEYS, getFactorProfile, profileName, resolveResearchProfile, type ScoringConfig } from "@/config/load-scoring";
+import type { MetricValue, PriceBarSnapshot } from "@/metrics/types";
 import type { ResearchProfile } from "@/research/profiles";
-import type { MetricValue } from "@/metrics/types";
 import { assessDataQuality } from "@/scoring/confidence";
 import { evaluateConcerns } from "@/scoring/concerns";
+import { assessEligibility } from "@/scoring/eligibility";
 import { hashScoringConfig } from "@/scoring/hash";
 import { scoreFactor } from "@/scoring/map-factor";
+import { rankCrossSection, type PercentileEvidence } from "@/scoring/rank";
 import type { CategoryScore, ScoreResult } from "@/scoring/types";
 import { emptyValuationContext } from "@/scoring/valuation-context";
 
-function categoryAverage(factors: { score: number | null; weight: number; available: boolean }[]): {
-  score: number | null;
-  coverage: number;
-  availableWeight: number;
-  totalWeight: number;
-} {
-  const totalWeight = factors.reduce((sum, f) => sum + f.weight, 0);
-  const available = factors.filter(
-    (f) => f.available && f.score !== null && Number.isFinite(f.score),
-  );
-  const availableWeight = available.reduce((sum, f) => sum + f.weight, 0);
-  const coverage = totalWeight === 0 ? 0 : availableWeight / totalWeight;
-  if (availableWeight === 0) {
-    return { score: null, coverage, availableWeight, totalWeight };
-  }
-  const score = available.reduce((sum, f) => sum + (f.score as number) * f.weight, 0) / availableWeight;
+export type ScoreInput = {
+  config: ScoringConfig; metrics: MetricValue[]; instrumentType: "COMMON_STOCK" | "REIT";
+  ticker?: string | null; sector?: string | null; industry?: string | null; researchProfile?: ResearchProfile | null;
+  pn17?: boolean; warning?: boolean; asOf?: string; bars?: PriceBarSnapshot[];
+  latestAnnual?: { periodEnd: string; availableAt: string | null } | null;
+};
+
+export function scoreFromMetrics(args: ScoreInput, ranks: Map<string, PercentileEvidence> = new Map()): ScoreResult {
+  const classified = resolveResearchProfile(args.instrumentType, args.ticker, { sector: args.sector, industry: args.industry, explicit: args.researchProfile }, args.config);
+  const hints = { sector: args.sector, industry: args.industry, explicit: classified.profile };
+  const profile = getFactorProfile(args.config, args.instrumentType, args.ticker, hints);
+  const weights = profile.category_weights ?? args.config.category_weights;
+  const asOf = args.asOf ?? new Date().toISOString();
+  const categories: CategoryScore[] = CATEGORY_KEYS.map((id) => {
+    const factors = profile.factor_sets[id].map((factor) => ({ ...scoreFactor(factor, args.metrics, ranks.get(factor.metric)), category: id }));
+    const live = factors.filter((f) => f.available && f.score !== null);
+    const totalFactorWeights = factors.reduce((sum, f) => sum + f.weight, 0);
+    const availableFactorWeights = live.reduce((sum, f) => sum + f.weight, 0);
+    const coverage = totalFactorWeights ? availableFactorWeights / totalFactorWeights : 0;
+    const score = availableFactorWeights ? live.reduce((sum, f) => sum + f.score! * f.weight, 0) / availableFactorWeights : null;
+    return { id, configuredWeight: weights[id], liveWeight: null, score, coverage, availableFactorWeights, totalFactorWeights, inThisRun: false, factors,
+      warning: score === null ? "No available ranked evidence; category excluded, not zero." : coverage < args.config.min_category_coverage ? "Thin factor coverage; remaining evidence renormalized." : null };
+  });
+  const live = categories.filter((c) => c.score !== null && c.configuredWeight > 0);
+  const liveWeight = live.reduce((sum, c) => sum + c.configuredWeight, 0);
+  for (const category of live) { category.inThisRun = true; category.liveWeight = category.configuredWeight / liveWeight; }
+  const researchScore = liveWeight ? live.reduce((sum, c) => sum + c.score! * c.liveWeight!, 0) : null;
+  const valuationScore = categories.find((c) => c.id === "valuation")?.score ?? null;
+  const quality = assessDataQuality({ asOf, categories, researchScore, valuationScore, latestAnnual: args.latestAnnual });
   return {
-    score: Number.isFinite(score) ? score : null,
-    coverage,
-    availableWeight,
-    totalWeight,
+    methodology: "cross-sectional-v2", asOf, configHash: hashScoringConfig(args.config), profile: profileName(args.instrumentType, args.ticker, hints, args.config),
+    researchProfile: classified.profile, researchProfileReason: classified.reason, researchScore, valuationScore, categories,
+    ...quality, eligibility: assessEligibility({ pn17: args.pn17 ?? false, warning: args.warning, coverage: quality.dataCoverage.coverageRatio, bars: args.bars ?? [], config: args.config, asOf }),
+    concerns: evaluateConcerns({ config: args.config, metrics: args.metrics, pn17: args.pn17 ?? false }),
+    notes: ["Percentiles computed together across the stored listed universe; banks and REITs have separate rank groups.", `Sector blend ${(args.config.ranking.sector_blend * 100).toFixed(0)}%; fallback to profile-wide below ${args.config.ranking.sector_min_names} available names. Ties use average ranks; singleton 50.`, `Accounts usable at known available_at, else FY end plus ${args.config.reporting_lag_months} months. News and generic technicals never affect scores.`, "Missing factors/categories are omitted and remaining weights renormalized. Eligibility is separate from score."],
+    valuationContext: emptyValuationContext("Historical and peer valuation context is separate from cross-sectional scores."),
   };
 }
 
-export function scoreFromMetrics(args: {
-  config: ScoringConfig;
-  metrics: MetricValue[];
-  instrumentType: "COMMON_STOCK" | "REIT";
-  ticker?: string | null;
-  sector?: string | null;
-  industry?: string | null;
-  researchProfile?: ResearchProfile | null;
-  pn17?: boolean;
-  asOf?: string;
-  /** Latest annual filing clock. available_at if known, else period_end. Never retrieved_at. */
-  latestAnnual?: { periodEnd: string; availableAt: string | null } | null;
-}): ScoreResult {
-  const classified = resolveResearchProfile(
-    args.instrumentType,
-    args.ticker,
-    { sector: args.sector, industry: args.industry, explicit: args.researchProfile },
-    args.config,
-  );
-  const hints = {
-    sector: args.sector,
-    industry: args.industry,
-    explicit: classified.profile,
-  };
-  const profile = getFactorProfile(args.config, args.instrumentType, args.ticker, hints);
-  const name = profileName(args.instrumentType, args.ticker, hints, args.config);
-  const asOf = args.asOf ?? new Date().toISOString();
-  const notes: string[] = [];
-
-  const categories: CategoryScore[] = CATEGORY_KEYS.map((key) => {
-    const configuredWeight = args.config.category_weights[key];
-    const blocked = args.config.unavailable_until_data.includes(key);
-    const factors = profile.factor_sets[key].map((factor) => {
-      const evidence = scoreFactor(factor, args.metrics);
-      return { ...evidence, category: key };
-    });
-    const avg = categoryAverage(factors);
-    const belowMin =
-      !blocked && avg.totalWeight > 0 && avg.coverage < args.config.min_category_coverage;
-    let warning: string | null = null;
-    if (blocked) {
-      warning = `Configured ${configuredWeight}% is not in this run (no ${key} data yet). Remaining weights are renormalized.`;
-    } else if (avg.totalWeight === 0) {
-      warning = "No factors in this profile for this category.";
-    } else if (avg.score === null) {
-      warning = "No available factors — omitted from the Research Score (not scored as zero).";
-    } else if (belowMin) {
-      warning = `Coverage ${(avg.coverage * 100).toFixed(0)}% is below min ${(args.config.min_category_coverage * 100).toFixed(0)}%. Score is shown with this warning.`;
+/** The only production score computation: rank every listed company in one cross-section. */
+export function scoreUniverse(inputs: ScoreInput[]): Map<string, ScoreResult> {
+  const prepared = inputs.map((input) => {
+    const classified = resolveResearchProfile(input.instrumentType, input.ticker, { sector: input.sector, industry: input.industry, explicit: input.researchProfile }, input.config);
+    const profile = getFactorProfile(input.config, input.instrumentType, input.ticker, { explicit: classified.profile });
+    return { input, group: classified.factorSet, factors: Object.values(profile.factor_sets).flat() };
+  });
+  const ranks = new Map<string, Map<string, PercentileEvidence>>();
+  for (const metricId of new Set(prepared.flatMap((p) => p.factors.map((f) => f.metric)))) {
+    const rows = prepared.filter((p) => p.factors.some((f) => f.metric === metricId));
+    const ranked = rankCrossSection(rows.map(({ input, group }) => {
+      const metric = input.metrics.find((m) => m.id === metricId);
+      return { ticker: input.ticker!, group, sector: input.sector ?? null, value: metric?.available ? metric.value : null };
+    }), rows[0].factors.find((f) => f.metric === metricId)!.direction === "lower_better", inputs[0].config.ranking.sector_min_names, inputs[0].config.ranking.sector_blend);
+    for (const [ticker, rank] of ranked) {
+      if (!ranks.has(ticker)) ranks.set(ticker, new Map());
+      ranks.get(ticker)!.set(metricId, rank);
     }
-    return {
-      id: key,
-      configuredWeight,
-      liveWeight: null,
-      score: blocked ? null : avg.score,
-      coverage: blocked ? 0 : avg.coverage,
-      availableFactorWeights: avg.availableWeight,
-      totalFactorWeights: avg.totalWeight,
-      inThisRun: false,
-      warning,
-      factors,
-    };
-  });
-
-  const live = categories.filter(
-    (c) =>
-      !args.config.unavailable_until_data.includes(c.id as CategoryKey) &&
-      c.score !== null &&
-      Number.isFinite(c.score),
-  );
-  const liveWeightSum = live.reduce((sum, c) => sum + c.configuredWeight, 0);
-  for (const category of categories) {
-    const included = live.some((c) => c.id === category.id);
-    category.inThisRun = included;
-    category.liveWeight = included && liveWeightSum > 0 ? category.configuredWeight / liveWeightSum : null;
   }
-
-  const researchScore =
-    liveWeightSum === 0
-      ? null
-      : live.reduce((sum, c) => sum + (c.score as number) * (c.configuredWeight / liveWeightSum), 0);
-
-  const valuation = categories.find((c) => c.id === "valuation");
-  const valuationScore = valuation?.score ?? null;
-
-  notes.push(
-    `Research profile ${classified.profile} (${classified.reason}) Factor set ${classified.factorSet}.`,
-  );
-  if (args.config.unavailable_until_data.length) {
-    notes.push(
-      `${args.config.unavailable_until_data
-        .map((k) => `${k} ${args.config.category_weights[k]}%`)
-        .join(", ")} configured but not in this live run.`,
-    );
-  }
-  const newsCat = categories.find((c) => c.id === "news");
-  if (newsCat && !newsCat.inThisRun && !args.config.unavailable_until_data.includes("news")) {
-    notes.push(
-      "News 10% is omitted until stored announcements exist; it is not scored as a neutral 50.",
-    );
-  }
-  if (args.config.concerns.apply_score_penalty) {
-    notes.push("Config asks for a concern penalty; Phase 4 still keeps concerns separate.");
-  } else {
-    notes.push("Potential Concerns do not change the Research Score.");
-  }
-
-  const concerns = evaluateConcerns({
-    config: args.config,
-    metrics: args.metrics,
-    pn17: args.pn17 ?? false,
-  });
-
-  const { dataCoverage, dataConfidence } = assessDataQuality({
-    asOf,
-    categories,
-    researchScore,
-    valuationScore,
-    latestAnnual: args.latestAnnual,
-  });
-
-  return {
-    asOf,
-    configHash: hashScoringConfig(args.config),
-    profile: name,
-    researchProfile: classified.profile,
-    researchProfileReason: classified.reason,
-    researchScore,
-    valuationScore,
-    categories,
-    concerns,
-    notes,
-    dataCoverage,
-    dataConfidence,
-    valuationContext: emptyValuationContext(
-      "Historical and peer context are attached at scoreTicker, not in the isolated scoring engine.",
-    ),
-  };
+  return new Map(inputs.map((input) => [input.ticker!, scoreFromMetrics(input, ranks.get(input.ticker!))]));
 }

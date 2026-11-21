@@ -1,7 +1,9 @@
 import { isCliEntrypoint } from "@/cli/entrypoint";
 import { scoreTicker } from "./run-ticker";
+import { rescoreListedMarket } from "@/market/scan";
 
 function main() {
+  rescoreListedMarket();
   const ticker = (process.argv[2] ?? "MAYBANK").toUpperCase();
   const scored = scoreTicker(ticker, true);
   if (!scored) {

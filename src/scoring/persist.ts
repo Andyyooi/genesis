@@ -6,6 +6,7 @@ import type { ScoreResult } from "@/scoring/types";
 export function persistScoreRun(args: {
   instrumentId: number;
   result: ScoreResult;
+  metrics?: import("@/metrics/types").MetricValue[];
 }) {
   if (isSnapshotReadOnly()) return;
   const db = getDb();
@@ -33,6 +34,8 @@ export function persistScoreRun(args: {
       coverageJson: JSON.stringify(args.result.dataCoverage),
       dataConfidence: args.result.dataConfidence.level,
       evidenceJson: JSON.stringify({
+        storedResult: args.result,
+        scoredMetrics: args.metrics ?? [],
         factors: args.result.categories.flatMap((c) => c.factors),
         concerns: args.result.concerns,
         notes: args.result.notes,

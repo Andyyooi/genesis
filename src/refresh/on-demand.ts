@@ -16,6 +16,7 @@ import { DAILY_FUNDAMENTALS_RECHECK_DAYS } from "@/refresh/fundamentals-freshnes
 import { persistDatasetRefresh } from "@/refresh/persist";
 import type { DatasetRefreshResult } from "@/refresh/types";
 import { scoreTicker } from "@/scoring/run-ticker";
+import { rescoreListedMarket } from "@/market/scan";
 
 const inFlight = new Set<string>();
 let watchlistActive = false;
@@ -326,6 +327,7 @@ function runScores(
   const startedAt = now().toISOString();
   const score = deps.score ?? scoreTicker;
   try {
+    if (!deps.score) rescoreListedMarket();
     const scored = score(ticker);
     const completedAt = now().toISOString();
     if (!scored) {
