@@ -1,9 +1,9 @@
 import { buildFullMarkdown } from "@/export/full";
 import { buildExportPayload } from "@/export/payload";
 import { buildQuickMarkdown } from "@/export/quick";
-import { buildRawJson, buildTablesCsv } from "@/export/raw";
+import { buildTablesCsv } from "@/export/raw";
 
-const KINDS = ["quick", "full", "json", "csv"] as const;
+const KINDS = ["quick", "full", "csv"] as const;
 type Kind = (typeof KINDS)[number];
 
 function isKind(value: string): value is Kind {
@@ -16,7 +16,7 @@ export async function GET(
 ) {
   const { ticker, kind } = await context.params;
   if (!isKind(kind)) {
-    return new Response("Unknown export kind. Use quick, full, json, or csv.", { status: 400 });
+    return new Response("Unknown export kind. Use quick, full, or csv.", { status: 400 });
   }
   const payload = buildExportPayload(ticker);
   if (!payload) {
@@ -29,9 +29,6 @@ export async function GET(
   }
   if (kind === "full") {
     return file(buildFullMarkdown(payload), `${stem}-full.md`, "text/markdown; charset=utf-8");
-  }
-  if (kind === "json") {
-    return file(buildRawJson(payload), `${stem}-raw.json`, "application/json; charset=utf-8");
   }
   return file(buildTablesCsv(payload), `${stem}-tables.csv`, "text/csv; charset=utf-8");
 }

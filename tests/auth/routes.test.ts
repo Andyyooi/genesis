@@ -92,7 +92,7 @@ describe("proxy responses", () => {
     const page = await proxy(new NextRequest("https://research.test/export/MAYBANK/full?format=csv"));
     expect(page.status).toBe(303);
     expect(page.headers.get("location")).toBe("https://research.test/login?next=%2Fexport%2FMAYBANK%2Ffull%3Fformat%3Dcsv");
-    const api = await proxy(new NextRequest("https://research.test/api/refresh-research", { method: "POST" }));
+    const api = await proxy(new NextRequest("https://research.test/api/refresh", { method: "POST" }));
     expect(api.status).toBe(401);
     expect(await api.json()).toEqual({ error: "Authentication required" });
   });
@@ -103,6 +103,6 @@ describe("proxy responses", () => {
     const page = await proxy(new NextRequest("https://research.test/"));
     expect(page.status).toBe(503);
     expect(await page.text()).toContain("The site password isn't configured");
-    expect((await proxy(new NextRequest("https://research.test/api/refresh-research"))).status).toBe(503);
+    expect((await proxy(new NextRequest("https://research.test/api/refresh"))).status).toBe(503);
   });
 });

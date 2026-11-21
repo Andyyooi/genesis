@@ -9,7 +9,6 @@ import {
 } from "@/components/research/data-confidence";
 import { DataLagBanner } from "@/components/research/data-lag-banner";
 import { ExportActions } from "@/components/research/export-actions";
-import { RecentEventsSection } from "@/components/research/recent-events";
 import { ValuationContextCard } from "@/components/research/valuation-context";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -411,7 +410,7 @@ export default async function ResearchPage({
         )}
       </Disclosure>
 
-      <Disclosure title="Price" hint="Last close, trading range and moving averages.">
+      <Disclosure title="Price" hint="Trading range and moving averages.">
 
         <Table>
           <TableHeader>
@@ -421,14 +420,6 @@ export default async function ResearchPage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow>
-              <TableCell>Last close</TableCell>
-              <TableCell className="text-right">{fmtRatio(lastClose)}</TableCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>Last trade date</TableCell>
-              <TableCell className="text-right">{formatDateSafe(lastTrade?.period)}</TableCell>
-            </TableRow>
             <TableRow>
               <TableCell>52-week high</TableCell>
               <TableCell className="text-right">{fmtRatio(metricById(metrics, "week52_high"))}</TableCell>
@@ -467,7 +458,6 @@ export default async function ResearchPage({
         </Table>
       </Disclosure>
 
-      <Disclosure title="Company news" hint="News availability and source information."><RecentEventsSection events={scored.events} /></Disclosure>
 
       <Disclosure title="Score history" hint="See how the stored research score has changed.">
 

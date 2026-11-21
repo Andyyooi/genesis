@@ -193,13 +193,6 @@ describe("opportunity lists", () => {
     ).toBe(false);
   });
 
-  it("Catalyst Watch uses stored classified events, not a buy list", () => {
-    expect(rowMatchesList(row(), "catalyst")).toBe(false);
-    expect(rowMatchesList(row({ catalystWatch: true, catalystLabel: "Positive catalyst: results" }), "catalyst")).toBe(
-      true,
-    );
-  });
-
   it("coverage averages available configured categories", () => {
     expect(liveCoverage(result())).toBeCloseTo(0.5);
   });
@@ -207,7 +200,7 @@ describe("opportunity lists", () => {
   it("keeps excluded names visible in all, but out of recommendation lists", () => {
     const excluded = row({ result: result({ eligibility: { eligible: false, reasons: ["PN17"], medianTradedValue: 200000, priceDays: 253 } }) });
     expect(rowMatchesList(excluded, "watchlist")).toBe(true);
-    for (const list of ["undervalued", "quality", "quality-value", "improving", "discounted", "catalyst"] as const) expect(rowMatchesList(excluded, list)).toBe(false);
+    for (const list of ["undervalued", "quality", "quality-value", "improving", "discounted"] as const) expect(rowMatchesList(excluded, list)).toBe(false);
   });
 
   it("Shariah and cap-size filters are flags, not scored factors", () => {
@@ -220,13 +213,11 @@ describe("opportunity lists", () => {
     expect(rowMatchesFilters(row({ listingBoard: "MAIN" }), { board: "MAIN" })).toBe(true);
   });
 
-  it("filters by confidence, freshness, profile, and event presence", () => {
+  it("filters by confidence, freshness, and profile", () => {
     expect(rowMatchesFilters(row({ confidence: "HIGH" }), { confidence: "HIGH" })).toBe(true);
     expect(rowMatchesFilters(row({ confidence: "LOW" }), { confidence: "HIGH" })).toBe(false);
     expect(rowMatchesFilters(row({ freshness: "FRESH" }), { freshness: "FRESH" })).toBe(true);
     expect(rowMatchesFilters(row({ researchProfile: "BANK" }), { profile: "BANK" })).toBe(true);
-    expect(rowMatchesFilters(row({ hasEvents: true }), { events: "yes" })).toBe(true);
-    expect(rowMatchesFilters(row({ hasEvents: false }), { events: "yes" })).toBe(false);
   });
 
   it("sorts by factual attributes without inventing a best-stock rank", () => {
