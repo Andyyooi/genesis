@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { loadScoringConfig } from "@/config/load-scoring";
 import { getDb } from "@/db/client";
 import { alerts, alertState, instruments } from "@/db/schema";
@@ -14,7 +14,7 @@ import {
   type AlertSnapshot,
 } from "@/alerts/evaluate";
 import { scoreTicker } from "@/scoring/run-ticker";
-import { isDemoAlert } from "@/alerts/purge-demo";
+import { loadAlertRefreshStatus, PUBLICATION_ALERT_METHOD } from "@/alerts/publication";
 
 function metric(metrics: MetricValue[], id: string): MetricValue | undefined {
   return metrics.find((m) => m.id === id);
@@ -154,6 +154,8 @@ export function refreshAlertsForUniverse() {
 }
 
 export function loadRecentAlerts(limit = 40) {
+  const status = loadAlertRefreshStatus();
+  if (!status?.alerts) return [];
   const db = getDb();
   return db
     .select({
@@ -169,9 +171,10 @@ export function loadRecentAlerts(limit = 40) {
     })
     .from(alerts)
     .innerJoin(instruments, eq(instruments.id, alerts.instrumentId))
+    .where(sql`CASE WHEN json_valid(${alerts.evidenceJson}) THEN json_extract(${alerts.evidenceJson}, '$.method') = ${PUBLICATION_ALERT_METHOD} AND json_extract(${alerts.evidenceJson}, '$.publicationRunId') = ${status.runId} ELSE 0 END`)
     .orderBy(desc(alerts.id))
     .limit(limit)
-    .all().filter((row) => !isDemoAlert(row.evidenceJson) && row.ruleId !== "earnings_announcement");
+    .all();
 }
 
 export function countAlerts() {

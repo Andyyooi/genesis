@@ -12,8 +12,11 @@ import { scoreTicker } from "@/scoring/run-ticker";
 import { persistUniverseScores } from "@/scoring/universe";
 import { clearOpportunityScanCache } from "@/opportunities/scan";
 import { purgeDemoAlerts } from "@/alerts/purge-demo";
+import { fairValueSafetyAt, loadAlertPublication, replacePublicationAlerts, type PublicationAlertSummary } from "@/alerts/publication";
+import { loadScoringConfig } from "@/config/load-scoring";
 
 export type MarketScanRowPayload = {
+  fairValueSafety: string | null;
   sector: string | null;
   eligible: boolean;
   exclusionReasons: string[];
@@ -39,6 +42,7 @@ export type MarketScanRowPayload = {
 };
 
 export type MarketScanSummary = {
+  alerts?: PublicationAlertSummary;
   kind: "market-scan";
   methodology: "cross-sectional-v2";
   asOf: string;
@@ -139,9 +143,15 @@ function persistListedScores(meta: {
   fundamentalsYahoo: { upserted: number; skippedHadFilings: number; failed: number };
 }): MarketScanSummary {
   const summary = getSqlite().transaction(() => {
+    const previous = loadAlertPublication();
     purgeDemoAlerts();
     persistUniverseScores(meta.asOf);
-    return publishListedScores(meta);
+    const published = publishListedScores(meta);
+    const current = loadAlertPublication()!;
+    const alertConfig = loadScoringConfig().alerts;
+    published.alerts = replacePublicationAlerts(previous, current, alertConfig.score_delta, alertConfig.publication);
+    getDb().update(marketScanRuns).set({ summaryJson: JSON.stringify(published) }).where(eq(marketScanRuns.id, current.id)).run();
+    return published;
   })();
   clearOpportunityScanCache();
   return summary;
@@ -189,6 +199,7 @@ function publishListedScores(meta: {
     const confidence = scoredRow.result.dataConfidence;
     const dataCoverage = scoredRow.result.dataCoverage;
     const payload: MarketScanRowPayload = {
+      fairValueSafety: fairValueSafetyAt(instrument.id, meta.asOf),
       sector: instrument.sector,
       eligible: scoredRow.result.eligibility?.eligible ?? false,
       exclusionReasons: scoredRow.result.eligibility?.reasons ?? ["Eligibility not verified"],
