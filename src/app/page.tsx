@@ -1,27 +1,26 @@
 import Link from "next/link";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  ArrowRight,
+  Activity,
+  Bookmark,
+  Minus,
+} from "lucide-react";
 import { Disclosure } from "@/components/research/disclosure";
 import { DashboardFilters } from "@/components/research/dashboard-filters";
-import { StatusLabel } from "@/components/research/status-label";
 import { TopPicks } from "@/components/research/top-picks";
-import { cn } from "cn";
+import {
+  ResearchWorkspace,
+  type WorkspaceRow,
+} from "@/components/research/research-workspace";
 import { loadRecentAlerts } from "@/alerts/refresh";
 import { loadScoringConfig } from "@/config/load-scoring";
 import { loadLatestIngestReports } from "@/db/queries";
+import { loadMarketPricePulse, loadSavedPrices } from "@/db/price-history";
 import { AlertsList } from "@/components/alerts/alerts-list";
 import { DataLagBanner } from "@/components/research/data-lag-banner";
-import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import type { PricesImportReport } from "@/ingest/types";
-import { formatMyr } from "@/lib/format-myr";
-import { dataConfidenceLabel, formatFreshnessBand, formatScore100 } from "@/lib/research-copy";
 import { buildSnapshotDates } from "@/lib/snapshot-dates";
 import {
   OPPORTUNITY_LISTS,
@@ -38,39 +37,34 @@ import { parseTopPicksOptions } from "@/opportunities/top-picks";
 
 export const dynamic = "force-dynamic";
 
-function fmtCoverage(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "Unavailable";
-  return `${(value * 100).toFixed(0)}%`;
-}
-
 function listHref(
   id: ListId,
-  extra?: Record<string, string | undefined>,
+  extra: Record<string, string | undefined>,
 ): string {
   const params = new URLSearchParams();
   if (id !== "watchlist") params.set("list", id);
-  for (const [key, value] of Object.entries(extra ?? {})) {
+  for (const [key, value] of Object.entries(extra))
     if (value) params.set(key, value);
-  }
-  const qs = params.toString();
-  return qs ? `/?${qs}` : "/";
+  return params.size ? `/?${params}` : "/";
 }
 
 export default async function HomePage({ searchParams }: PageProps<"/">) {
   const params = await searchParams;
   const topPicksOptions = parseTopPicksOptions(params);
   const topPicksPreservedParams = Object.fromEntries(Object.entries(params).filter(([key, value]) => key !== "qualityTilt" && key !== "lotBudget" && typeof value === "string")) as Record<string, string>;
-  const listId = parseListId(typeof params.list === "string" ? params.list : undefined);
-  const sortId = parseDashboardSort(typeof params.sort === "string" ? params.sort : undefined);
+  const value = (key: string) =>
+    typeof params[key] === "string" ? (params[key] as string) : undefined;
+  const listId = parseListId(value("list"));
+  const sortId = parseDashboardSort(value("sort"));
   const flagFilters = parseDashboardFilters({
-    type: typeof params.type === "string" ? params.type : undefined,
-    shariah: typeof params.shariah === "string" ? params.shariah : undefined,
-    board: typeof params.board === "string" ? params.board : undefined,
-    cap: typeof params.cap === "string" ? params.cap : undefined,
-    confidence: typeof params.confidence === "string" ? params.confidence : undefined,
-    freshness: typeof params.freshness === "string" ? params.freshness : undefined,
-    profile: typeof params.profile === "string" ? params.profile : undefined,
-    events: typeof params.events === "string" ? params.events : undefined,
+    type: value("type"),
+    shariah: value("shariah"),
+    board: value("board"),
+    cap: value("cap"),
+    confidence: value("confidence"),
+    freshness: value("freshness"),
+    profile: value("profile"),
+    events: value("events"),
   });
   const filterQuery = {
     type: flagFilters.instrumentType,
@@ -81,48 +75,81 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     freshness: flagFilters.freshness,
     profile: flagFilters.profile,
     events: flagFilters.events,
-    sort: sortId !== "ticker" ? sortId : undefined,
+    sort: sortId === "ticker" ? undefined : sortId,
   };
-
-  let rows;
-  let reports;
-  let recentAlerts: ReturnType<typeof loadRecentAlerts> = [];
+  let rows: ReturnType<typeof scanWatchlist>;
+  let reports: ReturnType<typeof loadLatestIngestReports>;
+  let recentAlerts: ReturnType<typeof loadRecentAlerts>;
   try {
     loadScoringConfig();
     rows = scanWatchlist();
     reports = loadLatestIngestReports();
     recentAlerts = loadRecentAlerts(6);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+  } catch {
     return (
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Watchlist failed to load</h1>
-        <p className="text-muted-foreground">
-          Check <code className="font-mono text-sm">config/universe.yaml</code> and{" "}
-          <code className="font-mono text-sm">config/scoring.yaml</code>.
+      <main className="mx-auto w-full max-w-6xl px-6 py-12">
+        <h1 className="text-2xl font-semibold">
+          Research is temporarily unavailable
+        </h1>
+        <p className="mt-2 text-muted-foreground">
+          Your saved data could not be opened. Check the data reports before
+          trying again.
         </p>
-        <pre className="overflow-x-auto rounded-lg border bg-muted p-4 text-sm">{message}</pre>
+        <Link
+          href="/ingest"
+          className="mt-4 inline-block text-primary underline"
+        >
+          Open data reports
+        </Link>
       </main>
     );
   }
-
-  const activeList = OPPORTUNITY_LISTS.find((item) => item.id === listId) ?? OPPORTUNITY_LISTS[0]!;
-  const listed = activeList.disabled ? [] : rows.filter((row) => rowMatchesList(row, listId));
-  const filtered = listed.filter((row) => rowMatchesFilters(row, flagFilters));
-  const visible = sortOpportunityRows(filtered, sortId);
-  const counts = Object.fromEntries(
+  const activeList =
+    OPPORTUNITY_LISTS.find((item) => item.id === listId) ??
+    OPPORTUNITY_LISTS[0]!;
+  const listed = activeList.disabled
+    ? []
+    : rows.filter((row) => rowMatchesList(row, listId));
+  const visible = sortOpportunityRows(
+    listed.filter((row) => rowMatchesFilters(row, flagFilters)),
+    sortId,
+  );
+  const workspaceRows: WorkspaceRow[] = rows.map((row) => ({
+    ticker: row.ticker,
+    name: row.name,
+    sector: row.sector,
+    price: row.price,
+    researchScore: row.researchScore,
+    valuationScore: row.valuationScore,
+    qualityScore: row.qualityScore,
+    confidence: row.confidence,
+    needsVerification: row.needsVerification,
+    freshness: row.freshness,
+    coverage: row.coreCoverageLabel,
+    priceDate: row.lastTradeDate,
+    pn17: row.pn17,
+    prices: loadSavedPrices(row.ticker, 30),
+  }));
+  const marketPulse = loadMarketPricePulse();
+  const latestDate = marketPulse.date;
+  const { higher, lower, unchanged: flat } = marketPulse;
+  const listCounts = new Map(
     OPPORTUNITY_LISTS.map((item) => [
       item.id,
-      item.disabled ? 0 : rows.filter((row) => rowMatchesList(row, item.id)).length,
+      item.disabled
+        ? 0
+        : rows.filter((row) => rowMatchesList(row, item.id)).length,
     ]),
-  ) as Record<ListId, number>;
-
-  const highConf = rows.filter((r) => r.confidence === "HIGH").length;
+  );
+  const emptyLists = OPPORTUNITY_LISTS.filter(
+    (item) => !listCounts.get(item.id) && item.id !== listId,
+  );
   const lowConf = rows.filter(
-    (r) => r.confidence === "LOW" || r.confidence === "VERY_LOW" || r.needsVerification,
+    (row) =>
+      row.confidence === "LOW" ||
+      row.confidence === "VERY_LOW" ||
+      row.needsVerification,
   ).length;
-  const withEvents = rows.filter((r) => r.hasEvents).length;
-
   const sample = rows.find((row) => row.ticker === "MAYBANK") ?? rows[0];
   const lagDates = sample
     ? buildSnapshotDates({
@@ -131,139 +158,257 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         fundamentalsPeriod: sample.fundamentalsPeriod,
       })
     : null;
-
-  const priceReport: PricesImportReport | null = reports.prices
+  const priceReport = reports.prices
     ? (JSON.parse(reports.prices.summaryJson) as PricesImportReport)
     : null;
-  const yahooFails = priceReport?.failed ?? [];
+  const failures = priceReport?.failed ?? [];
 
   return (
-    <main className="mx-auto flex w-full max-w-[88rem] flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
-      <header className="flex flex-col gap-2">
-        <p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">Bursa Malaysia · Research workspace</p>
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Your research, at a glance.</h1>
-        <p className="max-w-3xl text-muted-foreground">
-          Follow your watchlist, compare the evidence, and open a company to explore.
-        </p>
-        <dl className="mt-4 grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
-          <div className="summary-stat">
-            <dt className="text-muted-foreground">On your watchlist</dt>
-            <dd className="text-lg font-medium tabular-nums">{rows.length}</dd>
-          </div>
-          <div className="summary-stat positive">
-            <dt className="text-muted-foreground">High confidence</dt>
-            <dd className="text-lg font-medium tabular-nums">{highConf}</dd>
-          </div>
-          <div className="summary-stat caution">
-            <dt className="text-muted-foreground">Needs a closer look</dt>
-            <dd className="text-lg font-medium tabular-nums">{lowConf}</dd>
-          </div>
-          <div className="summary-stat info">
-            <dt className="text-muted-foreground">With events</dt>
-            <dd className="text-lg font-medium tabular-nums">{withEvents}</dd>
-          </div>
-        </dl>
+    <main className="research-home mx-auto flex w-full max-w-[96rem] flex-1 flex-col gap-6 px-4 py-7 sm:px-6 lg:px-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="section-kicker mb-2">BURSA MALAYSIA / YOUR WORKSPACE</p>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+            Your market. In focus.
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Less noise. A clearer view of the companies that matter to you.
+          </p>
+        </div>
+        <span className="snapshot-chip">
+          <span />
+          Saved prices · {latestDate ?? "unavailable"}
+        </span>
       </header>
 
-      {lagDates ? <DataLagBanner dates={lagDates} /> : null}
-      <TopPicks key={JSON.stringify(topPicksOptions)} options={topPicksOptions} preservedParams={topPicksPreservedParams} />
-
-      {yahooFails.length > 0 ? (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
-          Yahoo missed {yahooFails.length} ticker{yahooFails.length === 1 ? "" : "s"}:{" "}
-          {yahooFails.map((item) => item.ticker).join(", ")}. Details on the import report page — no
-          prices were invented.
+      <section
+        aria-label="Published Malaysian market snapshot"
+        className="pulse-grid"
+      >
+        <div className="pulse-card">
+          <div className="pulse-label">
+            <span>Malaysian market coverage</span>
+            <Bookmark className="size-4" aria-hidden="true" />
+          </div>
+          <p className="pulse-number">
+            {marketPulse.total.toLocaleString("en-MY")}
+            <span>listed stocks & REITs</span>
+          </p>
+          <Link href="/market" className="pulse-link">
+            Explore all listed names{" "}
+            <ArrowRight className="size-3.5" aria-hidden="true" />
+          </Link>
         </div>
-      ) : null}
+        <div className="pulse-card">
+          <div className="pulse-label">
+            <span>Closed higher</span>
+            <ArrowUpRight className="size-4 move-up" aria-hidden="true" />
+          </div>
+          <p className="pulse-number move-up">
+            {higher}
+            <span>vs previous saved close</span>
+          </p>
+          <div className="pulse-bar">
+            <span
+              className="bg-emerald-600"
+              style={{
+                width: `${marketPulse.covered ? (higher / marketPulse.covered) * 100 : 0}%`,
+              }}
+            />
+          </div>
+        </div>
+        <div className="pulse-card">
+          <div className="pulse-label">
+            <span>Closed lower</span>
+            <ArrowDownRight className="size-4 move-down" aria-hidden="true" />
+          </div>
+          <p className="pulse-number move-down">
+            {lower}
+            <span>vs previous saved close</span>
+          </p>
+          <div className="pulse-bar">
+            <span
+              className="bg-red-500"
+              style={{
+                width: `${marketPulse.covered ? (lower / marketPulse.covered) * 100 : 0}%`,
+              }}
+            />
+          </div>
+        </div>
+        <div className="pulse-card">
+          <div className="pulse-label">
+            <span>Closed unchanged</span>
+            <Minus
+              className="size-4 text-muted-foreground"
+              aria-hidden="true"
+            />
+          </div>
+          <p className="pulse-number">
+            {flat}
+            <span>vs previous saved close</span>
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {marketPulse.missing} unavailable or older
+          </p>
+        </div>
+      </section>
+      <p className="-mt-3 text-[11px] text-muted-foreground">
+        Published market coverage: {marketPulse.covered.toLocaleString("en-MY")}{" "}
+        listed names with two saved closes ending{" "}
+        {latestDate ?? "on an unavailable date"}. {marketPulse.missing}{" "}
+        unavailable or older. This is the saved stock universe, not a Bursa
+        index or live market feed.
+      </p>
 
-      <nav className="flex flex-col gap-2" aria-label="Research lists">
-        <p className="text-sm font-medium">Research lists</p>
-        <div className="flex flex-wrap gap-2">
-          {OPPORTUNITY_LISTS.map((item) => {
-            const selected = item.id === listId;
-            return (
+      <div className="research-grid">
+        <div className="flex min-w-0 flex-col gap-5">
+          <nav className="research-list-tabs" aria-label="Research lists">
+            {OPPORTUNITY_LISTS.filter(
+              (item) => listCounts.get(item.id) || item.id === listId,
+            ).map((item) => (
               <Link
                 key={item.id}
                 href={listHref(item.id, filterQuery)}
-                className={cn(
-                  buttonVariants({ variant: selected ? "default" : "outline", size: "sm" }),
-                  item.disabled && !selected ? "opacity-60" : "",
-                )}
+                aria-current={item.id === listId ? "page" : undefined}
               >
                 {item.label}
-                <span className="text-xs opacity-80">({counts[item.id]})</span>
+                <span>{listCounts.get(item.id)}</span>
               </Link>
-            );
-          })}
+            ))}
+          </nav>
+          {emptyLists.length ? (
+            <details className="empty-list-details">
+              <summary className="cursor-pointer">
+                Other research lists · no matches in this watchlist
+              </summary>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {emptyLists.map((item) => (
+                  <div key={item.id}>
+                    <Link
+                      href={listHref(item.id, filterQuery)}
+                      className="font-semibold text-primary underline underline-offset-2"
+                    >
+                      {item.label}
+                    </Link>
+                    <p className="mt-1">
+                      {item.description}{" "}
+                      {item.id === "catalyst"
+                        ? "No classified announcements are saved for these companies; this is not a live news feed."
+                        : "No tracked company currently meets this rule in the saved data."}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ) : null}
+          <ResearchWorkspace
+            rows={workspaceRows}
+            visibleTickers={visible.map((row) => row.ticker)}
+            label={activeList.label}
+            emptyReason={
+              listed.length > 0
+                ? "No companies meet your selected filters. Open Filters & sort to change or clear them."
+                : activeList.id === "catalyst"
+                  ? "No classified announcements are saved for these companies. This is not a live news feed."
+                  : `No tracked company currently meets this rule in the saved data: ${activeList.description}`
+            }
+          >
+            <div className="workspace-advanced">
+              <DashboardFilters
+                key={JSON.stringify(filterQuery)}
+                listId={listId}
+                values={filterQuery}
+              />
+            </div>
+          </ResearchWorkspace>
+          <details className="text-xs text-muted-foreground">
+            <summary className="w-fit cursor-pointer text-primary">
+              About {activeList.label.toLowerCase()}
+            </summary>
+            <p className="mt-2 max-w-3xl">
+              {activeList.description} {activeList.disabledReason} Research
+              scores are relative comparisons, not expected returns or fair
+              values. Missing inputs are never filled with zero.
+            </p>
+          </details>
+          <Disclosure
+            title="Recent alerts"
+            hint={`${recentAlerts.length} saved updates · open to review`}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">Recent alerts</h2>
+              <Link href="/alerts" className="text-sm text-primary underline">
+                All alerts
+              </Link>
+            </div>
+            <AlertsList
+              rows={recentAlerts}
+              empty="No saved alerts yet. Open All alerts to review the available data."
+            />
+          </Disclosure>
         </div>
-        <details className="text-sm text-muted-foreground"><summary className="w-fit cursor-pointer text-primary">About this list</summary><p className="mt-2">{activeList.description}</p></details>
-        {listId === "catalyst" ? (
-          <p className="text-sm text-muted-foreground">
-            Live announcements and news are not connected yet. This list uses previously saved
-            announcements, not a live feed.
-          </p>
-        ) : null}
-        {activeList.disabled ? (
-          <p className="text-sm text-muted-foreground">{activeList.disabledReason}</p>
-        ) : null}
-      </nav>
-
-      <DashboardFilters key={JSON.stringify(filterQuery)} listId={listId} values={filterQuery} />
-      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-xl font-semibold">{activeList.label}</h2><p className="text-sm text-muted-foreground">{visible.length} of {listed.length} companies · select a company for details</p></div>
-
-      <div className="overflow-x-auto rounded-lg border">
-        {visible.length === 0 ? (
-          <p className="px-4 py-8 text-sm text-muted-foreground">
-            {activeList.disabled
-              ? activeList.disabledReason
-              : listId === "catalyst"
-                ? "No stored Positive catalyst, Negative, or Uncertain announcements."
-                : listId === "improving"
-                  ? "No name has two persisted score_runs with a higher latest Research Score."
-                  : rows.length === 0
-                    ? "The universe is empty. Add COMMON_STOCK or REIT rows to config/universe.yaml."
-                    : listed.length > 0 && visible.length === 0
-                      ? "No names match these filters. Clear confidence, freshness, profile, or stored-flag filters."
-                      : "No names match this research list on the stored snapshots."}
-          </p>
-        ) : (
-          <Table>
-            <TableHeader><TableRow>
-              <TableHead>Company</TableHead><TableHead className="text-right">Price (RM)</TableHead>
-              <TableHead className="text-right">Research</TableHead><TableHead className="text-right">Valuation</TableHead>
-              <TableHead>Data confidence</TableHead><TableHead>Accounts</TableHead><TableHead className="text-right">Coverage</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>{visible.map((row) => <TableRow key={row.ticker} className="hover:bg-secondary/30">
-              <TableCell className="min-w-56 whitespace-normal">
-                <Link href={`/stock/${row.ticker}`} className="font-semibold text-primary underline-offset-4 hover:underline">{row.ticker}<span className="sr-only"> research</span></Link>
-                {row.pn17 ? <Badge className="ml-2" variant="destructive">PN17</Badge> : null}
-                <p className="mt-1 text-sm">{row.name}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{row.sector ?? "Sector unavailable"} · {row.researchProfile}</p>
-                {!row.result.eligibility?.eligible ? <span className="mt-1 block text-xs text-amber-800">Excluded from recommendations</span> : null}
-              </TableCell>
-              <TableCell className="text-right tabular-nums">{row.price === null || !Number.isFinite(row.price) ? "Unavailable" : formatMyr(row.price)}</TableCell>
-              <TableCell className={cn("text-right text-base tabular-nums", row.needsVerification || row.confidence === "VERY_LOW" || row.confidence === "LOW" ? "text-muted-foreground" : "font-semibold text-primary")}>{formatScore100(row.researchScore)}</TableCell>
-              <TableCell className="text-right tabular-nums text-muted-foreground">{formatScore100(row.valuationScore)}</TableCell>
-              <TableCell><StatusLabel level={row.confidence}>{dataConfidenceLabel(row.confidence)}</StatusLabel>{row.needsVerification ? <span className="mt-1 block text-xs text-amber-800">Needs verification</span> : null}</TableCell>
-              <TableCell><StatusLabel level={row.freshness}>{formatFreshnessBand(row.freshness)}</StatusLabel></TableCell>
-              <TableCell className="text-right tabular-nums">{row.coreCoverageLabel ?? fmtCoverage(row.coverage)}</TableCell>
-            </TableRow>)}</TableBody>
-          </Table>
-        )}
+        <aside
+          className="flex min-w-0 flex-col gap-5"
+          aria-label="Research context"
+        >
+          <TopPicks key={JSON.stringify(topPicksOptions)} options={topPicksOptions} preservedParams={topPicksPreservedParams} />
+          <section className="market-card p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <Activity className="size-4 text-primary" aria-hidden="true" />
+              <h2 className="font-semibold">Watchlist data checks</h2>
+            </div>
+            <div className="context-line">
+              <span>Needs a closer look</span>
+              <strong className="text-amber-800">{lowConf}</strong>
+            </div>
+            <div className="context-line">
+              <span>With saved events</span>
+              <strong>{rows.filter((row) => row.hasEvents).length}</strong>
+            </div>
+            <div className="context-line">
+              <span>Price import misses</span>
+              <strong>{failures.length}</strong>
+            </div>
+            {failures.length ? (
+              <details className="mt-3 text-xs">
+                <summary className="cursor-pointer text-amber-800">
+                  Which prices were missed?
+                </summary>
+                <p className="mt-2">
+                  {failures.map((item) => item.ticker).join(", ")}. Old saved
+                  prices may remain; no prices were invented.
+                </p>
+              </details>
+            ) : null}
+            <Link
+              href="/ingest"
+              className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary"
+            >
+              View data reports{" "}
+              <ArrowUpRight className="size-3.5" aria-hidden="true" />
+            </Link>
+          </section>
+          {lagDates ? (
+            <div>
+              <p className="mb-2 text-[11px] text-muted-foreground">
+                Example data dates · {sample?.ticker}. Each company has its own
+                dates.
+              </p>
+              <DataLagBanner dates={lagDates} />
+            </div>
+          ) : null}
+          <div className="research-note">
+            <p className="mb-2 font-semibold">
+              Built for research. Not trading.
+            </p>
+            <p>
+              Prices are saved observations, not live quotes. Use Refresh data
+              when you want a new publication. Your shortlist helps you
+              investigate, not decide what to buy or sell.
+            </p>
+          </div>
+        </aside>
       </div>
-      <Disclosure title="Recent alerts" hint={`${recentAlerts.length} recent updates · open to review`}>
-        <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-xl font-semibold">Recent alerts</h2>
-          <Link href="/alerts" className="text-sm underline underline-offset-4">
-            All alerts
-          </Link>
-        </div>
-        <AlertsList
-          rows={recentAlerts}
-          empty="No in-app alerts yet. Open All alerts to evaluate stored scores and announcements."
-        />
-      </Disclosure>
-
     </main>
   );
 }

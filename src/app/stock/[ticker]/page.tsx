@@ -41,6 +41,8 @@ import type { MetricValue } from "@/metrics/types";
 import { PersistedFairValue } from "@/components/research/persisted-fair-value";
 import { loadPersistedFairValueForPage } from "@/fair-value/load-persisted-page";
 import { scoreTicker } from "@/scoring/run-ticker";
+import { PriceChart } from "@/components/research/price-chart";
+import { loadSavedPrices } from "@/db/price-history";
 
 export const dynamic = "force-dynamic";
 
@@ -171,7 +173,7 @@ export default async function ResearchPage({
   const fairValue = loadPersistedFairValueForPage(instrument.id);
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-5 px-4 py-8 sm:px-6">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-8 sm:px-6">
       <p className="text-sm text-muted-foreground">
         <Link href="/" className="text-foreground underline underline-offset-4">
           Dashboard
@@ -224,6 +226,8 @@ export default async function ResearchPage({
           </p></details>
         ) : null}
       </header>
+
+      <PriceChart ticker={instrument.ticker} points={loadSavedPrices(instrument.ticker, -1)} />
 
       {/* B. Research Score Card */}
       <ResearchScoreCard result={result} />

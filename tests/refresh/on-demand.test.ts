@@ -225,6 +225,20 @@ describe("on-demand refresh and research", () => {
     expect(report.persistence).toBe("local-sqlite");
   });
 
+  it("keeps the independent fair-value result when scoring fails", async () => {
+    const fairValue = vi.fn(() => fairReport());
+    const report = await runRefreshAndResearch({ ticker: "MAYBANK" }, {
+      importPrices: async () => priceReport(["MAYBANK"]),
+      importFundamentals: async () => fundamentalsReport(),
+      fairValue,
+      score: () => { throw new Error("scoring failed"); },
+    });
+    expect(fairValue).toHaveBeenCalledOnce();
+    expect(report.categories.fairValue.status).toBe("SUCCESS");
+    expect(report.categories.scores.status).toBe("SOURCE_FAILED");
+    expect(report.overall).toBe("PARTIAL");
+  });
+
   it("replaces a stale price without publishing per-ticker scores through the injected reader", async () => {
     const report = await runRefreshAndResearch(
       { ticker: "MAYBANK" },

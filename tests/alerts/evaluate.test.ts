@@ -83,7 +83,7 @@ describe("alert rules", () => {
   });
   it("explains a Research Score jump without BUY/SELL", () => {
     const drafts = evaluateAlertDrafts(config, input({ result: result({ researchScore: 71 }) }), {
-      lastResearchScore: 64,
+      lastResearchScore: 54,
       lastHealthScore: 40,
       lastConcernIds: [],
       lastListIds: [],
@@ -92,7 +92,7 @@ describe("alert rules", () => {
       lastCloseDate: "2026-09-17",
     });
     const hit = drafts.find((d) => d.ruleId === "research_score_up");
-    expect(hit?.why).toMatch(/64\.0 → 71\.0/);
+    expect(hit?.why).toMatch(/54\.0 → 71\.0/);
     expect(hit?.why).toMatch(/FY/);
     expect(hit?.why).not.toMatch(/\bBUY\b/);
     expect(hit?.why).not.toMatch(/\bSELL\b/);

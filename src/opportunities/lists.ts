@@ -25,7 +25,7 @@ export const OPPORTUNITY_LISTS: OpportunityList[] = [
   {
     id: "watchlist",
     label: "Watchlist",
-    description: "Every name in universe.yaml. These are research lists, not buy orders.",
+    description: "Every company on the tracked research list. Use stars to make your own shortlist. These are research lists, not buy orders.",
     disabled: false,
   },
   {
@@ -50,7 +50,7 @@ export const OPPORTUNITY_LISTS: OpportunityList[] = [
     id: "improving",
     label: "Improving",
     description:
-      "Latest persisted Research Score is higher than the previous score_run. Needs at least two stored runs.",
+      "The latest saved Research Score is higher than the previous published score. Needs at least two saved research runs.",
     disabled: false,
   },
   {

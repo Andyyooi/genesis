@@ -59,6 +59,22 @@ const concernRuleSchema = z.object({
   threshold: z.number().optional(),
 });
 
+const publicationAlertDefaults = {
+  score_eligible_only: true,
+  exclusions_top_picks_only: true,
+  important_exclusions: ["warning"],
+  priority: ["new_exclusion_reason", "top_pick_left", "top_pick_entered", "fair_value_safety_changed", "research_score_down", "research_score_up"],
+  max_per_type: { new_exclusion_reason: 5, top_pick_left: 15, top_pick_entered: 15, fair_value_safety_changed: 5, research_score_down: 5, research_score_up: 5 },
+};
+
+const publicationAlertSchema = z.object({
+  score_eligible_only: z.boolean(),
+  exclusions_top_picks_only: z.boolean(),
+  important_exclusions: z.array(z.string().min(1)),
+  priority: z.array(z.string().min(1)),
+  max_per_type: z.record(z.string(), z.number().int().nonnegative()),
+}).default(publicationAlertDefaults);
+
 const scoringSchema = z
   .object({
     version: z.number(),
@@ -78,12 +94,14 @@ const scoringSchema = z
         price_move_1d: z.number().positive(),
         price_move_5d: z.number().positive(),
         health_delta: z.number().positive(),
+        publication: publicationAlertSchema,
       })
       .default({
-        score_delta: 5,
+        score_delta: 15,
         price_move_1d: 0.05,
         price_move_5d: 0.08,
         health_delta: 8,
+        publication: publicationAlertDefaults,
       }),
     top_picks: z.object({
       min_market_cap: z.number().nonnegative(),

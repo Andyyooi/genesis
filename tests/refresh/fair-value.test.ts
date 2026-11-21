@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +12,8 @@ import { FAIR_VALUE_QUALITY_VERSION, persistFairValueRun } from "@/fair-value/pe
 import { runDailyRefresh } from "@/refresh/daily";
 import { fairValueRefreshOutcome, refreshFairValueUniverse, type FairValueRefreshReport } from "@/refresh/fair-value";
 import { resetRefreshAndResearchLockForTests, runRefreshAndResearch } from "@/refresh/on-demand";
+import { rescoreListedMarket } from "@/market/scan";
+import { loadRecentAlerts } from "@/alerts/refresh";
 
 const PREV_PATH = process.env.BURSA_SQLITE_PATH;
 const AS_OF = "2026-10-08T00:00:00.000Z";
@@ -150,6 +152,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   delete process.env.BURSA_SNAPSHOT_READONLY;
   resetDb();
   if (PREV_PATH === undefined) delete process.env.BURSA_SQLITE_PATH;
@@ -158,6 +161,67 @@ afterEach(() => {
 });
 
 describe("fair value daily refresh", () => {
+  it.each(["daily", "on-demand", "workflow"])("uses fresh peer classifications and publishes current safety changes in the %s path", async (path) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-07T00:00:00.000Z"));
+    seed("WIDGET", "Industrial Products");
+    const instrument = getDb().select().from(instruments).get()!;
+    persistFairValueRun({
+      instrumentId: instrument.id,
+      result: valuedResult("WIDGET"),
+      quality: { ...qualityFor("WIDGET"), status: "CLEAR" },
+    });
+    rescoreListedMarket();
+    expect(loadRecentAlerts()).toEqual([]);
+    vi.setSystemTime(new Date(AS_OF));
+    const importPrices = async (): Promise<PricesImportReport> => ({
+      kind: "prices", startedAt: AS_OF, finishedAt: AS_OF,
+      succeeded: ["WIDGET"], failed: [], barsUpserted: 0,
+    });
+    const importFundamentals = async (): Promise<YahooFundamentalsReport> => {
+      getSqlite().prepare("UPDATE instruments SET industry = 'Banks' WHERE ticker = 'WIDGET'").run();
+      return {
+        kind: "fundamentals-yahoo", startedAt: AS_OF, finishedAt: AS_OF,
+        attempted: 1, upserted: 0, inserted: 0, filled: 0, unchanged: 1,
+        skippedHadFilings: 0, skippedOtherSource: 0, instrumentsUpdated: 0,
+        instrumentsUnchanged: 1, instrumentsSkippedFresh: 1, instrumentsFetched: 0, failed: [],
+      };
+    };
+    let calculated = false;
+    const freshFairValue = () => refreshFairValueUniverse({
+      asOf: AS_OF,
+      calculate: (input) => {
+        calculated = true;
+        expect(getDb().select().from(instruments).get()!.researchProfile).toBe(path === "workflow" ? "GENERAL" : "BANK");
+        expect(input.researchProfile).toBe("BANK");
+        expect(input.peers?.find((row) => row.ticker === "WIDGET")?.researchProfile).toBe("BANK");
+        return valuedResult(input.ticker);
+      },
+      assess: () => qualityFor("WITHHELD"),
+    });
+    const deps = { now: () => new Date(), importPrices, importFundamentals };
+    if (path === "on-demand") {
+      resetRefreshAndResearchLockForTests();
+      await runRefreshAndResearch({ ticker: "WIDGET" }, { ...deps, fairValue: freshFairValue });
+    } else {
+      await runDailyRefresh({ ...deps, skipRescore: path === "workflow", persistFairValues: freshFairValue });
+      if (path === "workflow") {
+        expect(loadRecentAlerts()).toEqual([]);
+        rescoreListedMarket();
+      }
+    }
+    const rows = loadRecentAlerts();
+    expect(calculated).toBe(true);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ ticker: "WIDGET", ruleId: "fair_value_safety_changed", triggeredAt: AS_OF });
+    expect(JSON.parse(rows[0].evidenceJson)).toMatchObject({ from: "CLEAR", to: "FLAGGED", previousRunDate: "2026-10-07" });
+    expect(rows[0].why).toContain("previous run 2026-10-07 → this run's price date unavailable");
+    expect(getSqlite().prepare("SELECT COUNT(*) AS count FROM market_scan_runs").get()).toEqual({ count: 2 });
+    expect(getSqlite().prepare("SELECT json_extract(payload_json, '$.fairValueSafety') AS safety FROM market_scan_rows WHERE run_id = 2").get()).toEqual({ safety: "FLAGGED" });
+    rescoreListedMarket();
+    expect(loadRecentAlerts()).toEqual([]);
+  });
+
   it("inserts one observation and leaves it unchanged on a repeat run", () => {
     seed("WIDGET", "Industrial Products");
     const first = refreshFairValueUniverse({ asOf: AS_OF });

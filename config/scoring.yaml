@@ -46,10 +46,22 @@ research_profile_rules:
   other_financial_industry_includes: [insurance, takaful, asset management, capital markets, credit services, financial data, stock exchanges]
   bank_tickers: [MAYBANK, CIMB, PBBANK, HLBANK, RHBBANK]
 alerts:
-  score_delta: 5
+  score_delta: 15
   price_move_1d: 0.05
   price_move_5d: 0.08
   health_delta: 8
+  publication:
+    score_eligible_only: true # Current eligible names, plus current/previous top picks.
+    exclusions_top_picks_only: true # Other exclusions matter only for top picks.
+    important_exclusions: [warning] # Normalized keys: warning, liquidity, price_history, coverage.
+    priority: [new_exclusion_reason, top_pick_left, top_pick_entered, fair_value_safety_changed, research_score_down, research_score_up]
+    max_per_type: # Largest score moves first; warning exclusions before other exclusions.
+      new_exclusion_reason: 5
+      top_pick_left: 15
+      top_pick_entered: 15
+      fair_value_safety_changed: 5
+      research_score_down: 5
+      research_score_up: 5
 concerns:
   apply_score_penalty: false
   rules:
