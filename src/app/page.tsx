@@ -67,6 +67,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     events: value("events"),
   });
   const filterQuery = {
+    qualityTilt: topPicksOptions.qualityTilt ? "on" : undefined,
+    lotBudget: topPicksOptions.lotBudget?.toString(),
     type: flagFilters.instrumentType,
     shariah: flagFilters.shariah ? "yes" : undefined,
     board: flagFilters.board,
