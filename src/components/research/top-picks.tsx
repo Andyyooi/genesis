@@ -1,30 +1,123 @@
 import Link from "next/link";
-import { Disclosure } from "./disclosure";
+import { ArrowUpRight, Telescope } from "lucide-react";
 import { loadTopPicks, pickReasons } from "@/opportunities/top-picks";
 import { formatScore100 } from "@/lib/research-copy";
 
 export function TopPicks() {
   const { summary, picks, excluded, exclusions } = loadTopPicks();
-  if (!picks.length) return <Disclosure title="Top picks" hint="No eligible published picks available.">
-    <p className="text-sm text-muted-foreground">Use Refresh data to request a new publication. These are research lists, not buy or sell instructions.</p>
-    <p className="text-sm">Publication: {summary?.asOf ?? "Unavailable"}. <Link href="/market?eligibility=excluded" className="text-primary underline">{excluded} names excluded</Link>.</p>
-    {exclusions.length ? <ul className="list-inside list-disc text-sm">{exclusions.map(([reason, count]) => <li key={reason}>{reason}: {count}</li>)}</ul> : null}
-  </Disclosure>;
-  return <section className="flex flex-col gap-3 rounded-2xl border border-teal-200 bg-gradient-to-br from-white to-teal-50/60 p-5">
-    <h2 className="text-xl font-semibold">Top picks right now</h2>
-    <p className="text-xs font-medium text-primary">Eligible published scores · research, not buy/sell advice</p>
-    <details className="text-sm text-muted-foreground"><summary className="cursor-pointer">How these are selected</summary><p className="mt-2">Highest eligible published scores, not personalised advice. Factor reasons describe relative blended profile/sector percentiles, not promises of returns. Publication: {summary?.asOf ?? "unavailable"}.</p></details>
-    {picks.length ? <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{picks.map((pick, index) => {
-      const reasons = pickReasons(pick.result);
-      const unavailable = pick.result.categories.flatMap((category) => category.factors).find((factor) => factor.reason?.includes("definition break"));
-      return <li className="flex flex-col gap-3 rounded-xl border bg-white p-4" key={pick.ticker}>
-        <h3 className="font-semibold">{index + 1}. <Link className="underline underline-offset-4" href={`/stock/${pick.ticker}`}>{pick.ticker} · {pick.name}</Link></h3>
-        <p>Score {formatScore100(pick.result.researchScore)} · {pick.result.researchProfile}</p>
-        <Disclosure title="Evidence & cautions"><ul className="list-inside list-disc text-sm">{reasons.length ? reasons.map((reason) => <li key={reason}>{reason}</li>) : <li>No favorable factor percentile is available.</li>}</ul>
-        <p className="text-sm">Caution: {unavailable?.reason ?? pick.result.concerns[0]?.message ?? `Data confidence ${pick.result.dataConfidence.level.toLowerCase()}; ${pick.result.dataCoverage.available}/${pick.result.dataCoverage.expected} factors available. Relative rank is not an absolute valuation.`}</p>
-        <p className="text-sm text-muted-foreground">Data as of {pick.lastTrade ?? "unavailable"} · accounts {pick.result.dataCoverage.periodEnd ?? "unavailable"}</p></Disclosure>
-      </li>;
-    })}</ol> : <p>No eligible published picks are available. Use Refresh data to request a new publication.</p>}
-    <p className="text-sm"><Link className="underline" href="/market?eligibility=excluded">{excluded} names excluded from recommendations</Link>{exclusions.length ? ` — ${exclusions.map(([reason, count]) => `${reason}: ${count}`).join("; ")}. Reasons can overlap.` : "."}</p>
-  </section>;
+  return (
+    <section className="market-card overflow-hidden">
+      <div className="radar-heading">
+        <span className="radar-icon">
+          <Telescope className="size-5" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="section-kicker">DISCOVER & INVESTIGATE</p>
+          <h2 className="text-lg font-semibold">Research radar</h2>
+        </div>
+      </div>
+      <p className="px-5 pb-3 text-xs text-muted-foreground">
+        Highest eligible published research scores. A starting point, not a buy
+        list.
+      </p>
+      {picks.length ? (
+        <ol className="radar-list">
+          {picks.slice(0, 3).map((pick, index) => {
+            const reasons = pickReasons(pick.result);
+            const unavailable = pick.result.categories
+              .flatMap((category) => category.factors)
+              .find((factor) => factor.reason?.includes("definition break"));
+            return (
+              <li key={pick.ticker}>
+                <div className="flex items-start gap-3">
+                  <span className="radar-rank">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/stock/${pick.ticker}`}
+                      className="company-symbol"
+                    >
+                      {pick.ticker}
+                      <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                    </Link>
+                    <p
+                      className="truncate text-xs text-muted-foreground"
+                      title={pick.name}
+                    >
+                      {pick.name}
+                    </p>
+                  </div>
+                  <span className="radar-score">
+                    {pick.result.researchScore?.toFixed(0) ?? "—"}
+                    <small>/100</small>
+                  </span>
+                </div>
+                <details className="mt-3 text-xs">
+                  <summary className="cursor-pointer text-primary">
+                    Evidence & cautions
+                  </summary>
+                  <p className="mt-2 font-medium">
+                    Research {formatScore100(pick.result.researchScore)} ·{" "}
+                    {pick.result.researchProfile}
+                  </p>
+                  <ul className="mt-2 list-disc space-y-1 pl-4">
+                    {reasons.length ? (
+                      reasons.map((reason) => <li key={reason}>{reason}</li>)
+                    ) : (
+                      <li>No favourable factor percentile is available.</li>
+                    )}
+                  </ul>
+                  <p className="mt-2 text-amber-800">
+                    {unavailable?.reason ??
+                      pick.result.concerns[0]?.message ??
+                      `Data confidence ${pick.result.dataConfidence.level.toLowerCase()}; ${pick.result.dataCoverage.available}/${pick.result.dataCoverage.expected} factors available.`}
+                  </p>
+                  <p className="mt-2 text-muted-foreground">
+                    Price {pick.lastTrade ?? "unavailable"} · accounts{" "}
+                    {pick.result.dataCoverage.periodEnd ?? "unavailable"}.
+                    Relative rank is not absolute value.
+                  </p>
+                </details>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className="px-5 py-4 text-sm text-muted-foreground">
+          No eligible published candidates. Check data reports or request a
+          manual refresh.
+        </p>
+      )}
+      <details className="border-t px-5 py-4 text-xs text-muted-foreground">
+        <summary className="cursor-pointer">
+          Selection & publication details
+        </summary>
+        <p className="mt-2">
+          Highest eligible published scores, not personalised advice.
+          Publication: {summary?.asOf ?? "unavailable"}.
+        </p>
+        <Link
+          className="mt-2 inline-block text-primary underline"
+          href="/market?eligibility=excluded"
+        >
+          {excluded} names excluded from recommendations
+        </Link>
+        {exclusions.length ? (
+          <ul className="mt-2 space-y-1">
+            {exclusions.map(([reason, count]) => (
+              <li key={reason}>
+                {reason}: {count}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <p className="mt-2">Reasons can overlap.</p>
+      </details>
+      <Link href="/market?eligibility=eligible" className="radar-footer">
+        Explore eligible research{" "}
+        <ArrowUpRight className="size-4" aria-hidden="true" />
+      </Link>
+    </section>
+  );
 }
