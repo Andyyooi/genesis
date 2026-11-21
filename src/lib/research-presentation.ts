@@ -1,10 +1,11 @@
 import { CATEGORY_LABELS, formatContextHeadline, formatScore100 } from "@/lib/research-copy";
 import { formatMetricValue } from "@/lib/format-metric";
+import { financialTerm } from "@/lib/financial-terms";
 import type { EventSnapshot, MetricValue } from "@/metrics/types";
 import type { CategoryScore, ScoreResult } from "@/scoring/types";
 
 export const RESEARCH_SCORE_BLURB =
-  "Research Score is the stored, universe-wide blend of value, quality, momentum, low volatility, health and growth percentiles. Profile-wide and sector ranks are blended; banks and REITs rank within their own groups. Missing factors are excluded and remaining weights are renormalized. News is display-only. It is not a buy or sell recommendation.";
+  "Research Score combines comparisons of price, profitability, price trends, price swings, financial strength and growth. Higher means a stronger comparison, not a predicted return. Banks and property funds are compared within their own groups. Missing checks are left out and the remaining checks share the weight. News does not affect the score. This is not a buy or sell recommendation.";
 
 export function researchScoreBlurb(result: ScoreResult): string {
   const omitted = result.categories
@@ -77,7 +78,8 @@ export function researchInterpretationBullets(args: {
   for (const id of valueMetrics) {
     const m = byId(id);
     if (m?.available && m.value !== null) {
-      bullets.push(`${m.label}: ${formatMetricValue(m)}${m.period ? ` (period ${m.period})` : ""}.`);
+      const term = financialTerm(id, m.label);
+      bullets.push(`${term.label} (${term.technical}): ${formatMetricValue(m)}${m.period ? ` (period ${m.period})` : ""}. ${term.explanation}`);
     }
   }
 
@@ -103,18 +105,19 @@ export function researchInterpretationBullets(args: {
   for (const id of profileMetrics) {
     const m = byId(id);
     if (m?.available && m.value !== null) {
-      bullets.push(`${m.label}: ${formatMetricValue(m)}${m.period ? ` (period ${m.period})` : ""}.`);
+      const term = financialTerm(id, m.label);
+      bullets.push(`${term.label} (${term.technical}): ${formatMetricValue(m)}${m.period ? ` (period ${m.period})` : ""}. ${term.explanation}`);
     }
     if (!m?.available && m?.reason?.includes("definition break")) bullets.push(m.reason);
   }
 
   const c = result.dataCoverage;
   bullets.push(
-    `Data coverage ${Math.round(c.coverageRatio * 100)}% (${c.available} of ${c.expected} core factors); freshness ${c.freshness.replaceAll("_", " ")}; confidence ${result.dataConfidence.level}.`,
+    `${c.available} of ${c.expected} financial and price checks have usable data (${Math.round(c.coverageRatio * 100)}%). Trust in the evidence: ${result.dataConfidence.level.toLowerCase()}, based on completeness and account age — not a judgement of investment safety.`,
   );
   if (!c.availableAt) {
     bullets.push(
-      "Point-in-time filing availability (available_at) is unknown for the latest annual used — historical series may be period-end only.",
+      "We do not know when the latest annual accounts became public. Historical comparisons may use information that was not yet available to investors.",
     );
   }
 
@@ -131,5 +134,5 @@ export function researchInterpretationBullets(args: {
 }
 
 export function absoluteValuationBlurb(): string {
-  return "Relative value percentiles within the scored universe, not an absolute fair-value estimate. Historical and peer labels below are separate and do not change this stored score.";
+  return "Compares how much accounting value you get for the price against other scored companies. Higher is relatively better value, not proof the share is cheap or an estimate of its true worth. Comparisons with past years and similar companies below do not change this score.";
 }

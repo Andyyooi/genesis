@@ -1,4 +1,6 @@
 import { Disclosure } from "@/components/research/disclosure";
+import { FinancialTerm } from "@/components/research/financial-term";
+import { plainConcern } from "@/lib/financial-terms";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CategoryDisclosure } from "@/components/research/category-disclosure";
@@ -126,7 +128,7 @@ function MetricTable({ ids, metrics }: { ids: string[]; metrics: MetricValue[] }
           const metric = metricById(metrics, id);
           return (
             <TableRow key={id}>
-              <TableCell>{metric?.label ?? id}</TableCell>
+              <TableCell><FinancialTerm id={id} fallback={metric?.label} /></TableCell>
               <TableCell className="whitespace-normal text-right">{fmtRatio(metric)}</TableCell>
               <TableCell className="hidden text-muted-foreground sm:table-cell">
                 {metric?.period ? formatDateSafe(metric.period) : "Unavailable"}
@@ -185,7 +187,7 @@ export default async function ResearchPage({
           <h1 className="text-3xl font-semibold tracking-tight">{instrument.name}</h1>
           <Badge variant={isReit ? "secondary" : "outline"}>{instrumentLabel}</Badge>
           <Badge variant="outline">{result.researchProfile}</Badge>
-          {instrument.pn17 ? <Badge variant="destructive">PN17</Badge> : null}
+          {instrument.pn17 ? <Badge variant="destructive">Financial distress warning (PN17)</Badge> : null}
           {instrument.shariahCompliant === true ? (
             <Badge variant="secondary">Shariah</Badge>
           ) : null}
@@ -215,13 +217,11 @@ export default async function ResearchPage({
         </dl>
         <DataLagBanner dates={snapshotDates} />
         {isReit ? (
-          <details className="text-sm text-muted-foreground"><summary className="cursor-pointer text-primary">About REIT research</summary><p className="mt-2">REIT profile: distribution yield, book NAV, DPU growth, gearing and related REIT
-            metrics. Industrial FCF and EV/EBITDA are not used.
+          <details className="text-sm text-muted-foreground"><summary className="cursor-pointer text-primary">About property-fund (REIT) research</summary><p className="mt-2">Property funds are compared using cash payments to investors, net property assets, growth in payments and borrowing. Ordinary-company cash-flow and operating-earnings comparisons are not used.
           </p></details>
         ) : null}
         {isBank ? (
-          <details className="text-sm text-muted-foreground"><summary className="cursor-pointer text-primary">About bank research</summary><p className="mt-2">Bank profile: P/B, ROE, and bank health overlays where data exists. Industrial FCF and
-            EV/EBITDA are not scoring factors.
+          <details className="text-sm text-muted-foreground"><summary className="cursor-pointer text-primary">About bank research</summary><p className="mt-2">Banks are compared using price versus net assets (P/B), profit on shareholders’ money (ROE), and bank health checks where data exists. Ordinary-company cash-flow and operating-earnings comparisons are not used.
           </p></details>
         ) : null}
       </header>
@@ -232,12 +232,10 @@ export default async function ResearchPage({
       <ResearchScoreCard result={result} />
 
       {/* C. Score breakdown */}
-      <Disclosure title="Score breakdown" hint="See the factors and evidence behind this score.">
+      <Disclosure title="Score breakdown" hint="See the financial and price checks (factors) behind this score.">
         <div>
           <p className="text-sm text-muted-foreground">
-            Live weight is the share of this run after unavailable categories are dropped and
-            remaining weights are renormalized. Unavailable factors are excluded — never treated as
-            zero.
+            Each factor is one financial or price check. Higher scores mean a stronger comparison with other scored companies, not a guaranteed return. A live weight is how much a category counts in this result. Missing checks are left out, not scored as zero; the remaining categories share the weight.
           </p>
         </div>
         <CategoryDisclosure categories={result.categories} />
@@ -309,7 +307,7 @@ export default async function ResearchPage({
           <ul className="list-disc space-y-2 pl-5 text-sm">
             {result.concerns.map((concern) => (
               <li key={concern.id}>
-                <span className="font-medium">{concern.label}.</span> {concern.message}
+                <span className="font-medium">{concern.label}.</span> {plainConcern(concern.id, concern.message)}
                 {concern.value !== null && Number.isFinite(concern.value)
                   ? ` Value: ${concern.value.toFixed(4)}.`
                   : ""}

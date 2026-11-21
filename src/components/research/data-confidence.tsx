@@ -1,8 +1,8 @@
 import { Disclosure } from "./disclosure";
+import { FinancialTerm } from "./financial-term";
 import { StatusLabel } from "./status-label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCoverageSummary } from "@/scoring/confidence";
 import type { ScoreResult } from "@/scoring/types";
 import { dataConfidenceLabel, formatFreshnessBand, formatScore100, scoreEmphasisMuted } from "@/lib/research-copy";
 import { researchScoreBlurb } from "@/lib/research-presentation";
@@ -52,17 +52,17 @@ export function ResearchScoreCard({ result }: { result: ScoreResult }) {
         <ScoreWithConfidence result={result} kind="research" />
         <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
           <div>
-            <dt className="text-muted-foreground">Data confidence</dt>
+            <dt className="text-muted-foreground"><FinancialTerm id="data_confidence" /></dt>
             <dd className="mt-1"><StatusLabel level={result.dataConfidence.level}>{dataConfidenceLabel(result.dataConfidence.level)}</StatusLabel></dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Coverage</dt>
+            <dt className="text-muted-foreground"><FinancialTerm id="coverage" /></dt>
             <dd className="font-medium">
-              {Math.round(c.coverageRatio * 100)}% ({c.available}/{c.expected})
+              {c.available} of {c.expected} checks ({Math.round(c.coverageRatio * 100)}%)
             </dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Freshness</dt>
+            <dt className="text-muted-foreground"><FinancialTerm id="freshness" /></dt>
             <dd className="mt-1"><StatusLabel level={c.freshness}>{formatFreshnessBand(c.freshness)}</StatusLabel></dd>
           </div>
         </dl>
@@ -84,7 +84,7 @@ export function DataQualitySection({ result }: { result: ScoreResult }) {
   const d = result.dataConfidence;
   const pitSafe = Boolean(c.availableAt);
   return (
-    <Disclosure title="Data quality" hint={`${dataConfidenceLabel(d.level)} confidence · ${Math.round(c.coverageRatio * 100)}% coverage · ${formatFreshnessBand(c.freshness)}`}>
+    <Disclosure title="Data quality" hint={`${dataConfidenceLabel(d.level)} trust in evidence · ${c.available} of ${c.expected} checks have data · accounts: ${formatFreshnessBand(c.freshness)}`}>
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Data Quality</h2>
         <p className="text-sm text-muted-foreground">
@@ -102,11 +102,11 @@ export function DataQualitySection({ result }: { result: ScoreResult }) {
         <CardContent className="flex flex-col gap-4 text-sm">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <p className="font-medium">Coverage</p>
-              <p className="text-muted-foreground">{formatCoverageSummary(c)}</p>
+              <p className="font-medium"><FinancialTerm id="coverage" /></p>
+              <p className="text-muted-foreground">{c.available} of {c.expected} checks have usable data ({Math.round(c.coverageRatio * 100)}%). Missing checks are left out, never scored as zero.</p>
             </div>
             <div>
-              <p className="font-medium">Freshness</p>
+              <p className="font-medium"><FinancialTerm id="freshness" /></p>
               <p className="text-muted-foreground">
                 {formatFreshnessBand(c.freshness)}
                 {c.ageMonths != null ? ` · ${c.ageMonths} months` : ""}
@@ -114,15 +114,15 @@ export function DataQualitySection({ result }: { result: ScoreResult }) {
               </p>
             </div>
             <div>
-              <p className="font-medium">Point-in-time safety</p>
+              <p className="font-medium">Can we tell when investors first had these accounts? (Point-in-time safety)</p>
               <p className="text-muted-foreground">
                 {pitSafe
                   ? `Filing availability known (${c.availableAt}).`
-                  : "Filing availability (available_at) unknown for the latest annual — period-end only; not claimed as look-ahead-safe PIT."}
+                  : "We know the year-end, but not when the latest accounts became public. Historical comparisons may therefore use information investors did not yet have."}
               </p>
             </div>
             <div>
-              <p className="font-medium">Factor age mix</p>
+              <p className="font-medium">Age of the evidence behind the checks</p>
               <p className="text-muted-foreground">
                 Fresh {c.freshCount} · aging {c.agingCount} · stale {c.staleCount} · very stale{" "}
                 {c.veryStaleCount} · period unknown {c.unknownCount}
