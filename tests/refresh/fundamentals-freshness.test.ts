@@ -450,6 +450,7 @@ describe("daily refresh wires freshness gate without changing prices/scoring rul
       },
     });
     expect(summary.datasets.find((d) => d.dataset === "fundamentals")?.metadata).toMatchObject({
+      requestsSucceeded: 0,
       instrumentsSkippedFresh: 1,
       instrumentsFetched: 0,
       recheckAfterDays: 14,

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { loadScoringConfig } from "@/config/load-scoring";
-import { getDb } from "@/db/client";
+import { getDb, getSqlite } from "@/db/client";
 import { fairValueRuns, financialPeriods, instruments, priceBars, refreshRuns } from "@/db/schema";
 import type { EventDraft, EventSourceProvider } from "@/events/types";
 import type { PricesImportReport } from "@/ingest/types";
@@ -13,6 +13,7 @@ import { formatDailyRefreshSummary, runDailyRefresh } from "@/refresh/daily";
 import { dailyRefreshOptionsFromArgv } from "@/refresh/cli";
 import { loadLastSuccessfulAt } from "@/refresh/persist";
 import { advancesLastSuccessful, combineOverallStatus } from "@/refresh/types";
+import { validateRefreshStages } from "@/refresh/validate-publication";
 
 const PREV_PATH = process.env.BURSA_SQLITE_PATH;
 let tempDir = "";
@@ -119,6 +120,20 @@ function emptyFundReport(over: Partial<YahooFundamentalsReport> = {}): YahooFund
 }
 
 describe("Phase 18B daily refresh", () => {
+  it("never lets 990 freshness skips mask ten failed real requests", async () => {
+    const failed = Array.from({ length: 10 }, (_, i) => ({ ticker: `MISS${i}`, yahooTicker: "0001.KL", mappingTried: ["0001.KL"], code: "UNKNOWN" as const, reason: "Yahoo unavailable" }));
+    const summary = await runDailyRefresh({
+      importPrices: async () => ({ kind: "prices", startedAt: "a", finishedAt: "b", succeeded: [], failed, barsUpserted: 0 }),
+      importFundamentals: async () => emptyFundReport({ attempted: 1000, instrumentsUnchanged: 990, instrumentsSkippedFresh: 990, instrumentsFetched: 10, failed }),
+      rescore: () => ({ kind: "ok" }),
+      now: () => new Date("2026-09-24T10:00:00.000Z"),
+    });
+    const stages = getSqlite().prepare("SELECT dataset, status, failed_count, json_extract(metadata_json, '$.requestsSucceeded') AS requested_succeeded_count, started_at FROM refresh_runs WHERE run_id = ?").all(summary.runId) as Parameters<typeof validateRefreshStages>[0];
+    expect(stages.find((r) => r.dataset === "fundamentals")).toMatchObject({ status: "PARTIAL", failed_count: 10, requested_succeeded_count: 0 });
+    expect(stages.find((r) => r.dataset === "prices")).toMatchObject({ status: "SOURCE_FAILED", failed_count: 10, requested_succeeded_count: 0 });
+    expect(() => validateRefreshStages(stages, summary.startedAt)).toThrow(/prices/);
+    expect(() => validateRefreshStages(stages.map((r) => r.dataset === "prices" ? { ...r, status: "SUCCESS", failed_count: 0, requested_succeeded_count: 1 } : r), summary.startedAt)).toThrow(/fundamentals/);
+  });
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "genesis-refresh-"));
     process.env.BURSA_SQLITE_PATH = join(tempDir, "test.db");
@@ -154,6 +169,7 @@ describe("Phase 18B daily refresh", () => {
       now: () => new Date("2026-09-24T10:00:00.000Z"),
     });
     expect(first.datasets.find((d) => d.dataset === "prices")?.status).toBe("SUCCESS");
+    expect(first.datasets.find((d) => d.dataset === "prices")?.metadata).toMatchObject({ requestsSucceeded: 1 });
     expect(loadLastSuccessfulAt("prices", "yahoo")).toBeTruthy();
 
     await runDailyRefresh({

@@ -104,6 +104,7 @@ async function refreshPrices(
           ? `Yahoo price miss for ${report.failed.length} instruments (existing bars preserved).`
           : null,
       metadata: {
+        requestsSucceeded: report.succeeded.length,
         barsUpserted: report.barsUpserted,
         failedSample: report.failed.slice(0, 10),
       },
@@ -161,6 +162,7 @@ async function refreshFundamentals(
           ? `Yahoo fundamentals issues for ${report.failed.length} instruments (prior periods preserved).`
           : null,
       metadata: {
+        requestsSucceeded: report.instrumentsUpdated + report.instrumentsUnchanged - report.instrumentsSkippedFresh - report.skippedHadFilings,
         inserted: report.inserted,
         filled: report.filled,
         unchangedPeriods: report.unchanged,
