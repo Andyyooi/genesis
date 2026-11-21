@@ -153,7 +153,7 @@ export async function importYahooPrices(
 
 const CLOSE_MATCH = 1e-6;
 
-type StoredYahooBar = { utc: number; barDate: string; close: number | null };
+type StoredYahooBar = YahooBar & { utc: number };
 
 type PriceWritePlan = {
   write: YahooBar[];
@@ -164,7 +164,7 @@ type PriceWritePlan = {
 
 function storedYahooBars(instrumentId: number): StoredYahooBar[] {
   const rows = getDb()
-    .select({ barDate: priceBars.barDate, close: priceBars.close })
+    .select({ barDate: priceBars.barDate, close: priceBars.close, open: priceBars.open, high: priceBars.high, low: priceBars.low, volume: priceBars.volume, adjClose: priceBars.adjClose })
     .from(priceBars)
     .where(and(eq(priceBars.instrumentId, instrumentId), eq(priceBars.source, "yahoo")))
     .all();
@@ -172,14 +172,14 @@ function storedYahooBars(instrumentId: number): StoredYahooBar[] {
   for (const row of rows) {
     const utc = yahooBarDateUtc(row.barDate);
     if (utc == null) continue;
-    stored.push({ utc, barDate: row.barDate, close: row.close });
+    stored.push({ ...row, utc });
   }
   return stored;
 }
 
 /**
  * New sessions are inserted even when they are older than the latest bar.
- * An older session with the same close is left as it is.
+ * Matching closes accept volume/adjustment revisions without losing stored fields.
  * An older session with a different close is kept and reported.
  * The latest stored session may still be revised when its close changes.
  */
@@ -217,6 +217,9 @@ function planYahooPriceWrites(ticker: string, accepted: YahooBar[], stored: Stor
     }
     if (Math.abs(storedClose - close) <= CLOSE_MATCH) {
       reimported += 1;
+      const volume = bar.volume ?? existing!.volume;
+      const adjClose = bar.adjClose != null && bar.adjClose > 0 ? bar.adjClose : existing!.adjClose;
+      if (volume !== existing!.volume || adjClose !== existing!.adjClose) write.push({ ...existing!, volume, adjClose });
       continue;
     }
     if (latestUtc != null && utc < latestUtc) {
@@ -260,6 +263,7 @@ function writePriceBar(instrumentId: number, bar: YahooBar, retrievedAt: string)
         close: bar.close,
         volume: bar.volume,
         adjClose: bar.adjClose,
+        adjusted: bar.adjClose != null && bar.adjClose > 0,
         asOf: `${bar.barDate}T16:00:00+08:00`,
         retrievedAt,
       },
