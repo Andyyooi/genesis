@@ -1,3 +1,4 @@
+import { Disclosure } from "@/components/research/disclosure";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -74,7 +75,7 @@ export default async function MetricsDebugPage({
           <CardTitle>Computed metrics</CardTitle>
           <CardDescription>CLI: npm run metrics -- {data.instrument.ticker}</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent><Disclosure title="View details">
           <Table>
             <TableHeader>
               <TableRow>
@@ -107,7 +108,7 @@ export default async function MetricsDebugPage({
               ))}
             </TableBody>
           </Table>
-        </CardContent>
+        </Disclosure></CardContent>
       </Card>
     </main>
   );

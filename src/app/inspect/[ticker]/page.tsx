@@ -1,3 +1,4 @@
+import { Disclosure } from "@/components/research/disclosure";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -80,7 +81,7 @@ export default async function InspectPage({
             not filled in. Re-import the same ticker/period/statement/source to overwrite.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent><Disclosure title="View details">
           {periods.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No periods yet. Import{" "}
@@ -128,7 +129,7 @@ export default async function InspectPage({
               </TableBody>
             </Table>
           )}
-        </CardContent>
+        </Disclosure></CardContent>
       </Card>
 
       <Card>
@@ -141,7 +142,7 @@ export default async function InspectPage({
               : ""}. Showing the latest 30. Last trade date is the newest bar, not “today”.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent><Disclosure title="View details">
           {recentBars.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No Yahoo bars stored. Run <code className="font-mono">npm run ingest:prices</code>.
@@ -175,7 +176,7 @@ export default async function InspectPage({
               </TableBody>
             </Table>
           )}
-        </CardContent>
+        </Disclosure></CardContent>
       </Card>
     </main>
   );

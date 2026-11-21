@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bursa research — dashboard",
-  description: "Personal Malaysian equity research. Phase 10: REIT and bank scoring profiles.",
+  title: "Genesis Research | Bursa Malaysia",
+  description: "Clear, evidence-led research for Bursa Malaysia equities.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -29,7 +29,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col bg-background text-foreground" suppressHydrationWarning>
         <AuthNav />
         <SnapshotBanner />
-        {children}
+        <a href="#main-content" className="skip-link">Skip to content</a>
+        <div id="main-content" className="flex flex-1 flex-col">{children}</div>
+        <footer className="mx-auto flex w-full max-w-[88rem] flex-wrap justify-between gap-2 px-6 py-6 text-xs text-muted-foreground"><span>Genesis Research · Bursa Malaysia</span><span>Research, not buy or sell advice. Prices are not live.</span></footer>
       </body>
     </html>
   );

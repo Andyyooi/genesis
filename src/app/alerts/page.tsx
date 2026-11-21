@@ -16,20 +16,19 @@ export default function AlertsPage() {
         <Link href="/" className="underline underline-offset-4">
           Dashboard
         </Link>
-        {" · in-app alerts · not email · not a buy or sell"}
+
       </p>
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold tracking-tight">Alerts</h1>
         <p className="text-muted-foreground">
-          Each item stores the rule and why it fired. Click through to the research page. Re-run
-          ingest or <code className="font-mono text-sm">npm run alerts</code> after new files.
+          Changes worth a closer look. Open an alert to see the company, or expand its explanation.
         </p>
       </header>
       <p className="text-sm text-muted-foreground">Universe-wide latest stored dates; individual companies can have older accounts.</p>
       {dates ? <DataLagBanner dates={dates} /> : <p>No published research run is available.</p>}
       <AlertsList
         rows={rows}
-        empty="No alerts yet. Import announcements or run npm run alerts. Nothing is invented to fill this list."
+        empty="No alerts in the published data yet."
       />
     </main>
   );
