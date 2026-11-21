@@ -18,7 +18,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               <input type="hidden" name="next" value={sanitizeNextPath(params.next)} />
               <label htmlFor="password" className="text-sm font-medium">Password</label>
               <input id="password" name="password" type="password" autoComplete="current-password" required maxLength={4096} className="h-10 rounded-lg border border-input bg-background px-3 focus-visible:outline-2 focus-visible:outline-ring" />
-              {params.error ? <p role="alert" className="text-sm text-destructive">Incorrect password. Please try again.</p> : null}
+              {params.error ? <p role="alert" className="text-sm text-destructive">{params.error === "rate_limit" ? "Too many failed sign-in attempts. Please wait up to 15 minutes before trying again." : "Incorrect password. Please try again."}</p> : null}
               <Button type="submit">Sign in</Button>
             </form>
           )}

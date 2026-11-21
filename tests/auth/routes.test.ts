@@ -18,6 +18,20 @@ function form(password: string, next = "/market", origin = "https://research.tes
 }
 
 describe("authentication routes", () => {
+  it("returns a friendly non-cacheable 429 after five failed attempts from the forwarded IP", async () => {
+    vi.stubEnv("SITE_PASSWORD", "test-password");
+    for (let i = 0; i < 5; i++) {
+      const request = form("wrong"); request.headers.set("x-forwarded-for", "192.0.2.50, 127.0.0.1");
+      expect((await login(request)).status).toBe(303);
+    }
+    const request = form("test-password"); request.headers.set("x-real-ip", "192.0.2.50");
+    const response = await login(request);
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBeTruthy();
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.cookies.get(SESSION_COOKIE)).toBeUndefined();
+    expect(await response.text()).toContain("Too many failed sign-in attempts");
+  });
   it("logs in through the public host when the server URL uses an internal bind address", async () => {
     vi.stubEnv("SITE_PASSWORD", "test-password");
     vi.stubEnv("NODE_ENV", "production");

@@ -20,7 +20,7 @@ it("skips unsupported / non-equity listings but still reports genuine equity mis
   const db = getDb();
   const now = new Date().toISOString();
   db.insert(instruments).values({ ticker: "ABFMY1", name: "ABF Malaysia Bond Index", instrumentType: "COMMON_STOCK", createdAt: now, updatedAt: now }).run();
-  const provider = { name: "test", annualPeriods: vi.fn(async () => []) };
+  const provider = { id: "test", annualPeriods: vi.fn(async () => []) };
   expect(await importYahooFundamentals(provider, { rateLimitMs: 0 })).toMatchObject({ attempted: 0, failed: [] });
   expect(provider.annualPeriods).not.toHaveBeenCalled();
   db.insert(instruments).values({ ticker: "EQUITY", yahooTicker: "0001.KL", name: "Equity Berhad", instrumentType: "COMMON_STOCK", createdAt: now, updatedAt: now }).run();

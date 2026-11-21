@@ -441,7 +441,7 @@ describe("daily refresh wires freshness gate without changing prices/scoring rul
     expect(priceOpts[0]).toMatchObject({
       listedOnly: true,
       skipAlerts: true,
-      range: "5d",
+      range: "auto",
       rateLimitMs: 100,
     });
     expect(fundOpts[0]).toMatchObject({

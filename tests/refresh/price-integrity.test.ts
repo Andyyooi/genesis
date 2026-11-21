@@ -144,20 +144,21 @@ function scored(researchScore: number | null, date = "2026-10-12", close = 11) {
 
 describe("refresh price integrity", () => {
   it("accepts revised volume and adjusted closes on old matching bars without erasing better fields", async () => {
+    const revisedBar = () => getDb().select().from(priceBars).where(eq(priceBars.barDate, "2026-09-16")).get();
     seedBar("MAYBANK", "2026-09-16", 10);
     seedBar("MAYBANK", "2026-09-17", 11);
     vi.mocked(fetchYahooDailyBars).mockResolvedValue([yahooBar("2026-09-16", 10, { volume: 200, adjClose: 8.5, open: null, high: null, low: null })]);
     const options = { onlyTicker: "MAYBANK", skipAlerts: true, skipUniverseSeed: true, rateLimitMs: 0 };
     expect((await importYahooPrices(options)).barsUpserted).toBe(1);
-    expect(storedBars("MAYBANK")[0]).toMatchObject({ close: 10, open: 10, volume: 200, adjClose: 8.5, adjusted: true });
+    expect(revisedBar()).toMatchObject({ close: 10, open: 10, volume: 200, adjClose: 8.5, adjusted: true });
     for (const adjClose of [null, 0]) {
       vi.mocked(fetchYahooDailyBars).mockResolvedValue([yahooBar("2026-09-16", 10, { volume: null, adjClose })]);
       expect((await importYahooPrices(options)).barsUpserted).toBe(0);
-      expect(storedBars("MAYBANK")[0]).toMatchObject({ volume: 200, adjClose: 8.5 });
+      expect(revisedBar()).toMatchObject({ volume: 200, adjClose: 8.5 });
     }
     vi.mocked(fetchYahooDailyBars).mockResolvedValue([yahooBar("2026-09-16", 10, { volume: -1 })]);
     expect((await importYahooPrices(options)).failed).toHaveLength(1);
-    expect(storedBars("MAYBANK")[0]).toMatchObject({ volume: 200, adjClose: 8.5 });
+    expect(revisedBar()).toMatchObject({ volume: 200, adjClose: 8.5 });
   });
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "genesis-price-integrity-"));
