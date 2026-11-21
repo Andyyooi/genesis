@@ -74,7 +74,7 @@ export function resolveSqliteFile(): { path: string; readonly: boolean } {
     : join(process.cwd(), "data", "snapshots", "research.db.gz");
   if (!existsSync(/*turbopackIgnore: true*/ gz)) {
     throw new Error(
-      `Read-only snapshot missing at ${gz}. Run npm run snapshot:pack and commit data/snapshots/research.db.gz.`,
+      `Read-only snapshot missing at ${gz}. Run npm run snapshot:fetch before starting the app.`,
     );
   }
   // Candidate paths use an isolated /tmp copy so they never collide with the committed snapshot cache.
