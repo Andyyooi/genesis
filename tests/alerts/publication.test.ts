@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { evaluatePublicationAlerts, type AlertCompany, type AlertPublication } from "@/alerts/publication";
+import { loadScoringConfig } from "@/config/load-scoring";
 
 function company(overrides: Partial<AlertCompany> = {}): AlertCompany {
   return { instrumentId: 1, ticker: "TEST", researchScore: 50, eligible: true, exclusionReasons: [], lastTrade: "2026-11-20", fairValueSafety: "CLEAR", ...overrides };
@@ -61,5 +62,55 @@ describe("published-run change alerts", () => {
 
   it("does not generate alerts for unchanged publications", () => {
     expect(evaluatePublicationAlerts(publication([company()]), publication([company()], 2), 5)).toEqual([]);
+  });
+
+  it("uses a meaningful default threshold and ignores moves in excluded non-picks", () => {
+    const config = loadScoringConfig().alerts;
+    expect(config.score_delta).toBe(15);
+    const before = company({ eligible: false, researchScore: 10 });
+    const after = { ...before, researchScore: 80 };
+    expect(evaluatePublicationAlerts(publication([before]), publication([after], 2), config.score_delta)).toEqual([]);
+    const policy = { ...config.publication, score_eligible_only: false };
+    expect(evaluatePublicationAlerts(publication([before]), publication([after], 2), config.score_delta, policy).map((row) => row.ruleId)).toEqual(["research_score_up"]);
+    expect(evaluatePublicationAlerts(publication([company()]), publication([company({ researchScore: 64.99 })], 2), config.score_delta)).toEqual([]);
+  });
+
+  it("keeps meaningful score moves for a former pick that becomes excluded", () => {
+    const result = evaluatePublicationAlerts(publication([company()]), publication([company({ eligible: false, researchScore: 20 })], 2), 15);
+    expect(result.map((row) => row.ruleId)).toEqual(["top_pick_left", "research_score_down"]);
+  });
+
+  it("suppresses routine exclusions outside picks, but always considers new warnings", () => {
+    const before = company({ eligible: false });
+    const after = { ...before, exclusionReasons: ["Median daily traded value RM 50000 is below RM 100000."] };
+    expect(evaluatePublicationAlerts(publication([before]), publication([after], 2), 15)).toEqual([]);
+    const policy = { ...loadScoringConfig().alerts.publication, exclusions_top_picks_only: false };
+    expect(evaluatePublicationAlerts(publication([before]), publication([after], 2), 15, policy)[0].ruleId).toBe("new_exclusion_reason");
+    const warning = { ...after, exclusionReasons: [...after.exclusionReasons, "Stored PN17 / warning flag is set."] };
+    const result = evaluatePublicationAlerts(publication([before]), publication([warning], 2), 15);
+    expect(result).toHaveLength(1);
+    expect(result[0].evidence.reasons).toEqual(["Stored PN17 / warning flag is set."]);
+  });
+
+  it("caps each type after ranking the biggest moves, deterministically", () => {
+    const before = Array.from({ length: 20 }, (_, i) => company({ ticker: `T${i}`, researchScore: 30 + i }));
+    const after = before.map((row, i) => ({ ...row, researchScore: row.researchScore! + 16 + i }));
+    const policy = loadScoringConfig().alerts.publication;
+    const evaluate = (settings = policy) => evaluatePublicationAlerts(publication(before), publication(after, 2), 15, settings);
+    expect(evaluate().map((row) => row.ticker)).toEqual(["T19", "T18", "T17", "T16", "T15"]);
+    expect(evaluate({ ...policy, max_per_type: { ...policy.max_per_type, research_score_up: 2 } }).map((row) => row.ticker)).toEqual(["T19", "T18"]);
+    expect(evaluate({ ...policy, max_per_type: { ...policy.max_per_type, research_score_up: 0 } })).toEqual([]);
+    const reversed = evaluatePublicationAlerts(publication([...before].reverse()), publication([...after].reverse(), 2), 15);
+    expect(reversed).toEqual(evaluate());
+  });
+
+  it("prioritizes warnings before routine exclusions when applying a cap", () => {
+    const before = [company({ ticker: "A" }), company({ ticker: "Z", eligible: false })];
+    const after = before.map((row) => ({ ...row, eligible: false, exclusionReasons: [row.ticker === "A" ? "Only 100 price days; 200 required." : "Stored PN17 / warning flag is set."] }));
+    const policy = loadScoringConfig().alerts.publication;
+    const result = evaluatePublicationAlerts(publication(before), publication(after, 2), 15, { ...policy, max_per_type: { ...policy.max_per_type, new_exclusion_reason: 1 } });
+    expect(result.map((row) => [row.ticker, row.ruleId])).toEqual([["Z", "new_exclusion_reason"], ["A", "top_pick_left"]]);
+    const reordered = evaluatePublicationAlerts(publication(before), publication(after, 2), 15, { ...policy, priority: ["top_pick_left", "new_exclusion_reason"] });
+    expect(reordered[0].ruleId).toBe("top_pick_left");
   });
 });

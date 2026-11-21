@@ -148,7 +148,8 @@ function persistListedScores(meta: {
     persistUniverseScores(meta.asOf);
     const published = publishListedScores(meta);
     const current = loadAlertPublication()!;
-    published.alerts = replacePublicationAlerts(previous, current, loadScoringConfig().alerts.score_delta);
+    const alertConfig = loadScoringConfig().alerts;
+    published.alerts = replacePublicationAlerts(previous, current, alertConfig.score_delta, alertConfig.publication);
     getDb().update(marketScanRuns).set({ summaryJson: JSON.stringify(published) }).where(eq(marketScanRuns.id, current.id)).run();
     return published;
   })();

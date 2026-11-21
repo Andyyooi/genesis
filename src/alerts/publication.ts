@@ -1,6 +1,9 @@
 import { getSqlite } from "@/db/client";
 import { loadFairValueRunById } from "@/fair-value/load-run";
 import type { AlertDraft } from "@/alerts/evaluate";
+import { loadScoringConfig, type ScoringConfig } from "@/config/load-scoring";
+
+type PublicationAlertPolicy = ScoringConfig["alerts"]["publication"];
 
 export const PUBLICATION_ALERT_METHOD = "universe-publication-v1";
 
@@ -65,7 +68,7 @@ function exclusionKey(reason: string) {
   return reason;
 }
 
-export function evaluatePublicationAlerts(previous: AlertPublication | null, current: AlertPublication, threshold: number): AlertDraft[] {
+export function evaluatePublicationAlerts(previous: AlertPublication | null, current: AlertPublication, threshold: number, policy: PublicationAlertPolicy = loadScoringConfig().alerts.publication): AlertDraft[] {
   if (!previous) return [];
   const drafts: AlertDraft[] = [];
   const old = new Map(previous.rows.map((row) => [row.ticker, row]));
@@ -76,6 +79,7 @@ export function evaluatePublicationAlerts(previous: AlertPublication | null, cur
   for (const ticker of new Set([...old.keys(), ...now.keys()])) {
     const before = old.get(ticker);
     const after = now.get(ticker);
+    const isPick = priorPicks.has(ticker) || currentPicks.has(ticker);
     const add = (ruleId: string, title: string, why: string, evidence: Record<string, unknown>) => drafts.push({
       ruleId, ticker, title, why: `${why} ${comparison}`,
       evidence: { ...evidence, method: PUBLICATION_ALERT_METHOD, previousRunId: previous.id, publicationRunId: current.id, previousRunDate: previous.asOf.slice(0, 10), priceDate: current.priceDate, publishedAt: current.asOf },
@@ -85,13 +89,13 @@ export function evaluatePublicationAlerts(previous: AlertPublication | null, cur
     if (before && after) {
       const from = before.researchScore;
       const to = after.researchScore;
-      if (from !== null && to !== null && Number.isFinite(from) && Number.isFinite(to) && Math.abs(to - from) >= threshold && to !== from) {
+      if ((!policy.score_eligible_only || after.eligible || isPick) && from !== null && to !== null && Number.isFinite(from) && Number.isFinite(to) && Math.abs(to - from) >= threshold && to !== from) {
         add(to > from ? "research_score_up" : "research_score_down", `${ticker} Research Score ${from.toFixed(1)} → ${to.toFixed(1)}`,
           `Published Research Score moved ${from.toFixed(1)} → ${to.toFixed(1)} (threshold ${threshold} points).`, { from, to, threshold });
       }
       const priorReasons = new Set(before.exclusionReasons.map(exclusionKey));
-      const reasons = after.exclusionReasons.filter((reason) => !priorReasons.has(exclusionKey(reason)));
-      if (reasons.length) add("new_exclusion_reason", `${ticker} new recommendation exclusion`, reasons.join(" "), { reasons });
+      const reasons = after.exclusionReasons.filter((reason) => !priorReasons.has(exclusionKey(reason)) && (!policy.exclusions_top_picks_only || isPick || policy.important_exclusions.includes(exclusionKey(reason))));
+      if (reasons.length) add("new_exclusion_reason", `${ticker} new recommendation exclusion`, reasons.join(" "), { reasons, important: reasons.some((reason) => policy.important_exclusions.includes(exclusionKey(reason))) });
       if (before.fairValueSafety !== null && after.fairValueSafety !== null && before.fairValueSafety !== after.fairValueSafety) {
         add("fair_value_safety_changed", `${ticker} fair-value safety ${before.fairValueSafety} → ${after.fairValueSafety}`,
           `Persisted fair-value safety changed from ${before.fairValueSafety} to ${after.fairValueSafety}. Open the company page for the assessment.`, { from: before.fairValueSafety, to: after.fairValueSafety });
@@ -103,17 +107,31 @@ export function evaluatePublicationAlerts(previous: AlertPublication | null, cur
         `${ticker} ${entered ? "is now" : "is no longer"} among the 15 highest-scoring eligible names in the published universe.`, { from: priorPicks.has(ticker), to: entered });
     }
   }
-  return drafts;
+  const priority = (draft: AlertDraft) => {
+    const index = policy.priority.indexOf(draft.ruleId);
+    return index < 0 ? policy.priority.length : index;
+  };
+  const magnitude = (draft: AlertDraft) => Math.abs(Number(draft.evidence.to) - Number(draft.evidence.from)) || 0;
+  drafts.sort((a, b) => priority(a) - priority(b)
+    || Number(b.evidence.important === true) - Number(a.evidence.important === true)
+    || magnitude(b) - magnitude(a) || a.ticker.localeCompare(b.ticker));
+  const counts = new Map<string, number>();
+  return drafts.filter((draft) => {
+    const count = counts.get(draft.ruleId) ?? 0;
+    if (count >= (policy.max_per_type[draft.ruleId] ?? 0)) return false;
+    counts.set(draft.ruleId, count + 1);
+    return true;
+  });
 }
 
 /** Called inside the universe publication transaction; retain only this refresh's changes. */
-export function replacePublicationAlerts(previous: AlertPublication | null, current: AlertPublication, threshold: number): PublicationAlertSummary {
+export function replacePublicationAlerts(previous: AlertPublication | null, current: AlertPublication, threshold: number, policy?: PublicationAlertPolicy): PublicationAlertSummary {
   const sqlite = getSqlite();
-  const drafts = evaluatePublicationAlerts(previous, current, threshold);
+  const drafts = evaluatePublicationAlerts(previous, current, threshold, policy);
   sqlite.prepare("DELETE FROM alerts").run();
   const companies = new Map([...(previous?.rows ?? []), ...current.rows].map((row) => [row.ticker, row]));
   const insert = sqlite.prepare("INSERT INTO alerts (instrument_id, ticker, rule_id, title, why, evidence_json, href, fingerprint, triggered_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-  for (const draft of drafts) insert.run(companies.get(draft.ticker)!.instrumentId, draft.ticker, draft.ruleId, draft.title, draft.why, JSON.stringify(draft.evidence), draft.href, draft.fingerprint, current.asOf, current.asOf);
+  for (const draft of [...drafts].reverse()) insert.run(companies.get(draft.ticker)!.instrumentId, draft.ticker, draft.ruleId, draft.title, draft.why, JSON.stringify(draft.evidence), draft.href, draft.fingerprint, current.asOf, current.asOf);
   return { method: PUBLICATION_ALERT_METHOD, previousRunDate: previous?.asOf.slice(0, 10) ?? null, priceDate: current.priceDate, count: drafts.length };
 }
 

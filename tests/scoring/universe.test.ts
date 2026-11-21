@@ -82,6 +82,7 @@ describe("published universe scores", () => {
     const rows = loadRecentAlerts();
     expect(summary.alerts).toMatchObject({ count: 2, previousRunDate: "2026-09-25", priceDate: "2025-09-10" });
     expect(rows.map((row) => row.ruleId).sort()).toEqual(["new_exclusion_reason", "top_pick_left"]);
+    expect(rows[0].ruleId).toBe("new_exclusion_reason");
     for (const row of rows) {
       expect(row.triggeredAt).toBe(summary.asOf);
       expect(row.why).toContain("previous run 2026-09-25 → this run's price date 2025-09-10");
