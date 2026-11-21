@@ -34,6 +34,7 @@ import {
   type ListId,
 } from "@/opportunities/lists";
 import { scanWatchlist } from "@/opportunities/scan";
+import { parseTopPicksOptions } from "@/opportunities/top-picks";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,8 @@ function listHref(
 
 export default async function HomePage({ searchParams }: PageProps<"/">) {
   const params = await searchParams;
+  const topPicksOptions = parseTopPicksOptions(params);
+  const topPicksPreservedParams = Object.fromEntries(Object.entries(params).filter(([key, value]) => key !== "qualityTilt" && key !== "lotBudget" && typeof value === "string")) as Record<string, string>;
   const listId = parseListId(typeof params.list === "string" ? params.list : undefined);
   const sortId = parseDashboardSort(typeof params.sort === "string" ? params.sort : undefined);
   const flagFilters = parseDashboardFilters({
@@ -163,7 +166,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       </header>
 
       {lagDates ? <DataLagBanner dates={lagDates} /> : null}
-      <TopPicks />
+      <TopPicks key={JSON.stringify(topPicksOptions)} options={topPicksOptions} preservedParams={topPicksPreservedParams} />
 
       {yahooFails.length > 0 ? (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">

@@ -85,6 +85,11 @@ const scoringSchema = z
         price_move_5d: 0.08,
         health_delta: 8,
       }),
+    top_picks: z.object({
+      min_market_cap: z.number().nonnegative(),
+      min_median_traded_value: z.number().nonnegative(),
+      quality_tilt_weights: categoryWeightsSchema,
+    }),
     concerns: z.object({
       apply_score_penalty: z.boolean(),
       rules: z.array(concernRuleSchema),
@@ -123,6 +128,9 @@ const scoringSchema = z
       }),
   })
   .superRefine((value, ctx) => {
+    if (Object.values(value.top_picks.quality_tilt_weights).reduce((a, b) => a + b, 0) !== 100) {
+      ctx.addIssue({ code: "custom", message: "top_picks quality tilt weights must sum to 100", path: ["top_picks", "quality_tilt_weights"] });
+    }
     const sum = Object.values(value.category_weights).reduce((a, b) => a + b, 0);
     if (sum !== 100) {
       ctx.addIssue({
