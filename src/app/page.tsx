@@ -194,6 +194,12 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
           })}
         </div>
         <details className="text-sm text-muted-foreground"><summary className="w-fit cursor-pointer text-primary">About this list</summary><p className="mt-2">{activeList.description}</p></details>
+        {listId === "catalyst" ? (
+          <p className="text-sm text-muted-foreground">
+            Live announcements and news are not connected yet. This list uses previously saved
+            announcements, not a live feed.
+          </p>
+        ) : null}
         {activeList.disabled ? (
           <p className="text-sm text-muted-foreground">{activeList.disabledReason}</p>
         ) : null}

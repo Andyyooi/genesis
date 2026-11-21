@@ -50,10 +50,9 @@ export default function IngestReportPage() {
             : "Rejected CSV rows and Yahoo misses stay here so they can be fixed. Nothing is silently filled in. Re-run ingest after editing the CSV or universe mapping."}
         </p>
         <p className="text-sm text-muted-foreground">
-          Daily Yahoo EOD (not live ticks) can run on this machine with{" "}
-          <code className="font-mono">npm run ingest:prices:daily</code>. That VM loop is not Cursor
-          usage. Missed symbols stay listed; prices are never invented. Fundamentals stay CSV — we
-          do not auto-fill filings from Yahoo.
+          The daily data refresh brings in end-of-day prices and company financial figures from
+          Yahoo Finance. These are not live prices. Missing figures stay marked as unavailable.
+          Financial figures can also be imported manually from a CSV spreadsheet.
         </p>
         <p className="text-sm text-muted-foreground">
           <code className="font-mono">npm run ingest:fundamentals -- data/raw/fundamentals-sample.csv</code>

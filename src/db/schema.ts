@@ -142,7 +142,7 @@ export const events = sqliteTable(
   ],
 );
 
-/** Persisted score runs stub so history/backtests can attach later. */
+/** Persisted score runs with evidence and valuation context. */
 export const scoreRuns = sqliteTable("score_runs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   instrumentId: integer("instrument_id")

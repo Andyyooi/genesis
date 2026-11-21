@@ -134,7 +134,7 @@ function pipelineDeps(importPrices: (options: { onlyTicker?: string }) => Promis
   return {
     importPrices,
     importFundamentals: async () => fundamentalsReport(),
-    score: (ticker: string) => scored("2026-09-18", 10),
+    score: () => scored("2026-09-18", 10),
     fairValue: () => fairReport(),
     sleep: async () => undefined,
     paceMs: 0 as const,
