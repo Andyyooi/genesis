@@ -1,12 +1,11 @@
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { loadScoringConfig } from "@/config/load-scoring";
 import { getDb } from "@/db/client";
 import { alerts, alertState, instruments } from "@/db/schema";
-import { loadInstrumentSnapshots, loadScoreHistory, loadWatchlist } from "@/db/queries";
+import { loadScoreHistory, loadWatchlist } from "@/db/queries";
 import { isSnapshotReadOnly } from "@/lib/data-mode";
-import { latestAnnualObservation, latestAnnualPeriod } from "@/lib/snapshot-dates";
+import { latestAnnualPeriod } from "@/lib/snapshot-dates";
 import type { MetricValue } from "@/metrics/types";
-import { snapshotsToMetrics } from "@/metrics/from-snapshots";
 import { categoryScore } from "@/opportunities/lists";
 import {
   buildCurrentSnapshot,
@@ -14,8 +13,8 @@ import {
   type AlertDraft,
   type AlertSnapshot,
 } from "@/alerts/evaluate";
-import { persistScoreRun } from "@/scoring/persist";
-import { scoreFromMetrics } from "@/scoring/score";
+import { scoreTicker } from "@/scoring/run-ticker";
+import { isDemoAlert } from "@/alerts/purge-demo";
 
 function metric(metrics: MetricValue[], id: string): MetricValue | undefined {
   return metrics.find((m) => m.id === id);
@@ -113,72 +112,13 @@ function closesFromBars(bars: { barDate: string; close: number | null }[]) {
   };
 }
 
-export function refreshAlertsForTicker(ticker: string): { drafts: number; inserted: number; demoPrior: boolean } {
-  const data = loadInstrumentSnapshots(ticker);
-  if (!data) return { drafts: 0, inserted: 0, demoPrior: false };
-  const instrumentType = data.instrument.instrumentType === "REIT" ? "REIT" : "COMMON_STOCK";
-  const asOf = new Date().toISOString();
-  const metrics = snapshotsToMetrics({
-    instrumentType,
-    periods: data.periods,
-    bars: data.bars,
-    events: data.events,
-    asOf,
-  });
+export function refreshAlertsForTicker(ticker: string): { drafts: number; inserted: number } {
+  const data = scoreTicker(ticker);
+  if (!data) return { drafts: 0, inserted: 0 };
+  const { metrics, result } = data;
   const config = loadScoringConfig();
-  const result = scoreFromMetrics({
-    config,
-    metrics,
-    instrumentType,
-    pn17: data.instrument.pn17,
-    ticker: data.instrument.ticker,
-    sector: data.instrument.sector,
-    industry: data.instrument.industry,
-    asOf,
-    latestAnnual: latestAnnualObservation(data.periods),
-  });
 
   const history = loadScoreHistory(data.instrument.id, 8);
-  const db = getDb();
-  const existingScoreAlert = db
-    .select({ id: alerts.id })
-    .from(alerts)
-    .where(
-      and(eq(alerts.instrumentId, data.instrument.id), eq(alerts.ruleId, "research_score_up")),
-    )
-    .get();
-  const existingDown = db
-    .select({ id: alerts.id })
-    .from(alerts)
-    .where(
-      and(eq(alerts.instrumentId, data.instrument.id), eq(alerts.ruleId, "research_score_down")),
-    )
-    .get();
-
-  let demoPriorScore: number | null = null;
-  const scoresTooClose =
-    history.length >= 2 &&
-    history[0]?.researchScore !== null &&
-    history[1]?.researchScore !== null &&
-    Math.abs((history[0]!.researchScore as number) - (history[1]!.researchScore as number)) <
-      config.alerts.score_delta;
-  if (result.researchScore !== null && !existingScoreAlert && !existingDown && (history.length < 2 || scoresTooClose)) {
-    demoPriorScore = result.researchScore - config.alerts.score_delta - 1;
-    persistScoreRun({
-      instrumentId: data.instrument.id,
-      result: {
-        ...result,
-        asOf: "demo-prior-run",
-        researchScore: demoPriorScore,
-        notes: [
-          "Documented demo prior score_run for in-app alerts. Same stored FY filings; news omitted in this snapshot. Not invented fundamentals.",
-          ...result.notes,
-        ],
-      },
-    });
-  }
-
-  persistScoreRun({ instrumentId: data.instrument.id, result });
 
   const prices = closesFromBars(data.bars);
   const dist = metric(metrics, "distance_from_52w_high");
@@ -186,29 +126,25 @@ export function refreshAlertsForTicker(ticker: string): { drafts: number; insert
     ticker: data.instrument.ticker,
     name: data.instrument.name,
     result,
-    events: data.events,
+    events: [],
     lastClose: prices.lastClose,
     lastCloseDate: prices.lastCloseDate,
     close1dAgo: prices.close1dAgo,
     close5dAgo: prices.close5dAgo,
     valuationScore: result.valuationScore,
     qualityScore: categoryScore(result, "quality"),
-    persistedResearchScores: [result.researchScore, demoPriorScore].filter((n) => n !== undefined),
+    persistedResearchScores: history.map((row) => row.researchScore),
     distanceFrom52wHigh: dist?.available ? dist.value : null,
     distanceFrom52wHighAvailable: Boolean(dist?.available && dist.value !== null),
-    catalystWatch: data.events.some((event) => {
-      const c = event.classification;
-      return c === "Positive catalyst" || c === "Negative" || c === "Uncertain";
-    }),
+    catalystWatch: false,
     fundamentalsPeriod: latestAnnualPeriod(data.periods),
-    demoPriorScore,
   };
 
   const previous = loadState(data.instrument.id);
   const drafts = evaluateAlertDrafts(config, input, previous);
   const inserted = insertDrafts(data.instrument.id, drafts);
   saveState(data.instrument.id, buildCurrentSnapshot(input));
-  return { drafts: drafts.length, inserted, demoPrior: demoPriorScore !== null };
+  return { drafts: drafts.length, inserted };
 }
 
 export function refreshAlertsForUniverse() {
@@ -228,13 +164,14 @@ export function loadRecentAlerts(limit = 40) {
       why: alerts.why,
       href: alerts.href,
       triggeredAt: alerts.triggeredAt,
+      evidenceJson: alerts.evidenceJson,
       name: instruments.name,
     })
     .from(alerts)
     .innerJoin(instruments, eq(instruments.id, alerts.instrumentId))
     .orderBy(desc(alerts.id))
     .limit(limit)
-    .all();
+    .all().filter((row) => !isDemoAlert(row.evidenceJson) && row.ruleId !== "earnings_announcement");
 }
 
 export function countAlerts() {

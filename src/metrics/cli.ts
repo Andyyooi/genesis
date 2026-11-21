@@ -1,3 +1,4 @@
+import { isCliEntrypoint } from "@/cli/entrypoint";
 import { loadInstrumentSnapshots } from "@/db/queries";
 import { snapshotsToMetrics } from "@/metrics/from-snapshots";
 
@@ -29,4 +30,4 @@ function main() {
   console.log(JSON.stringify(payload, null, 2));
 }
 
-main();
+if (isCliEntrypoint(import.meta.url)) main();

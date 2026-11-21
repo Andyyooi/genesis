@@ -39,8 +39,8 @@ function baseResult(over: Partial<ScoreResult> = {}): ScoreResult {
       category({ id: "quality", score: 60 }),
       category({ id: "financial_health", inThisRun: false, liveWeight: null, score: null }),
       category({ id: "growth", score: 50 }),
-      category({ id: "news", inThisRun: false, liveWeight: null, score: null }),
-      category({ id: "technical", inThisRun: false, liveWeight: null, score: null }),
+      category({ id: "momentum", inThisRun: false, liveWeight: null, score: null }),
+      category({ id: "low_volatility", inThisRun: false, liveWeight: null, score: null }),
     ],
     concerns: [],
     notes: [],
@@ -70,6 +70,15 @@ function baseResult(over: Partial<ScoreResult> = {}): ScoreResult {
 }
 
 describe("research presentation helpers", () => {
+  it("shows REIT-only interpretation factors only for REITs", () => {
+    const metrics: MetricValue[] = ["reit_gearing", "dpu_cagr", "roe"].map((id) => ({ id, label: id === "reit_gearing" ? "REIT gearing" : id, value: 0.2, unit: "ratio", available: true, reason: null, period: null, inputs: [], formula: "test" }));
+    for (const profile of ["default", "bank"] as const) {
+      const text = researchInterpretationBullets({ result: baseResult({ profile }), metrics, events: [] }).join(" ");
+      expect(text).not.toContain("REIT gearing");
+      expect(text).not.toContain("dpu_cagr");
+    }
+    expect(researchInterpretationBullets({ result: baseResult({ profile: "reit", researchProfile: "REIT" }), metrics, events: [] }).join(" ")).toContain("REIT gearing");
+  });
   it("labels unavailable factors without scoring them as zero", () => {
     expect(factorAvailabilityLabel(true, null)).toBe("Available");
     expect(factorAvailabilityLabel(false, null)).toBe("Unavailable — insufficient data");
@@ -80,7 +89,7 @@ describe("research presentation helpers", () => {
     expect(liveWeightLabel(category({ id: "quality", liveWeight: 0.3, inThisRun: true }))).toBe(
       "30% of this run",
     );
-    expect(liveWeightLabel(category({ id: "news", liveWeight: null, inThisRun: false }))).toBe(
+    expect(liveWeightLabel(category({ id: "momentum", liveWeight: null, inThisRun: false }))).toBe(
       "Not in this run",
     );
   });

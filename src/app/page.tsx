@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TopPicks } from "@/components/research/top-picks";
 import { cn } from "cn";
 import { loadRecentAlerts } from "@/alerts/refresh";
 import { loadScoringConfig } from "@/config/load-scoring";
@@ -17,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import type { PricesImportReport } from "@/ingest/types";
 import { formatMyr } from "@/lib/format-myr";
-import { formatFreshnessBand, formatScore100 } from "@/lib/research-copy";
+import { dataConfidenceLabel, formatFreshnessBand, formatScore100 } from "@/lib/research-copy";
 import { buildSnapshotDates } from "@/lib/snapshot-dates";
 import {
   OPPORTUNITY_LISTS,
@@ -172,6 +173,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       </header>
 
       {lagDates ? <DataLagBanner dates={lagDates} /> : null}
+      <TopPicks />
 
       <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between gap-2">
@@ -261,10 +263,9 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
             {(
               [
                 { label: "Any confidence", confidence: undefined },
-                { label: "HIGH", confidence: "HIGH" },
-                { label: "MEDIUM", confidence: "MEDIUM" },
-                { label: "LOW", confidence: "LOW" },
-                { label: "VERY LOW", confidence: "VERY_LOW" },
+                { label: "High", confidence: "HIGH" },
+                { label: "Medium", confidence: "MEDIUM" },
+                { label: "Low", confidence: "LOW" },
               ] as const
             ).map((item) => (
               <Link
@@ -462,7 +463,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
                 <TableHead className="text-right">Price</TableHead>
                 <TableHead className="text-right">Research</TableHead>
                 <TableHead className="text-right">Valuation</TableHead>
-                <TableHead>Confidence</TableHead>
+                <TableHead>Data confidence</TableHead>
                 <TableHead>Freshness</TableHead>
                 <TableHead className="text-right">Coverage</TableHead>
                 <TableHead className="text-right">Quality</TableHead>
@@ -495,7 +496,10 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
                       </Badge>
                     ) : null}
                   </TableCell>
-                  <TableCell>{row.name}</TableCell>
+                  <TableCell>
+                    {row.name}
+                    {!row.result.eligibility?.eligible ? <p className="mt-1 text-xs text-muted-foreground">Excluded: {row.result.eligibility?.reasons.join(" ") ?? "Eligibility not verified"}</p> : null}
+                  </TableCell>
                   <TableCell className="max-w-36 truncate text-muted-foreground">
                     {row.sector ?? "Unavailable"}
                   </TableCell>
@@ -538,7 +542,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
                             : "outline"
                       }
                     >
-                      {row.confidence ?? "Unavailable"}
+                      {dataConfidenceLabel(row.confidence)}
                     </Badge>
                     {row.needsVerification ? (
                       <span className="mt-1 block text-xs text-muted-foreground">

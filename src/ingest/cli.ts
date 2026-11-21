@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { isCliEntrypoint } from "@/cli/entrypoint";
 import { refuseSnapshotWrites } from "@/lib/data-mode";
 import { fillYahooAvailableAt } from "./fill-available-at";
 import { importAnnouncementsCsv } from "./import-announcements";
@@ -52,7 +53,9 @@ async function main() {
   process.exitCode = 1;
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (isCliEntrypoint(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}

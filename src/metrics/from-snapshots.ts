@@ -1,8 +1,10 @@
 import type { LineItems } from "@/ingest/types";
 import { computeMetrics } from "@/metrics/compute";
 import type { EventSnapshot, PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
+import type { ScoringConfig } from "@/config/load-scoring";
 
 type PeriodRow = {
+  actualOrEstimate?: string;
   periodEnd: string;
   availableAt: string | null;
   statementType: string;
@@ -12,6 +14,8 @@ type PeriodRow = {
 };
 
 type BarRow = {
+  adjClose?: number | null;
+  volume?: number | null;
   barDate: string;
   close: number | null;
   high: number | null;
@@ -19,10 +23,10 @@ type BarRow = {
 };
 
 function emptyItems(): LineItems & {
-  grossProfit: null;
+  grossProfit: number | null;
   operatingProfit: null;
   ebitda: null;
-  ebit: null;
+  ebit: number | null;
   interestExpense: null;
 } {
   return {
@@ -55,6 +59,7 @@ export function snapshotsToMetrics(args: {
   bars: BarRow[];
   events?: EventSnapshot[];
   asOf?: string;
+  config?: ScoringConfig;
 }) {
   const periods: StatementSnapshot[] = args.periods.map((row) => {
     let items = emptyItems();
@@ -71,6 +76,7 @@ export function snapshotsToMetrics(args: {
       statementType: row.statementType,
       source: row.source,
       fiscalQuarter: row.fiscalQuarter,
+      actualOrEstimate: row.actualOrEstimate,
       ...items,
     };
   });
@@ -80,6 +86,8 @@ export function snapshotsToMetrics(args: {
     close: bar.close,
     high: bar.high,
     low: bar.low,
+    adjClose: bar.adjClose,
+    volume: bar.volume,
   }));
 
   const asOf = args.asOf ?? new Date().toISOString();
@@ -96,5 +104,7 @@ export function snapshotsToMetrics(args: {
     periods,
     bars,
     events,
+    asOf,
+    config: args.config,
   });
 }

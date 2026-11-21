@@ -1,3 +1,5 @@
+import { usableYahooDailyBar } from "@/ingest/price-bar";
+
 export type YahooBar = {
   barDate: string;
   open: number | null;
@@ -30,6 +32,8 @@ type ChartResponse = {
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }
+
+export { usableYahooDailyBar };
 
 function utcDate(epochSec: number): string {
   const d = new Date(epochSec * 1000);
@@ -80,18 +84,22 @@ export async function fetchYahooDailyBars(yahooTicker: string, range = "5y"): Pr
   }
 
   const bars: YahooBar[] = [];
+  const now = new Date();
   for (let i = 0; i < timestamps.length; i++) {
-    const close = quote.close?.[i] ?? null;
-    if (close === null || close === undefined) continue;
-    bars.push({
-      barDate: utcDate(timestamps[i]!),
+    const epoch = timestamps[i];
+    const close = quote.close?.[i];
+    if (typeof epoch !== "number" || !Number.isFinite(epoch) || typeof close !== "number") continue;
+    const bar: YahooBar = {
+      barDate: utcDate(epoch),
       open: quote.open?.[i] ?? null,
       high: quote.high?.[i] ?? null,
       low: quote.low?.[i] ?? null,
       close,
       volume: quote.volume?.[i] ?? null,
       adjClose: adjSeries?.[i] ?? null,
-    });
+    };
+    if (!usableYahooDailyBar(bar, now)) continue;
+    bars.push(bar);
   }
 
   if (bars.length === 0) {

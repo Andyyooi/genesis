@@ -1,26 +1,14 @@
 import Link from "next/link";
 import { AlertsList } from "@/components/alerts/alerts-list";
 import { DataLagBanner } from "@/components/research/data-lag-banner";
-import { loadWatchlist } from "@/db/queries";
-import { buildSnapshotDates } from "@/lib/snapshot-dates";
-import { countAlerts, loadRecentAlerts, refreshAlertsForUniverse } from "@/alerts/refresh";
+import { storedSnapshotDates } from "@/lib/stored-snapshot-dates";
+import { loadRecentAlerts } from "@/alerts/refresh";
 
 export const dynamic = "force-dynamic";
 
 export default function AlertsPage() {
-  if (countAlerts() === 0) {
-    refreshAlertsForUniverse();
-  }
   const rows = loadRecentAlerts(50);
-  const watch = loadWatchlist();
-  const sample = watch.find((row) => row.ticker === "MAYBANK") ?? watch[0];
-  const dates = sample
-    ? buildSnapshotDates({
-        scoreAsOf: new Date().toISOString(),
-        lastTradeDate: sample.lastTradeDate,
-        fundamentalsPeriod: sample.ticker === "MAYBANK" ? "2024-12-31" : null,
-      })
-    : null;
+  const dates = storedSnapshotDates();
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
@@ -37,7 +25,8 @@ export default function AlertsPage() {
           ingest or <code className="font-mono text-sm">npm run alerts</code> after new files.
         </p>
       </header>
-      {dates ? <DataLagBanner dates={dates} /> : null}
+      <p className="text-sm text-muted-foreground">Universe-wide latest stored dates; individual companies can have older accounts.</p>
+      {dates ? <DataLagBanner dates={dates} /> : <p>No published research run is available.</p>}
       <AlertsList
         rows={rows}
         empty="No alerts yet. Import announcements or run npm run alerts. Nothing is invented to fill this list."

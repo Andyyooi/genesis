@@ -85,8 +85,8 @@ export function loadWatchlist(): WatchlistRow[] {
   });
 }
 
-export function loadInstrumentSnapshots(ticker: string) {
-  seedUniverseFromYaml();
+export function loadInstrumentSnapshots(ticker: string, skipSeed = false) {
+  if (!skipSeed) seedUniverseFromYaml();
   const db = getDb();
   const instrument = db
     .select()

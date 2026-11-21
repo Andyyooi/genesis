@@ -1,95 +1,32 @@
-import { eq } from "drizzle-orm";
-import { loadScoringConfig, resolveResearchProfile } from "@/config/load-scoring";
+import { desc, eq } from "drizzle-orm";
+import { loadScoringConfig } from "@/config/load-scoring";
 import { getDb } from "@/db/client";
 import { loadInstrumentSnapshots } from "@/db/queries";
-import { instruments } from "@/db/schema";
-import { latestAnnualObservation } from "@/lib/snapshot-dates";
-import { snapshotsToMetrics } from "@/metrics/from-snapshots";
-import { isSnapshotReadOnly } from "@/lib/data-mode";
-import { persistScoreRun } from "@/scoring/persist";
+import { scoreRuns } from "@/db/schema";
+import type { EventSnapshot, MetricValue } from "@/metrics/types";
 import { scoreFromMetrics } from "@/scoring/score";
-import {
-  buildValuationContext,
-  loadPeerUniverse,
-  periodsToSnapshots,
-} from "@/scoring/valuation-context";
+import type { ScoreResult } from "@/scoring/types";
 
-export function scoreTicker(
-  ticker: string,
-  persist = true,
-  opts?: { attachValuationContext?: boolean },
-) {
-  const data = loadInstrumentSnapshots(ticker);
+/** Read the published universe result. The legacy arguments never trigger per-ticker scoring. */
+export function scoreTicker(ticker: string, persist = false, opts?: { attachValuationContext?: boolean }) {
+  void persist;
+  void opts;
+  const data = loadInstrumentSnapshots(ticker, true);
   if (!data) return null;
   const instrumentType = data.instrument.instrumentType === "REIT" ? "REIT" : "COMMON_STOCK";
-  const config = loadScoringConfig();
-  const classified = resolveResearchProfile(
-    instrumentType,
-    data.instrument.ticker,
-    { sector: data.instrument.sector, industry: data.instrument.industry },
-    config,
-  );
-  if (data.instrument.researchProfile !== classified.profile) {
-    if (!isSnapshotReadOnly()) {
-      getDb()
-        .update(instruments)
-        .set({ researchProfile: classified.profile, updatedAt: new Date().toISOString() })
-        .where(eq(instruments.id, data.instrument.id))
-        .run();
+  const row = getDb().select().from(scoreRuns).where(eq(scoreRuns.instrumentId, data.instrument.id)).orderBy(desc(scoreRuns.id)).get();
+  let result: ScoreResult | null = null;
+  let metrics: MetricValue[] = [];
+  try {
+    const evidence = JSON.parse(row?.evidenceJson ?? "{}");
+    if (evidence.storedResult?.methodology === "cross-sectional-v2") {
+      result = evidence.storedResult;
+      metrics = evidence.scoredMetrics ?? [];
     }
-    data.instrument.researchProfile = classified.profile;
+  } catch { /* An unreadable legacy run is not a current percentile score. */ }
+  if (!result) {
+    result = scoreFromMetrics({ config: loadScoringConfig(), metrics: [], instrumentType, ticker: data.instrument.ticker, sector: data.instrument.sector, industry: data.instrument.industry, pn17: data.instrument.pn17, asOf: row?.asOf ?? new Date().toISOString() });
+    result.notes = ["No published percentile score. Run npm run market:rescore on the writable research database, then publish a snapshot."];
   }
-  const asOf = new Date().toISOString();
-  const metrics = snapshotsToMetrics({
-    instrumentType,
-    ticker: data.instrument.ticker,
-    sector: data.instrument.sector,
-    industry: data.instrument.industry,
-    periods: data.periods,
-    bars: data.bars,
-    // Phase 16: store/display events, but do not feed news_tone into Research Score yet.
-    events: [],
-    asOf,
-  });
-  const result = scoreFromMetrics({
-    config,
-    metrics,
-    instrumentType,
-    ticker: data.instrument.ticker,
-    pn17: data.instrument.pn17,
-    sector: data.instrument.sector,
-    industry: data.instrument.industry,
-    researchProfile: classified.profile,
-    asOf,
-    latestAnnual: latestAnnualObservation(data.periods),
-  });
-  if (opts?.attachValuationContext !== false) {
-    result.valuationContext = buildValuationContext({
-      ticker: data.instrument.ticker,
-      researchProfile: classified.profile,
-      industry: data.instrument.industry,
-      sector: data.instrument.sector,
-      periods: periodsToSnapshots(data.periods),
-      bars: data.bars,
-      metrics,
-      peers: loadPeerUniverse(),
-      dataConfidence: result.dataConfidence,
-      dataCoverage: result.dataCoverage,
-    });
-  }
-  if (persist && !isSnapshotReadOnly()) {
-    persistScoreRun({ instrumentId: data.instrument.id, result });
-  }
-  return {
-    ticker: data.instrument.ticker,
-    name: data.instrument.name,
-    instrumentType,
-    pn17: data.instrument.pn17,
-    instrument: data.instrument,
-    periods: data.periods,
-    bars: data.bars,
-    events: data.events,
-    metrics,
-    result,
-  };
+  return { ticker: data.instrument.ticker, name: data.instrument.name, instrumentType, pn17: data.instrument.pn17, ...data, events: [] as EventSnapshot[], metrics, result };
 }

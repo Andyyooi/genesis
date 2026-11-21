@@ -1,3 +1,4 @@
+import { isCliEntrypoint } from "@/cli/entrypoint";
 import { refuseSnapshotWrites } from "@/lib/data-mode";
 import { refreshAlertsForUniverse } from "@/alerts/refresh";
 
@@ -10,4 +11,4 @@ function main() {
   console.log(JSON.stringify({ kind: "alerts", summary }, null, 2));
 }
 
-main();
+if (isCliEntrypoint(import.meta.url)) main();

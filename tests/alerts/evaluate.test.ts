@@ -30,7 +30,8 @@ function result(over: Partial<ScoreResult> = {}): ScoreResult {
       },
     ],
     concerns: [],
-    notes: ["News is in this live run."],
+    eligibility: { eligible: true, reasons: [], medianTradedValue: 200000, priceDays: 253 },
+    notes: ["News is display-only."],
     dataCoverage: {
       expected: 9,
       available: 7,
@@ -70,14 +71,18 @@ function input(over: Partial<AlertInputs> = {}): AlertInputs {
     distanceFrom52wHighAvailable: true,
     catalystWatch: true,
     fundamentalsPeriod: "2024-12-31",
-    demoPriorScore: null,
     ...over,
   };
 }
 
 describe("alert rules", () => {
+  it("never invents a score rise on first observation", () => {
+    const drafts = evaluateAlertDrafts(config, input(), null);
+    expect(drafts.some((d) => d.ruleId === "research_score_up" || d.ruleId === "research_score_down")).toBe(false);
+    expect(drafts.some((d) => d.evidence.demo === true)).toBe(false);
+  });
   it("explains a Research Score jump without BUY/SELL", () => {
-    const drafts = evaluateAlertDrafts(config, input({ demoPriorScore: 64, result: result({ researchScore: 71 }) }), {
+    const drafts = evaluateAlertDrafts(config, input({ result: result({ researchScore: 71 }) }), {
       lastResearchScore: 64,
       lastHealthScore: 40,
       lastConcernIds: [],

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { loadScoringConfig } from "@/config/load-scoring";
 import { getDb, getSqlite } from "@/db/client";
-import { financialPeriods, instruments, priceBars, refreshRuns } from "@/db/schema";
+import { fairValueRuns, financialPeriods, instruments, priceBars, refreshRuns } from "@/db/schema";
 import type { EventDraft, EventSourceProvider } from "@/events/types";
 import type { PricesImportReport } from "@/ingest/types";
 import type { YahooFundamentalsReport } from "@/market/ingest-fundamentals-yahoo";
@@ -13,17 +13,18 @@ import { formatDailyRefreshSummary, runDailyRefresh } from "@/refresh/daily";
 import { dailyRefreshOptionsFromArgv } from "@/refresh/cli";
 import { loadLastSuccessfulAt } from "@/refresh/persist";
 import { advancesLastSuccessful, combineOverallStatus } from "@/refresh/types";
+import { validateRefreshStages } from "@/refresh/validate-publication";
 
 const PREV_PATH = process.env.BURSA_SQLITE_PATH;
 let tempDir = "";
 
 function resetDb() {
+  const g = globalThis as { sqlite?: { close: () => void } };
   try {
-    getSqlite().close();
+    g.sqlite?.close();
   } catch {
-    /* ignore */
+    /* The singleton may already be closed. */
   }
-  const g = globalThis as { sqlite?: unknown };
   delete g.sqlite;
 }
 
@@ -119,6 +120,20 @@ function emptyFundReport(over: Partial<YahooFundamentalsReport> = {}): YahooFund
 }
 
 describe("Phase 18B daily refresh", () => {
+  it("never lets 990 freshness skips mask ten failed real requests", async () => {
+    const failed = Array.from({ length: 10 }, (_, i) => ({ ticker: `MISS${i}`, yahooTicker: "0001.KL", mappingTried: ["0001.KL"], code: "UNKNOWN" as const, reason: "Yahoo unavailable" }));
+    const summary = await runDailyRefresh({
+      importPrices: async () => ({ kind: "prices", startedAt: "a", finishedAt: "b", succeeded: [], failed, barsUpserted: 0 }),
+      importFundamentals: async () => emptyFundReport({ attempted: 1000, instrumentsUnchanged: 990, instrumentsSkippedFresh: 990, instrumentsFetched: 10, failed }),
+      rescore: () => ({ kind: "ok" }),
+      now: () => new Date("2026-09-24T10:00:00.000Z"),
+    });
+    const stages = getSqlite().prepare("SELECT dataset, status, failed_count, json_extract(metadata_json, '$.requestsSucceeded') AS requested_succeeded_count, started_at FROM refresh_runs WHERE run_id = ?").all(summary.runId) as Parameters<typeof validateRefreshStages>[0];
+    expect(stages.find((r) => r.dataset === "fundamentals")).toMatchObject({ status: "PARTIAL", failed_count: 10, requested_succeeded_count: 0 });
+    expect(stages.find((r) => r.dataset === "prices")).toMatchObject({ status: "SOURCE_FAILED", failed_count: 10, requested_succeeded_count: 0 });
+    expect(() => validateRefreshStages(stages, summary.startedAt)).toThrow(/prices/);
+    expect(() => validateRefreshStages(stages.map((r) => r.dataset === "prices" ? { ...r, status: "SUCCESS", failed_count: 0, requested_succeeded_count: 1 } : r), summary.startedAt)).toThrow(/fundamentals/);
+  });
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "genesis-refresh-"));
     process.env.BURSA_SQLITE_PATH = join(tempDir, "test.db");
@@ -154,6 +169,7 @@ describe("Phase 18B daily refresh", () => {
       now: () => new Date("2026-09-24T10:00:00.000Z"),
     });
     expect(first.datasets.find((d) => d.dataset === "prices")?.status).toBe("SUCCESS");
+    expect(first.datasets.find((d) => d.dataset === "prices")?.metadata).toMatchObject({ requestsSucceeded: 1 });
     expect(loadLastSuccessfulAt("prices", "yahoo")).toBeTruthy();
 
     await runDailyRefresh({
@@ -367,6 +383,76 @@ describe("Phase 18B daily refresh", () => {
     expect(scores.source).toBe("scoreTicker");
     expect(scores.updatedCount).toBe(1);
     expect(scores.errorSummary).toBeNull();
+    const fairValue = summary.datasets.find((d) => d.dataset === "fair_value")!;
+    expect(fairValue.source).toBe("fair-value");
+    expect(fairValue.status).not.toBe("SOURCE_FAILED");
+  });
+
+  it("skips Fair Value when prices and fundamentals are not useful and leaves stored rows", async () => {
+    const summary = await runDailyRefresh({
+      importPrices: async () => {
+        throw new Error("price outage");
+      },
+      importFundamentals: async () => {
+        throw new Error("fundamentals outage");
+      },
+      rescore: () => ({ kind: "ok" }),
+    });
+    const fairValue = summary.datasets.find((d) => d.dataset === "fair_value")!;
+    expect(fairValue.status).toBe("UNCHANGED");
+    expect(fairValue.attemptedCount).toBe(0);
+    expect(fairValue.updatedCount).toBe(0);
+    expect(fairValue.source).toBe("fair-value-skipped");
+    expect(fairValue.errorSummary).toBe(
+      "Skipped Fair Value because prices/fundamentals did not complete usefully.",
+    );
+    expect(getDb().select().from(fairValueRuns).all()).toHaveLength(0);
+    expect(summary.overallStatus).toBe("SOURCE_FAILED");
+  });
+
+  it("keeps overall status on prices and fundamentals when Fair Value fails", async () => {
+    const summary = await runDailyRefresh({
+      importPrices: async () =>
+        ({
+          kind: "prices",
+          startedAt: "a",
+          finishedAt: "b",
+          succeeded: ["MAYBANK"],
+          failed: [{ ticker: "OTHER", yahooTicker: "OTHER.KL", reason: "fixture" }],
+          barsUpserted: 1,
+        }) satisfies PricesImportReport,
+      importFundamentals: async () => emptyFundReport(),
+      rescore: () => ({ kind: "ok" }),
+      persistFairValues: () => ({
+        attempted: 1,
+        inserted: 0,
+        unchanged: 0,
+        failed: [{ ticker: "MAYBANK", stage: "calculation", message: "fixture calc" }],
+        unsupported: 0,
+        noValue: 0,
+        flagged: 0,
+        caution: 0,
+        withheld: 0,
+        persistenceRefused: false,
+      }),
+    });
+    const fairValue = summary.datasets.find((d) => d.dataset === "fair_value")!;
+    expect(summary.datasets.find((d) => d.dataset === "prices")?.status).toBe("PARTIAL");
+    expect(summary.overallStatus).toBe("PARTIAL");
+    expect(fairValue.status).toBe("SOURCE_FAILED");
+    expect(fairValue.source).toBe("fair-value");
+    expect(fairValue.errorSummary).toContain("Stage: calculation");
+    expect(fairValue.errorSummary).not.toContain("Yahoo");
+    expect(fairValue.metadata?.failureStage).toBe("calculation");
+    expect(summary.notes.some((note) => note.includes("Fair Value dataset SOURCE_FAILED"))).toBe(true);
+  });
+
+  it("refuses the daily refresh before Fair Value writes in snapshot mode", async () => {
+    process.env.BURSA_SNAPSHOT_READONLY = "1";
+    await expect(runDailyRefresh({ rescore: () => ({ kind: "ok" }) })).rejects.toThrow(
+      /read-only snapshot/,
+    );
+    expect(getDb().select().from(fairValueRuns).all()).toHaveLength(0);
   });
 
   it("prints fundamentals fetched and skipped_fresh beside attempted", () => {

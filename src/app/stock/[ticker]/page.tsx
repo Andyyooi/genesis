@@ -37,8 +37,8 @@ import {
 } from "@/lib/research-presentation";
 import { buildSnapshotDates, latestAnnualPeriod } from "@/lib/snapshot-dates";
 import type { MetricValue } from "@/metrics/types";
-import { EstimatedFairValue } from "@/components/research/estimated-fair-value";
-import { loadFairValueForPage } from "@/fair-value/load-for-page";
+import { PersistedFairValue } from "@/components/research/persisted-fair-value";
+import { loadPersistedFairValueForPage } from "@/fair-value/load-persisted-page";
 import { scoreTicker } from "@/scoring/run-ticker";
 
 export const dynamic = "force-dynamic";
@@ -125,7 +125,7 @@ function MetricTable({ ids, metrics }: { ids: string[]; metrics: MetricValue[] }
           return (
             <TableRow key={id}>
               <TableCell>{metric?.label ?? id}</TableCell>
-              <TableCell className="text-right">{fmtRatio(metric)}</TableCell>
+              <TableCell className="whitespace-normal text-right">{fmtRatio(metric)}</TableCell>
               <TableCell className="hidden text-muted-foreground sm:table-cell">
                 {metric?.period ? formatDateSafe(metric.period) : "Unavailable"}
               </TableCell>
@@ -141,7 +141,7 @@ export default async function ResearchPage({
   params,
 }: PageProps<"/stock/[ticker]">) {
   const { ticker } = await params;
-  const scored = scoreTicker(ticker, true);
+  const scored = scoreTicker(ticker);
   if (!scored) notFound();
 
   const { instrument, periods, bars, metrics, result } = scored;
@@ -167,7 +167,7 @@ export default async function ResearchPage({
     events: scored.events,
   });
   const profileIds = profileMetricIds(result.researchProfile, isReit);
-  const fairValue = loadFairValueForPage(instrument.ticker, result.asOf);
+  const fairValue = loadPersistedFairValueForPage(instrument.id);
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-8 sm:px-6">
@@ -260,18 +260,18 @@ export default async function ResearchPage({
         </ul>
       </section>
 
-      {/* 5. Absolute Valuation vs Contextual */}
+      {/* 5. Relative Value vs Contextual */}
       <section className="flex flex-col gap-4">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Absolute Valuation</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Relative Value</h2>
           <p className="text-sm text-muted-foreground">{absoluteValuationBlurb()}</p>
         </div>
         <Card>
           <CardHeader>
-            <CardTitle>Absolute Valuation Score</CardTitle>
+            <CardTitle>Relative Value Score</CardTitle>
             <CardDescription>
               Valuation factors only for this research profile. Separate from Research Score and
-              from historical/peer labels below.
+              from historical/peer labels below. This is the same stored result used by the market scan.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -285,7 +285,7 @@ export default async function ResearchPage({
         </div>
       </section>
 
-      {fairValue ? <EstimatedFairValue result={fairValue} /> : null}
+      <PersistedFairValue stored={fairValue} />
 
       {/* Profile metrics */}
       <section className="flex flex-col gap-3">
@@ -384,6 +384,11 @@ export default async function ResearchPage({
                   ["Dividend / share", "dividendPerShare"],
                   ["NAV / unit (reported)", "navPerShare"],
                   ["Total assets", "totalAssets"],
+                  ["Gross profit", "grossProfit"],
+                  ["EBIT / operating income", "ebit"],
+                  ["Current assets", "currentAssets"],
+                  ["Current liabilities", "currentLiabilities"],
+                  ["Long-term debt", "longTermDebt"],
                 ] as const
               ).map(([label, key]) => (
                 <TableRow key={key}>

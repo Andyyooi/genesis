@@ -1,3 +1,4 @@
+import { isCliEntrypoint } from "@/cli/entrypoint";
 import { refuseSnapshotWrites } from "@/lib/data-mode";
 import { formatDailyRefreshSummary, runDailyRefresh, type DailyRefreshDeps } from "@/refresh/daily";
 
@@ -17,7 +18,9 @@ async function main() {
   if (summary.overallStatus === "SOURCE_FAILED") process.exitCode = 1;
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (isCliEntrypoint(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}

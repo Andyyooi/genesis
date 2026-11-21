@@ -1,0 +1,68 @@
+name: Refresh data
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      BURSA_SQLITE_PATH: ${{ github.workspace }}/data/sqlite/research.db
+      BURSA_SNAPSHOT_READONLY: '0'
+      VERCEL: '0'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci 2>&1 | tee refresh.log
+      - name: Unpack published snapshot
+        run: |
+          mkdir -p data/sqlite
+          gzip -dc data/snapshots/research.db.gz > "$BURSA_SQLITE_PATH"
+          echo "REFRESH_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          touch refresh.log
+      - name: Download prices and accounts; calculate fair value
+        run: npm run refresh:daily -- --skip-rescore 2>&1 | tee -a refresh.log
+      - name: Re-score and publish universe results
+        run: npm run market:rescore 2>&1 | tee -a refresh.log
+      - name: Validate refresh results
+        run: npx tsx scripts/validate-refresh.ts 2>&1 | tee -a refresh.log
+      - name: Pack and validate snapshot
+        run: npm run snapshot:pack -- --dest data/snapshots/research.db.gz --write-production 2>&1 | tee -a refresh.log
+      - name: Commit and push snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/snapshots/research.db.gz
+          if git diff --cached --quiet; then
+            echo "No snapshot changes" | tee -a refresh.log
+          else
+            git commit -m "data: refresh snapshot as of $(date -u +%Y-%m-%d)" 2>&1 | tee -a refresh.log
+            git push origin HEAD:main 2>&1 | tee -a refresh.log
+          fi
+      - name: Upload refresh log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-log-${{ github.run_id }}
+          path: refresh.log
+          if-no-files-found: warn
+          retention-days: 30

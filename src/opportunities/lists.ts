@@ -261,9 +261,9 @@ export function categoryScore(result: ScoreResult, id: string): number | null {
   return result.categories.find((c) => c.id === id)?.score ?? null;
 }
 
-/** Mean factor coverage of categories that can be in a live run (technical still excluded). */
+/** Mean factor coverage of categories with a positive configured weight. */
 export function liveCoverage(result: ScoreResult): number | null {
-  const liveSlots = result.categories.filter((c) => c.id !== "technical");
+  const liveSlots = result.categories.filter((c) => c.configuredWeight > 0);
   if (liveSlots.length === 0) return null;
   return liveSlots.reduce((sum, c) => sum + c.coverage, 0) / liveSlots.length;
 }
@@ -282,6 +282,7 @@ export function researchListIds(
     | "distanceFrom52wHigh"
     | "distanceFrom52wHighAvailable"
     | "catalystWatch"
+    | "result"
   >,
 ): ListId[] {
   const full = row as OpportunityRow;
@@ -290,6 +291,7 @@ export function researchListIds(
 
 export function rowMatchesList(row: OpportunityRow, list: ListId): boolean {
   if (list === "watchlist") return true;
+  if (!row.result.eligibility?.eligible) return false;
   if (list === "catalyst") return row.catalystWatch;
   if (list === "undervalued") return (row.valuationScore ?? -1) >= 70;
   if (list === "quality") return (row.qualityScore ?? -1) >= 70;

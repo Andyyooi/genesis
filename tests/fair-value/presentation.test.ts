@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createElement } from "react";
@@ -444,6 +444,7 @@ describe("Fair Value page loader", () => {
     } finally {
       if (previous === undefined) delete process.env.BURSA_SQLITE_PATH;
       else process.env.BURSA_SQLITE_PATH = previous;
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 
@@ -455,10 +456,11 @@ describe("Fair Value page loader", () => {
     expect(loader).toContain("readonly: true");
     expect(loader).not.toMatch(/persistFairValueRun|insertFairValueRun|scoreTicker|calculateGeneralFairValue|calculateBankFairValue|calculateReitFairValue|yahoo|fetch\(/);
     expect(presentation).not.toMatch(/calculateFairValue|persistFairValueRun|scoreTicker/);
-    expect(page).toContain("loadFairValueForPage");
-    expect(page).toContain("<EstimatedFairValue");
-    expect(page.indexOf("Absolute Valuation")).toBeLessThan(page.indexOf("<EstimatedFairValue"));
-    expect(page.indexOf("<EstimatedFairValue")).toBeLessThan(page.indexOf("Profile metrics"));
+    expect(page).toContain("loadPersistedFairValueForPage");
+    expect(page).toContain("<PersistedFairValue");
+    expect(page).toContain("Relative Value");
+    expect(page.indexOf("Relative Value")).toBeLessThan(page.indexOf("<PersistedFairValue"));
+    expect(page.indexOf("<PersistedFairValue")).toBeLessThan(page.indexOf("Profile metrics"));
     expect(page).not.toMatch(/calculateFairValue|calculateGeneralFairValue|persistFairValueRun/);
     expect(readFileSync("src/fair-value/orchestrate.ts", "utf8")).toContain("export function calculateFairValue");
     expect(readFileSync("src/fair-value/calculate.ts", "utf8")).not.toContain("EstimatedFairValue");

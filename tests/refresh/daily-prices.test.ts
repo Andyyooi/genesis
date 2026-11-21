@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { loadScoringConfig } from "@/config/load-scoring";
-import { getDb, getSqlite } from "@/db/client";
+import { getDb } from "@/db/client";
 import { instruments, priceBars } from "@/db/schema";
 import { importYahooPrices } from "@/ingest/import-prices";
 import { runDailyRefresh } from "@/refresh/daily";
@@ -38,12 +38,12 @@ vi.mock("@/ingest/providers/yahoo-prices", () => ({
 import { fetchYahooDailyBars } from "@/ingest/providers/yahoo-prices";
 
 function resetDb() {
+  const g = globalThis as { sqlite?: { close: () => void } };
   try {
-    getSqlite().close();
+    g.sqlite?.close();
   } catch {
-    /* ignore */
+    /* The singleton may already be closed. */
   }
-  const g = globalThis as { sqlite?: unknown };
   delete g.sqlite;
 }
 
@@ -114,7 +114,7 @@ describe("daily price range and throttle", () => {
     else process.env.BURSA_SQLITE_PATH = PREV_PATH;
   });
 
-  it("daily refresh uses range=5d and rateLimitMs=100", async () => {
+  it("daily refresh chooses each ticker's range automatically with rateLimitMs=100", async () => {
     const captured: unknown[] = [];
     await runDailyRefresh({
       importPrices: async (opts) => {
@@ -150,7 +150,7 @@ describe("daily price range and throttle", () => {
     expect(captured[0]).toMatchObject({
       listedOnly: true,
       skipAlerts: true,
-      range: "5d",
+      range: "auto",
       rateLimitMs: 100,
     });
   });

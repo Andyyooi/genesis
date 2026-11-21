@@ -69,7 +69,7 @@ describe("fundamental metrics", () => {
       bars: [],
     });
     expect(byId(metrics, "roe").available).toBe(false);
-    expect(byId(metrics, "roe").reason).toBe("Division by zero");
+    expect(byId(metrics, "roe").reason).toMatch(/denominator is not positive/);
   });
 
   it("keeps negative EPS and refuses P/E instead of using zero", () => {
@@ -125,7 +125,7 @@ describe("fundamental metrics", () => {
     const metrics = computeMetrics({
       instrumentType: "REIT",
       periods: [
-        annual({ periodEnd: "2022-12-31", dividendPerShare: 0.3, equity: 50, shares: 10 }),
+        annual({ periodEnd: "2021-12-31", dividendPerShare: 0.3, equity: 50, shares: 10 }),
         annual({ periodEnd: "2024-12-31", dividendPerShare: 0.4, equity: 50, shares: 10 }),
       ],
       bars: [],

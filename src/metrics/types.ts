@@ -21,6 +21,7 @@ export type MetricValue = {
 };
 
 export type StatementSnapshot = {
+  actualOrEstimate?: string;
   periodEnd: string;
   availableAt: string | null;
   statementType: string;
@@ -39,6 +40,9 @@ export type StatementSnapshot = {
   navPerShare: number | null;
   totalAssets: number | null;
   grossProfit: number | null;
+  currentAssets?: number | null;
+  currentLiabilities?: number | null;
+  longTermDebt?: number | null;
   operatingProfit: number | null;
   ebitda: number | null;
   ebit: number | null;
@@ -66,6 +70,8 @@ export type EventSnapshot = {
 };
 
 export type PriceBarSnapshot = {
+  adjClose?: number | null;
+  volume?: number | null;
   barDate: string;
   close: number | null;
   high: number | null;

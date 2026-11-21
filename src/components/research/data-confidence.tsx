@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCoverageSummary } from "@/scoring/confidence";
 import type { ScoreResult } from "@/scoring/types";
-import { formatFreshnessBand, formatScore100, scoreEmphasisMuted } from "@/lib/research-copy";
+import { dataConfidenceLabel, formatFreshnessBand, formatScore100, scoreEmphasisMuted } from "@/lib/research-copy";
 import { researchScoreBlurb } from "@/lib/research-presentation";
 import { cn } from "cn";
 
@@ -34,10 +34,6 @@ export function ScoreWithConfidence({
       >
         {formatScore100(value)}
       </p>
-      <p className="text-sm text-muted-foreground">
-        Confidence {result.dataConfidence.level}
-        {result.dataConfidence.needsVerification ? " · needs verification" : ""}
-      </p>
     </div>
   );
 }
@@ -54,8 +50,8 @@ export function ResearchScoreCard({ result }: { result: ScoreResult }) {
         <ScoreWithConfidence result={result} kind="research" />
         <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
           <div>
-            <dt className="text-muted-foreground">Confidence</dt>
-            <dd className="font-medium">{result.dataConfidence.level}</dd>
+            <dt className="text-muted-foreground">Data confidence</dt>
+            <dd className="font-medium">{dataConfidenceLabel(result.dataConfidence.level)}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Coverage</dt>
@@ -68,6 +64,13 @@ export function ResearchScoreCard({ result }: { result: ScoreResult }) {
             <dd className="font-medium">{formatFreshnessBand(c.freshness)}</dd>
           </div>
         </dl>
+        <div className="rounded-md border p-3 text-sm">
+          <p className="font-medium">{result.eligibility?.eligible ? "Eligible for research recommendations" : "Excluded from recommendations"}</p>
+          <ul className="list-disc pl-5">
+            {(result.eligibility?.reasons ?? ["Eligibility not verified; run market:rescore."]).map((reason) => <li key={reason}>{reason}</li>)}
+          </ul>
+          <p className="text-muted-foreground">Eligibility does not alter the score. Research lists are not buy or sell advice.</p>
+        </div>
       </CardContent>
     </Card>
   );
@@ -82,15 +85,14 @@ export function DataQualitySection({ result }: { result: ScoreResult }) {
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Data Quality</h2>
         <p className="text-sm text-muted-foreground">
-          Separate from Research Score and Absolute Valuation. A high score with thin coverage is
+          Separate from Research Score and Relative Value. A high score with thin coverage is
           not stronger evidence than a moderate score with fuller, fresher data.
         </p>
       </div>
       <Card className={d.needsVerification ? "border-destructive/40" : undefined}>
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-            Overall confidence
-            <Badge variant={confidenceBadgeVariant(d.level)}>{d.level}</Badge>
+            Coverage and accounts freshness
             {d.needsVerification ? <Badge variant="destructive">Needs verification</Badge> : null}
           </CardTitle>
         </CardHeader>
@@ -126,8 +128,7 @@ export function DataQualitySection({ result }: { result: ScoreResult }) {
           </div>
           {d.needsVerification ? (
             <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2">
-              High score with thin coverage or stale inputs. Raw scores are unchanged; treat them
-              carefully.
+              Thin coverage or stale accounts. The stored score is unchanged; verify the underlying evidence.
             </p>
           ) : null}
           <ul className="list-disc space-y-1 pl-5 text-muted-foreground">

@@ -2,15 +2,21 @@ import { countDistinct, desc, eq } from "drizzle-orm";
 import { join } from "node:path";
 import { importFundamentalsCsv } from "@/ingest/import-fundamentals";
 import { importYahooPrices } from "@/ingest/import-prices";
-import { getDb } from "@/db/client";
+import { getDb, getSqlite } from "@/db/client";
 import { financialPeriods, instruments, marketScanRows, marketScanRuns, priceBars } from "@/db/schema";
 import { importYahooFundamentals } from "@/market/ingest-fundamentals-yahoo";
 import { refreshUniverse } from "@/market/refresh-universe";
 import { latestAnnualPeriod } from "@/lib/snapshot-dates";
 import { liveCoverage } from "@/opportunities/lists";
 import { scoreTicker } from "@/scoring/run-ticker";
+import { persistUniverseScores } from "@/scoring/universe";
+import { clearOpportunityScanCache } from "@/opportunities/scan";
+import { purgeDemoAlerts } from "@/alerts/purge-demo";
 
 export type MarketScanRowPayload = {
+  sector: string | null;
+  eligible: boolean;
+  exclusionReasons: string[];
   ticker: string;
   name: string;
   instrumentType: string;
@@ -34,6 +40,7 @@ export type MarketScanRowPayload = {
 
 export type MarketScanSummary = {
   kind: "market-scan";
+  methodology: "cross-sectional-v2";
   asOf: string;
   universe: { fetched: number; upserted: number; inactivated: number; listed: number; watchlist: number };
   prices: { succeeded: number; failed: number; barsUpserted: number };
@@ -131,6 +138,22 @@ function persistListedScores(meta: {
   fundamentalsCsv: { upserted: number; rejected: number };
   fundamentalsYahoo: { upserted: number; skippedHadFilings: number; failed: number };
 }): MarketScanSummary {
+  const summary = getSqlite().transaction(() => {
+    purgeDemoAlerts();
+    persistUniverseScores(meta.asOf);
+    return publishListedScores(meta);
+  })();
+  clearOpportunityScanCache();
+  return summary;
+}
+
+function publishListedScores(meta: {
+  asOf: string;
+  universe: { fetched: number; upserted: number; inactivated: number };
+  prices: { succeeded: number; failed: number; barsUpserted: number };
+  fundamentalsCsv: { upserted: number; rejected: number };
+  fundamentalsYahoo: { upserted: number; skippedHadFilings: number; failed: number };
+}): MarketScanSummary {
   const db = getDb();
   const listed = db
     .select()
@@ -166,6 +189,9 @@ function persistListedScores(meta: {
     const confidence = scoredRow.result.dataConfidence;
     const dataCoverage = scoredRow.result.dataCoverage;
     const payload: MarketScanRowPayload = {
+      sector: instrument.sector,
+      eligible: scoredRow.result.eligibility?.eligible ?? false,
+      exclusionReasons: scoredRow.result.eligibility?.reasons ?? ["Eligibility not verified"],
       ticker: instrument.ticker,
       name: instrument.name,
       instrumentType: scoredRow.instrumentType,
@@ -203,7 +229,7 @@ function persistListedScores(meta: {
         confidence: payload.confidence,
         freshness: payload.freshness,
       });
-    } else {
+    } else if (payload.eligible) {
       highestResearch.push({
         ticker: instrument.ticker,
         score: payload.researchScore,
@@ -234,6 +260,7 @@ function persistListedScores(meta: {
 
   const summary: MarketScanSummary = {
     kind: "market-scan",
+    methodology: "cross-sectional-v2",
     asOf: meta.asOf,
     universe: {
       fetched: meta.universe.fetched,
@@ -294,6 +321,8 @@ export function loadLatestMarketScan(): {
   } catch {
     summary = null;
   }
+  if (summary?.methodology !== "cross-sectional-v2") return { summary: null, rows: [] };
+  const sectors = new Map(db.select({ ticker: instruments.ticker, sector: instruments.sector }).from(instruments).all().map((row) => [row.ticker, row.sector]));
   const rows = db
     .select()
     .from(marketScanRows)
@@ -301,7 +330,8 @@ export function loadLatestMarketScan(): {
     .all()
     .map((row) => {
       try {
-        return JSON.parse(row.payloadJson) as Record<string, unknown>;
+        const payload = JSON.parse(row.payloadJson) as Record<string, unknown>;
+        return { ...payload, sector: payload.sector ?? sectors.get(row.ticker) ?? null };
       } catch {
         return { ticker: row.ticker };
       }

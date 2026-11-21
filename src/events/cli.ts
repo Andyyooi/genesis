@@ -1,3 +1,4 @@
+import { isCliEntrypoint } from "@/cli/entrypoint";
 import { ingestPhase16Events, PHASE16_EVENT_TICKERS } from "@/events/ingest";
 
 async function main() {
@@ -8,7 +9,9 @@ async function main() {
   console.log(JSON.stringify(report, null, 2));
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (isCliEntrypoint(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

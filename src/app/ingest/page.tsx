@@ -43,7 +43,7 @@ export default function IngestReportPage() {
         <h1 className="text-3xl font-semibold tracking-tight">Import report</h1>
         <p className="max-w-2xl text-muted-foreground">
           {isSnapshotReadOnly()
-            ? "This host serves a frozen import-report snapshot. CSV ingest and Yahoo price pulls cannot write here."
+            ? "This website is serving a published snapshot. CSV ingest and Yahoo price pulls stop here because this host cannot save results. Publishing updated data is a separate local snapshot pack and deploy."
             : "Rejected CSV rows and Yahoo misses stay here so they can be fixed. Nothing is silently filled in. Re-run ingest after editing the CSV or universe mapping."}
         </p>
         <p className="text-sm text-muted-foreground">

@@ -12,6 +12,12 @@ import {
 } from "@/market/ingest-fundamentals-yahoo";
 import { rescoreListedMarket } from "@/market/scan";
 import { DAILY_FUNDAMENTALS_RECHECK_DAYS } from "@/refresh/fundamentals-freshness";
+import {
+  fairValueInputsReady,
+  fairValueRefreshOutcome,
+  refreshFairValueUniverse,
+  type FairValueRefreshReport,
+} from "@/refresh/fair-value";
 import { persistDatasetRefresh } from "@/refresh/persist";
 import {
   combineOverallStatus,
@@ -33,6 +39,8 @@ export type DailyRefreshDeps = {
   rescore?: () => unknown;
   /** Set by `npm run refresh:daily -- --skip-rescore`. Does not call rescoreListedMarket. */
   skipRescore?: boolean;
+  /** Test seam. Production uses stored snapshots and persistFairValueRun. */
+  persistFairValues?: (asOf: string) => FairValueRefreshReport;
   now?: () => Date;
 };
 
@@ -73,7 +81,7 @@ async function refreshPrices(
     const report = await importPrices({
       listedOnly: true,
       skipAlerts: true,
-      range: "5d",
+      range: "auto",
       rateLimitMs: 100,
     });
     const completedAt = (deps.now?.() ?? new Date()).toISOString();
@@ -96,6 +104,7 @@ async function refreshPrices(
           ? `Yahoo price miss for ${report.failed.length} instruments (existing bars preserved).`
           : null,
       metadata: {
+        requestsSucceeded: report.succeeded.length,
         barsUpserted: report.barsUpserted,
         failedSample: report.failed.slice(0, 10),
       },
@@ -153,6 +162,7 @@ async function refreshFundamentals(
           ? `Yahoo fundamentals issues for ${report.failed.length} instruments (prior periods preserved).`
           : null,
       metadata: {
+        requestsSucceeded: report.instrumentsUpdated + report.instrumentsUnchanged - report.instrumentsSkippedFresh - report.skippedHadFilings,
         inserted: report.inserted,
         filled: report.filled,
         unchangedPeriods: report.unchanged,
@@ -406,6 +416,55 @@ function refreshScores(
   }
 }
 
+function refreshFairValue(
+  runId: string,
+  marketDate: string | null,
+  deps: DailyRefreshDeps,
+  prior: DatasetRefreshResult[],
+  asOf: string,
+): DatasetRefreshResult {
+  const nowFn = deps.now ?? (() => new Date());
+  const startedAt = nowFn().toISOString();
+  if (!fairValueInputsReady(prior)) {
+    return persistDatasetRefresh(runId, {
+      dataset: "fair_value",
+      source: "fair-value-skipped",
+      status: "UNCHANGED",
+      startedAt,
+      completedAt: nowFn().toISOString(),
+      marketDate,
+      attemptedCount: 0,
+      updatedCount: 0,
+      unchangedCount: 0,
+      failedCount: 0,
+      unavailableCount: 0,
+      lastSuccessfulAt: null,
+      errorSummary: "Skipped Fair Value because prices/fundamentals did not complete usefully.",
+      metadata: { skipped: true },
+    });
+  }
+  const report = (deps.persistFairValues ?? ((stamp: string) => refreshFairValueUniverse({ asOf: stamp })))(
+    asOf,
+  );
+  const outcome = fairValueRefreshOutcome(report);
+  return persistDatasetRefresh(runId, {
+    dataset: "fair_value",
+    source: "fair-value",
+    status: outcome.status,
+    startedAt,
+    completedAt: nowFn().toISOString(),
+    marketDate,
+    attemptedCount: report.attempted,
+    updatedCount: outcome.updatedCount,
+    unchangedCount: outcome.unchangedCount,
+    failedCount: outcome.failedCount,
+    unavailableCount: outcome.unavailableCount,
+    lastSuccessfulAt: null,
+    errorSummary: outcome.errorSummary,
+    metadata: outcome.metadata,
+  });
+}
+
 /**
  * Manual daily batch refresh. Datasets are independent: events/news NO_SOURCE
  * must not block prices/fundamentals. Never overwrites valid rows with null on failure.
@@ -432,8 +491,14 @@ export async function runDailyRefresh(
   const events = await refreshEvents(runId, marketDate, deps);
   const news = refreshNews(runId, marketDate, deps);
   const scores = refreshScores(runId, marketDate, deps, [prices, fundamentals]);
+  const fairValue = refreshFairValue(runId, marketDate, deps, [prices, fundamentals], startedAt);
+  if (fairValue.status === "PARTIAL" || fairValue.status === "SOURCE_FAILED") {
+    notes.push(
+      `Fair Value dataset ${fairValue.status}: ${fairValue.errorSummary ?? "see fair_value refresh metadata."}`,
+    );
+  }
 
-  const datasets = [prices, fundamentals, events, news, scores];
+  const datasets = [prices, fundamentals, events, news, scores, fairValue];
   const completedAt = nowFn().toISOString();
   return {
     kind: "daily-refresh",

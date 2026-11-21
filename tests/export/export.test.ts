@@ -136,7 +136,7 @@ describe("ChatGPT export", () => {
     const reit = wrap("REIT", "KLCC", [m("dividend_yield", 0.06), m("revenue_cagr", 0.04)]);
     expect(reit.score.profile).toBe("reit");
     const ids = reit.score.categories.flatMap((c) => c.factors.map((f) => f.id));
-    expect(ids).toContain("dpu_yield");
+    expect(ids).toContain("distribution_yield");
     expect(ids).not.toContain("fcf");
     const md = buildFullMarkdown(reit);
     expect(md).toMatch(/REIT factor profile/);

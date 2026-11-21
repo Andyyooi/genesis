@@ -1,4 +1,9 @@
 export type LineItems = {
+  grossProfit?: number | null;
+  ebit?: number | null;
+  currentAssets?: number | null;
+  currentLiabilities?: number | null;
+  longTermDebt?: number | null;
   revenue: number | null;
   pat: number | null;
   eps: number | null;
@@ -37,6 +42,14 @@ export type PriceImportFailure = {
   reason: string;
 };
 
+/** An older stored session whose close was left unchanged. */
+export type PriceBarConflict = {
+  ticker: string;
+  barDate: string;
+  storedClose: number;
+  incomingClose: number;
+};
+
 export type EventsImportReport = {
   kind: "events";
   file: string;
@@ -53,5 +66,12 @@ export type PricesImportReport = {
   finishedAt: string;
   succeeded: string[];
   failed: PriceImportFailure[];
+  /** Rows written this run: new sessions and a revised latest session. */
   barsUpserted: number;
+  /** Sessions that were not already stored, including a gap older than the latest bar. */
+  barsInserted?: number;
+  /** Stored sessions whose close already matched. Those rows were not rewritten. */
+  barsReimported?: number;
+  /** Older sessions whose incoming close differed. The stored close was kept. */
+  conflicts?: PriceBarConflict[];
 };

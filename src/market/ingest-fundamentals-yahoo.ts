@@ -68,6 +68,8 @@ export type YahooFundamentalsImportOptions = {
     asOf?: Date;
     recheckAfterDays?: number;
   };
+  /** Limit the fetch to one listed instrument. Unset keeps the full listed universe. */
+  onlyTicker?: string;
 };
 
 function defaultProvider(): FundamentalProvider {
@@ -118,11 +120,14 @@ export async function importYahooFundamentals(
   const options = isFundamentalProvider(providerOrOptions) ? maybeOptions : providerOrOptions;
   const startedAt = new Date().toISOString();
   const db = getDb();
+  const requested = options?.onlyTicker?.trim().toUpperCase();
   const listed = db
     .select()
     .from(instruments)
     .all()
-    .filter((row) => row.listingStatus !== "inactive");
+    .filter((row) => row.listingStatus !== "inactive")
+    .filter((row) => ["COMMON_STOCK", "REIT"].includes(row.instrumentType) && !isUnsupportedYahooListing(row.name))
+    .filter((row) => !requested || row.ticker.toUpperCase() === requested);
   const skipIfAny = options?.skipIfAnyFilings ?? false;
   const delay = options?.rateLimitMs ?? 200;
   const gate = options?.freshnessGate;
@@ -138,6 +143,7 @@ export async function importYahooFundamentals(
   let instrumentsUnchanged = 0;
   let instrumentsSkippedFresh = 0;
   let instrumentsFetched = 0;
+  let unsupported = 0;
   const failed: TypedFundamentalFailure[] = [];
   const retrievedAt = new Date().toISOString();
 
@@ -171,19 +177,6 @@ export async function importYahooFundamentals(
         continue;
       }
     }
-    if (isUnsupportedYahooListing(instrument.name)) {
-      const row: TypedFundamentalFailure = {
-        ticker: instrument.ticker,
-        yahooTicker: instrument.yahooTicker,
-        mappingTried: yahooSymbolCandidates(instrument),
-        code: "UNSUPPORTED",
-        reason: "Yahoo listing looks like an ETF/index fund — statements not forced",
-      };
-      failed.push(row);
-      recordIngestFailure("fundamentals", instrument.ticker, instrument.yahooTicker, row.reason, row.code);
-      continue;
-    }
-
     const mappingTried = yahooSymbolCandidates(instrument);
     if (mappingTried.length === 0) {
       const row: TypedFundamentalFailure = {
@@ -265,6 +258,7 @@ export async function importYahooFundamentals(
     } catch (error) {
       const code: FundamentalFailureCode =
         error instanceof FundamentalIngestError ? error.code : "UNKNOWN";
+      if (code === "UNSUPPORTED") { unsupported += 1; continue; }
       const reason = error instanceof Error ? error.message : "Yahoo fundamentals failed";
       failed.push({
         ticker: instrument.ticker,
@@ -282,7 +276,7 @@ export async function importYahooFundamentals(
     kind: "fundamentals-yahoo",
     startedAt,
     finishedAt: new Date().toISOString(),
-    attempted: listed.length,
+    attempted: listed.length - unsupported,
     upserted,
     inserted,
     filled,

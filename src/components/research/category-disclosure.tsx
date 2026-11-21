@@ -2,7 +2,7 @@
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { CategoryScore, FactorEvidence } from "@/scoring/types";
-import { categoryTitle, formatScore100 } from "@/lib/research-copy";
+import { CATEGORY_EXPLANATIONS, categoryTitle, formatScore100 } from "@/lib/research-copy";
 import { factorAvailabilityLabel, liveWeightLabel } from "@/lib/research-presentation";
 
 function fmtValue(value: number | null): string {
@@ -17,11 +17,14 @@ function FactorBlock({ factor }: { factor: FactorEvidence }) {
         <span>
           <span className="font-medium">{factor.label}</span>
           <span className="mt-0.5 block text-xs text-muted-foreground">
+            Value {fmtValue(factor.value)} · {factor.explanation}
+          </span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
             {factorAvailabilityLabel(factor.available, factor.reason)}
           </span>
         </span>
         <span className="shrink-0 tabular-nums text-muted-foreground">
-          {factor.available ? formatScore100(factor.score) : "Unavailable"}
+          {factor.available ? `${factor.score?.toFixed(1)} percentile` : "Unavailable"}
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-2 space-y-2 border-t pt-2 text-sm text-muted-foreground">
@@ -81,6 +84,7 @@ export function CategoryDisclosure({ categories }: { categories: CategoryScore[]
               </span>
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-3 border-t px-4 py-3">
+              <p className="text-sm text-muted-foreground">{CATEGORY_EXPLANATIONS[category.id]}</p>
               {category.warning ? (
                 <p className="text-sm text-muted-foreground">{category.warning}</p>
               ) : null}

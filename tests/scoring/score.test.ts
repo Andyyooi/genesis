@@ -1,295 +1,97 @@
 import { describe, expect, it } from "vitest";
-import { getFactorProfile, loadScoringConfig } from "@/config/load-scoring";
-import type { MetricValue } from "@/metrics/types";
-import { scoreFromMetrics } from "@/scoring/score";
+import { loadScoringConfig } from "@/config/load-scoring";
+import { percentile, rankCrossSection } from "@/scoring/rank";
+import { scoreFromMetrics, scoreUniverse, type ScoreInput } from "@/scoring/score";
+import { available } from "@/metrics/types";
 
-function m(id: string, value: number | null, available = value !== null): MetricValue {
-  return {
-    id,
-    label: id,
-    value,
-    unit: "ratio",
-    available,
-    reason: available ? null : "unavailable in fixture",
-    period: "2024-12-31",
-    inputs: [{ name: id, value }],
-    formula: id,
-  };
+const config = loadScoringConfig();
+function input(ticker: string, value: number, over: Partial<ScoreInput> = {}): ScoreInput {
+  return { config, ticker, instrumentType: "COMMON_STOCK", sector: "Technology", asOf: "2026-09-25", latestAnnual: { periodEnd: "2025-12-31", availableAt: null }, metrics: [available("earnings_yield", "E/P", value, "ratio", "EPS / price", [], "2025-12-31")], ...over };
 }
 
-function byCat(result: ReturnType<typeof scoreFromMetrics>, id: string) {
-  const row = result.categories.find((c) => c.id === id);
-  if (!row) throw new Error(id);
-  return row;
-}
-
-describe("scoring engine", () => {
-  const config = loadScoringConfig();
-
-  it("splits cheap valuation from weak quality", () => {
-    const cheapWeak = scoreFromMetrics({
-      config,
-      instrumentType: "COMMON_STOCK",
-      metrics: [
-        m("price_to_earnings", 8),
-        m("dividend_yield", 0.06),
-        m("roe", 0.04),
-        m("net_margin", 0.04),
-        m("revenue_cagr", 0.1),
-        m("pat_cagr", 0.1),
-      ],
-    });
-    expect(cheapWeak.valuationScore).toBeGreaterThan(80);
-    expect(byCat(cheapWeak, "quality").score).toBeLessThan(20);
-    expect(cheapWeak.researchScore).not.toBe(cheapWeak.valuationScore);
-
-    const expensiveQuality = scoreFromMetrics({
-      config,
-      instrumentType: "COMMON_STOCK",
-      metrics: [
-        m("price_to_earnings", 24),
-        m("dividend_yield", 0.02),
-        m("roe", 0.2),
-        m("net_margin", 0.25),
-        m("revenue_cagr", 0.1),
-        m("pat_cagr", 0.1),
-      ],
-    });
-    expect(expensiveQuality.valuationScore).toBeLessThan(30);
-    expect(byCat(expensiveQuality, "quality").score).toBeGreaterThan(80);
+describe("cross-sectional ranks", () => {
+  it("uses endpoints, ties, singleton neutrality and reverse directions", () => {
+    expect(percentile(1, [1, 2, 3])).toBe(0);
+    expect(percentile(3, [1, 2, 3])).toBe(100);
+    expect(percentile(2, [1, 2, 2, 3])).toBe(50);
+    expect(percentile(1, [1, 2, 3], true)).toBe(100);
+    expect(percentile(2, [2])).toBe(50);
+    expect(percentile(2, [2, 2, 2])).toBe(50);
   });
-
-  it("omits unavailable factors instead of scoring them as zero", () => {
-    const omitted = scoreFromMetrics({
-      config,
-      instrumentType: "COMMON_STOCK",
-      metrics: [m("roe", 0.18), m("net_margin", null, false)],
-    });
-    const quality = byCat(omitted, "quality");
-    expect(quality.score).toBe(100);
-    expect(quality.coverage).toBeCloseTo(0.55);
-    const asZeroWouldBe = (100 * 55 + 0 * 45) / 100;
-    expect(quality.score).not.toBe(asZeroWouldBe);
+  it("blends profile and sector ranks 50/50 only with at least eight available sector names", () => {
+    const rows = Array.from({ length: 16 }, (_, i) => ({ ticker: String(i), value: i, sector: i < 8 ? "A" : "B", group: "default" }));
+    const ranked = rankCrossSection(rows, false);
+    expect(ranked.get("7")?.market).toBeCloseTo(7 / 15 * 100);
+    expect(ranked.get("7")?.sector).toBe(100);
+    expect(ranked.get("7")?.blended).toBeCloseTo((7 / 15 * 100 + 100) / 2);
+    expect(ranked.get("7")?.sectorFallback).toBe(false);
+    const small = rankCrossSection(rows.slice(0, 7), false);
+    expect(small.get("3")?.sectorFallback).toBe(true);
+    expect(small.get("3")?.sector).toBe(small.get("3")?.market);
+    expect(rankCrossSection([{ ticker: "missing", value: null, sector: "A", group: "default" }], false).size).toBe(0);
   });
-
-  it("does not score negative EPS as a zero P/E", () => {
-    const result = scoreFromMetrics({
-      config,
-      instrumentType: "COMMON_STOCK",
-      metrics: [m("price_to_earnings", null, false), m("dividend_yield", 0.05)],
-    });
-    const pe = byCat(result, "valuation").factors.find((f) => f.id === "pe");
-    expect(pe?.available).toBe(false);
-    expect(pe?.score).toBeNull();
-    expect(result.valuationScore).not.toBe(0);
-    expect(result.valuationScore).toBeGreaterThan(70);
+  it("keeps banks and REITs separate and excludes missing/nonfinite observations", () => {
+    const ranked = rankCrossSection([
+      { ticker: "ordinary", group: "default", sector: null, value: 100 },
+      { ticker: "bank-low", group: "bank", sector: "Finance", value: 1 },
+      { ticker: "bank-high", group: "bank", sector: "Finance", value: 2 },
+      { ticker: "reit", group: "reit", sector: null, value: 0 },
+      { ticker: "bad", group: "bank", sector: "Finance", value: NaN },
+    ], false);
+    expect(ranked.get("bank-high")?.blended).toBe(100);
+    expect(ranked.get("bank-low")?.marketCount).toBe(2);
+    expect(ranked.get("ordinary")?.blended).toBe(50);
+    expect(ranked.get("reit")?.blended).toBe(50);
+    expect(ranked.has("bad")).toBe(false);
   });
+});
 
-  it("selects the REIT profile and does not use ordinary-company FCF/leverage factors", () => {
-    const reit = getFactorProfile(config, "REIT");
-    const def = getFactorProfile(config, "COMMON_STOCK");
-    const reitMetrics = [
-      ...reit.factor_sets.valuation,
-      ...reit.factor_sets.quality,
-      ...reit.factor_sets.financial_health,
-    ].map((f) => f.metric);
-    const defaultMetrics = [
-      ...def.factor_sets.valuation,
-      ...def.factor_sets.financial_health,
-    ].map((f) => f.metric);
-
-    expect(defaultMetrics).toContain("fcf");
-    expect(defaultMetrics).toContain("net_debt_to_ebitda");
-    expect(defaultMetrics).toContain("price_to_earnings");
-    expect(reitMetrics).not.toContain("fcf");
-    expect(reitMetrics).not.toContain("net_debt_to_ebitda");
-    expect(reitMetrics).not.toContain("debt_to_equity");
-    expect(reitMetrics).not.toContain("price_to_earnings");
-    expect(reitMetrics).not.toContain("ev_ebitda");
-    expect(reitMetrics).toContain("dividend_yield");
-    expect(reitMetrics).toContain("book_nav_premium");
-    expect(reitMetrics).toContain("dpu_cagr");
-    expect(reitMetrics).toContain("reit_gearing");
-
-    const scored = scoreFromMetrics({
-      config,
-      instrumentType: "REIT",
-      metrics: [m("fcf", 1e9), m("debt_to_equity", 0.2), m("dividend_yield", 0.06), m("revenue_cagr", 0.04)],
-    });
-    expect(scored.profile).toBe("reit");
-    const factorIds = scored.categories.flatMap((c) => c.factors.map((f) => f.id));
-    expect(factorIds).not.toContain("fcf");
-    expect(factorIds).not.toContain("debt_to_equity");
-    expect(factorIds).toContain("dpu_yield");
-    expect(factorIds).toContain("nav_premium");
+describe("universe scoring", () => {
+  it("renormalizes available factors/categories without anchors or news", () => {
+    const scored = scoreUniverse([input("A", 0.01), input("B", 0.1)]);
+    expect(scored.get("A")?.researchScore).toBe(0);
+    expect(scored.get("B")?.researchScore).toBe(100);
+    expect(scored.get("B")?.categories.find((c) => c.id === "valuation")?.liveWeight).toBe(1);
+    expect(scored.get("B")?.categories.map((c) => c.id)).toEqual(["valuation", "quality", "financial_health", "growth", "momentum", "low_volatility"]);
+    expect(scored.get("B")?.categories.flatMap((c) => c.factors).some((f) => /news|technical/.test(f.id))).toBe(false);
+    expect(scoreUniverse([]).size).toBe(0);
   });
-
-  it("applies a bank overlay on MAYBANK/CIMB/PBBANK and skips industrial FCF and EV/EBITDA", () => {
-    const bank = getFactorProfile(config, "COMMON_STOCK", "MAYBANK");
-    const def = getFactorProfile(config, "COMMON_STOCK", "TENAGA");
-    const bankMetrics = [
-      ...bank.factor_sets.valuation,
-      ...bank.factor_sets.quality,
-      ...bank.factor_sets.financial_health,
-    ].map((f) => f.metric);
-    const defaultHealth = def.factor_sets.financial_health.map((f) => f.metric);
-
-    expect(defaultHealth).toContain("fcf");
-    expect(bankMetrics).toContain("price_to_book");
-    expect(bankMetrics).toContain("roe");
-    expect(bankMetrics).not.toContain("fcf");
-    expect(bankMetrics).not.toContain("ev_ebitda");
-    expect(bankMetrics).not.toContain("net_debt_to_ebitda");
-    expect(bank.factor_sets.financial_health).toHaveLength(4);
-    expect(bank.factor_sets.financial_health.map((f) => f.metric)).toEqual(
-      expect.arrayContaining(["nim", "cet1_ratio"]),
-    );
-
-    const scored = scoreFromMetrics({
-      config,
-      instrumentType: "COMMON_STOCK",
-      ticker: "CIMB",
-      metrics: [
-        m("price_to_book", 1.1),
-        m("roe", 0.12),
-        m("fcf", 1e9),
-        m("ev_ebitda", 8),
-        m("net_debt_to_ebitda", 1),
-        m("dividend_yield", 0.05),
-        m("revenue_cagr", 0.04),
-        m("pat_cagr", 0.04),
-      ],
-    });
-    expect(scored.profile).toBe("bank");
-    const factorIds = scored.categories.flatMap((c) => c.factors.map((f) => f.id));
-    expect(factorIds).toContain("pb");
-    expect(factorIds).toContain("roe");
-    expect(factorIds).not.toContain("fcf");
-    expect(factorIds).not.toContain("ev_ebitda");
-    expect(byCat(scored, "financial_health").inThisRun).toBe(false);
+  it("does not fabricate a percentile for a per-ticker calculation", () => {
+    const result = scoreFromMetrics(input("A", 0.05));
+    expect(result.researchScore).toBeNull();
+    expect(result.categories[0].factors[0].value).toBe(0.05);
+    expect(result.categories[0].factors[0].available).toBe(false);
   });
-
-  it("marks news and technical as not in this run and renormalizes", () => {
-    const result = scoreFromMetrics({
-      config,
-      instrumentType: "COMMON_STOCK",
-      metrics: [
-        m("price_to_earnings", 12),
-        m("dividend_yield", 0.05),
-        m("roe", 0.12),
-        m("net_margin", 0.12),
-        m("revenue_cagr", 0.06),
-        m("pat_cagr", 0.06),
-      ],
-    });
-    expect(byCat(result, "news").inThisRun).toBe(false);
-    expect(byCat(result, "technical").inThisRun).toBe(false);
-    expect(byCat(result, "news").configuredWeight).toBe(10);
-    const live = result.categories.filter((c) => c.inThisRun);
-    const liveSum = live.reduce((s, c) => s + (c.liveWeight ?? 0), 0);
-    expect(liveSum).toBeCloseTo(1);
-    expect(result.notes.join(" ")).toMatch(/not in this live run/);
+  it("uses configured profile weights and omits bank industrial/REIT quality factors", () => {
+    expect(config.category_weights).toEqual({ valuation: 30, quality: 25, financial_health: 10, growth: 5, momentum: 20, low_volatility: 10 });
+    const bank = config.instrument_profiles.bank;
+    expect(bank.category_weights).toEqual({ valuation: 35, quality: 25, financial_health: 0, growth: 5, momentum: 20, low_volatility: 15 });
+    expect(bank.factor_sets.financial_health).toEqual([]);
+    expect(bank.factor_sets.quality.map((f) => f.metric)).toEqual(["roe"]);
+    expect(config.instrument_profiles.reit.category_weights).toEqual({ valuation: 35, quality: 0, financial_health: 20, growth: 10, momentum: 20, low_volatility: 15 });
+    expect(config.instrument_profiles.reit.factor_sets.quality).toEqual([]);
+    const results = scoreUniverse([input("MAYBANK", 0.1), input("CIMB", 0.2), input("GENERAL", 100)]);
+    expect(results.get("CIMB")?.researchScore).toBe(100);
+    expect(results.get("GENERAL")?.researchScore).toBe(50);
   });
-
-  it("lets news contribute only when a stored tone metric exists, never as a fake 50", () => {
-    const baseMetrics = [
-      m("price_to_earnings", 12),
-      m("dividend_yield", 0.05),
-      m("roe", 0.12),
-      m("net_margin", 0.12),
-      m("revenue_cagr", 0.06),
-      m("pat_cagr", 0.06),
-    ];
-    const without = scoreFromMetrics({ config, instrumentType: "COMMON_STOCK", metrics: baseMetrics });
-    expect(byCat(without, "news").inThisRun).toBe(false);
-    expect(byCat(without, "news").score).toBeNull();
-    expect(without.notes.join(" ")).toMatch(/not scored as a neutral 50/);
-
-    const withNews = scoreFromMetrics({
-      config,
-      instrumentType: "COMMON_STOCK",
-      metrics: [...baseMetrics, m("news_tone", 1)],
-    });
-    expect(byCat(withNews, "news").inThisRun).toBe(true);
-    expect(byCat(withNews, "news").score).toBe(100);
-    expect(withNews.researchScore).not.toBe(without.researchScore);
-  });
-
-  it("changes results when YAML weights change", () => {
-    const metrics = [
-      m("price_to_earnings", 8),
-      m("dividend_yield", 0.06),
-      m("roe", 0.04),
-      m("net_margin", 0.04),
-      m("revenue_cagr", 0.1),
-      m("pat_cagr", 0.1),
-    ];
-    const base = scoreFromMetrics({ config, instrumentType: "COMMON_STOCK", metrics });
+  it("keeps exclusions and concerns separate from score, and config edits affect weighted totals", () => {
+    const a = input("A", 0.01, { metrics: [available("earnings_yield", "E/P", 0.01, "ratio", "", [], null), available("roe", "ROE", 0.2, "ratio", "", [], null)] });
+    const b = input("B", 0.1, { metrics: [available("earnings_yield", "E/P", 0.1, "ratio", "", [], null), available("roe", "ROE", 0.1, "ratio", "", [], null)] });
+    const base = scoreUniverse([a, b]).get("A")!;
+    const flagged = scoreUniverse([{ ...a, pn17: true }, b]).get("A")!;
+    expect(flagged.researchScore).toBe(base.researchScore);
+    expect(flagged.eligibility?.eligible).toBe(false);
+    expect(flagged.concerns.some((c) => c.id === "pn17")).toBe(true);
     const tilted = structuredClone(config);
-    tilted.category_weights.valuation = 50;
-    tilted.category_weights.quality = 5;
-    tilted.category_weights.financial_health = 10;
-    tilted.category_weights.growth = 15;
-    const changed = scoreFromMetrics({ config: tilted, instrumentType: "COMMON_STOCK", metrics });
-    expect(changed.researchScore).not.toBe(base.researchScore);
-    expect(changed.researchScore).toBeGreaterThan(base.researchScore as number);
+    tilted.category_weights.valuation = 40;
+    tilted.category_weights.quality = 15;
+    const changed = scoreUniverse([{ ...a, config: tilted }, { ...b, config: tilted }]).get("A")!;
+    expect(changed.researchScore).toBeLessThan(base.researchScore!);
     expect(changed.configHash).not.toBe(base.configHash);
   });
-
-  it("does not apply a silent concern penalty", () => {
-    const metrics = [
-      m("price_to_earnings", 12),
-      m("dividend_yield", 0.05),
-      m("roe", 0.12),
-      m("net_margin", 0.12),
-      m("revenue_cagr", -0.1),
-      m("pat_cagr", 0.06),
-    ];
-    const clean = scoreFromMetrics({
-      config,
-      instrumentType: "COMMON_STOCK",
-      metrics,
-      pn17: false,
-    });
-    const flagged = scoreFromMetrics({
-      config,
-      instrumentType: "COMMON_STOCK",
-      metrics,
-      pn17: true,
-    });
-    expect(clean.concerns.some((c) => c.id === "falling_revenue")).toBe(true);
-    expect(flagged.concerns.some((c) => c.id === "pn17")).toBe(true);
-    expect(flagged.researchScore).toBe(clean.researchScore);
-    expect(config.concerns.apply_score_penalty).toBe(false);
-  });
-
-  it("does not let a non-finite growth metric poison Research Score (OPPSTAR/PCHEM-style)", () => {
-    // Profit→loss PAT CAGR historically produced NaN via Math.pow; defensive path treats
-    // non-finite metric values as unavailable and renormalizes remaining growth weight.
-    const poisoned = m("pat_cagr", Number.NaN, true);
-    poisoned.reason = null;
-    const result = scoreFromMetrics({
-      config,
-      instrumentType: "COMMON_STOCK",
-      ticker: "OPPSTAR",
-      metrics: [
-        m("price_to_earnings", null, false),
-        m("dividend_yield", 0.005),
-        m("roe", 0.01),
-        m("net_margin", 0.01),
-        m("debt_to_equity", 0.2),
-        m("fcf", -1),
-        m("revenue_cagr", -0.15),
-        poisoned,
-      ],
-    });
-    const pat = byCat(result, "growth").factors.find((f) => f.id === "pat_cagr");
-    expect(pat?.available).toBe(false);
-    expect(pat?.score).toBeNull();
-    expect(Number.isFinite(byCat(result, "growth").score as number)).toBe(true);
-    expect(byCat(result, "growth").score).not.toBeNull();
-    expect(Number.isFinite(result.researchScore as number)).toBe(true);
-    expect(result.researchScore).not.toBeNull();
-    expect(result.valuationScore).toBe(0);
+  it("does not let NaN poison ranks", () => {
+    const results = scoreUniverse([input("A", NaN), input("B", 0.1)]);
+    expect(results.get("A")?.researchScore).toBeNull();
+    expect(results.get("B")?.researchScore).toBe(50);
   });
 });

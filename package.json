@@ -25,7 +25,8 @@
     "test": "vitest run",
     "events:ingest": "tsx src/events/cli.ts",
     "refresh:daily": "tsx src/refresh/cli.ts",
-    "snapshot:pack": "tsx scripts/pack-snapshot.ts"
+    "snapshot:pack": "tsx scripts/pack-snapshot.ts",
+    "snapshot:report": "tsx scripts/snapshot-report.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { loadScoringConfig } from "@/config/load-scoring";
-import { getDb, getSqlite } from "@/db/client";
+import { getDb } from "@/db/client";
 import { financialPeriods, instruments, priceBars } from "@/db/schema";
 import { emptyLineItems } from "@/ingest/merge-line-items";
 import { importYahooFundamentals } from "@/market/ingest-fundamentals-yahoo";
@@ -20,12 +20,12 @@ const PREV_PATH = process.env.BURSA_SQLITE_PATH;
 let tempDir = "";
 
 function resetDb() {
+  const g = globalThis as { sqlite?: { close: () => void } };
   try {
-    getSqlite().close();
+    g.sqlite?.close();
   } catch {
-    /* ignore */
+    /* The singleton may already be closed. */
   }
-  const g = globalThis as { sqlite?: unknown };
   delete g.sqlite;
 }
 
@@ -441,7 +441,7 @@ describe("daily refresh wires freshness gate without changing prices/scoring rul
     expect(priceOpts[0]).toMatchObject({
       listedOnly: true,
       skipAlerts: true,
-      range: "5d",
+      range: "auto",
       rateLimitMs: 100,
     });
     expect(fundOpts[0]).toMatchObject({
@@ -450,6 +450,7 @@ describe("daily refresh wires freshness gate without changing prices/scoring rul
       },
     });
     expect(summary.datasets.find((d) => d.dataset === "fundamentals")?.metadata).toMatchObject({
+      requestsSucceeded: 0,
       instrumentsSkippedFresh: 1,
       instrumentsFetched: 0,
       recheckAfterDays: 14,
