@@ -51,26 +51,40 @@ export function dailyPriceBars(bars: PriceBarSnapshot[], asOf = new Date().toISO
 }
 
 export function priceEvidence(bars: PriceBarSnapshot[], asOf?: string): MetricValue[] {
-  const window = dailyPriceBars(bars, asOf).slice(-253);
-  const full = window.length === 253;
-  const adjusted = full && window.every((b) => finite(b.adjClose) && b.adjClose > 0);
+  const ordered = dailyPriceBars(bars, asOf);
+  const latest = ordered.at(-1);
+  const monthsBefore = (months: number) => {
+    const date = new Date(`${latest?.barDate}T00:00:00Z`);
+    const day = date.getUTCDate();
+    date.setUTCDate(1); date.setUTCMonth(date.getUTCMonth() - months);
+    date.setUTCDate(Math.min(day, new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate()));
+    return date.getTime();
+  };
+  const endpoint = (target: number) => ordered.filter((b) => Date.parse(b.barDate) <= target).at(-1);
+  const start = endpoint(monthsBefore(12));
+  const end = endpoint(monthsBefore(1));
+  const near = (bar: PriceBarSnapshot | undefined, target: number) => bar && target - Date.parse(bar.barDate) <= 7 * 86400000;
+  const window = start ? ordered.filter((b) => b.barDate >= start.barDate) : [];
+  const adjusted = window.length > 0 && window.every((b) => finite(b.adjClose) && b.adjClose > 0);
   const prices = window.map((b) => adjusted ? b.adjClose! : b.close);
-  const valid = full && prices.every((p) => finite(p) && p > 0);
+  const valid = near(start, monthsBefore(12)) && near(end, monthsBefore(1)) && prices.every((p) => finite(p) && p > 0);
   const period = window.length ? `${window[0].barDate} to ${window[window.length - 1].barDate}` : null;
   const kind = adjusted ? "adjusted closes (includes provider dividend/split adjustments)" : "raw closes (dividends not included)";
-  const momentum = valid ? prices[231]! / prices[0]! - 1 : null;
+  const endPrice = end ? adjusted ? end.adjClose : end.close : null;
+  const momentum = valid && finite(endPrice) ? endPrice / prices[0]! - 1 : null;
   let volatility: number | null = null;
-  if (valid) {
+  const continuous = window.length >= 200 && window.every((b, i) => i === 0 || Date.parse(b.barDate) - Date.parse(window[i - 1].barDate) <= 7 * 86400000);
+  if (valid && continuous) {
     const returns = prices.slice(1).map((p, i) => p! / prices[i]! - 1);
     const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
     volatility = Math.sqrt(returns.reduce((sum, r) => sum + (r - mean) ** 2, 0) / (returns.length - 1)) * Math.sqrt(252);
   }
   return [
-    metric("momentum_12_1", momentum, `close(t−21) / close(t−252) − 1; ${kind}`, period, [
+    metric("momentum_12_1", momentum, `close(1 calendar month ago) / close(12 calendar months ago) − 1; anchored to latest stored session; ${kind}`, start && end ? `${start.barDate} to ${end.barDate}` : null, [
       { name: "startPrice", value: prices[0] ?? null, period: window[0]?.barDate },
-      { name: "endPrice", value: prices[231] ?? null, period: window[231]?.barDate },
-    ], "253 distinct stored sessions with positive prices are required"),
-    metric("volatility_252", volatility, `sample std dev of 252 daily returns × √252; ${kind}`, period, [], "253 distinct stored sessions with positive prices are required"),
+      { name: "endPrice", value: endPrice ?? null, period: end?.barDate },
+    ], "Positive prices within 7 calendar days of both 12–1 month endpoints are required"),
+    metric("volatility_252", volatility, `sample std dev of daily returns over 12 calendar months × √252; ${kind}`, period, [], "A full calendar year, at least 200 sessions and no gaps exceeding 7 calendar days are required"),
   ];
 }
 

@@ -114,7 +114,7 @@ describe("daily price range and throttle", () => {
     else process.env.BURSA_SQLITE_PATH = PREV_PATH;
   });
 
-  it("daily refresh uses range=5d and rateLimitMs=100", async () => {
+  it("daily refresh chooses each ticker's range automatically with rateLimitMs=100", async () => {
     const captured: unknown[] = [];
     await runDailyRefresh({
       importPrices: async (opts) => {
@@ -150,7 +150,7 @@ describe("daily price range and throttle", () => {
     expect(captured[0]).toMatchObject({
       listedOnly: true,
       skipAlerts: true,
-      range: "5d",
+      range: "auto",
       rateLimitMs: 100,
     });
   });

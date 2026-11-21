@@ -81,7 +81,7 @@ async function refreshPrices(
     const report = await importPrices({
       listedOnly: true,
       skipAlerts: true,
-      range: "5d",
+      range: "auto",
       rateLimitMs: 100,
     });
     const completedAt = (deps.now?.() ?? new Date()).toISOString();

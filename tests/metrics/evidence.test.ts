@@ -108,26 +108,36 @@ describe("evidence fundamentals", () => {
 });
 
 describe("price evidence", () => {
-  it("uses adjusted prices consistently and skips the last 21 sessions for momentum", () => {
-    const prices = bars();
+  const calendarPrices = (count = 366) => Array.from({ length: count }, (_, i) => ({ ...bars(1)[0], barDate: new Date(Date.UTC(2025, 8, 25 + i)).toISOString().slice(0, 10), close: 10 * 1.001 ** i, adjClose: 10 * 1.002 ** i })) as PriceBarSnapshot[];
+  it("uses adjusted prices consistently and calendar 12–1 month endpoints", () => {
+    const prices = calendarPrices();
     const base = priceEvidence(prices, "2026-09-25");
-    expect(metric(base, "momentum_12_1").value).toBeCloseTo(1.002 ** 231 - 1);
+    expect(metric(base, "momentum_12_1").value).toBeCloseTo(1.002 ** 334 - 1);
     expect(metric(base, "volatility_252").value).toBeCloseTo(0, 10);
-    prices[252].adjClose = 1000000;
+    prices[365].adjClose = 1000000;
     expect(metric(priceEvidence(prices, "2026-09-25"), "momentum_12_1").value).toBe(metric(base, "momentum_12_1").value);
     expect(metric(priceEvidence(prices, "2026-09-25"), "volatility_252").value).toBeGreaterThan(0);
   });
   it("does not mix adjusted/raw series, invent bars, count duplicate days, or use future prices", () => {
-    const prices = bars();
+    const prices = calendarPrices();
     prices[0].adjClose = null;
-    expect(metric(priceEvidence(prices, "2026-09-25"), "momentum_12_1").value).toBeCloseTo(1.001 ** 231 - 1);
-    expect(metric(priceEvidence(bars(252)), "momentum_12_1").available).toBe(false);
-    expect(metric(priceEvidence([...bars(252), bars(252)[0]]), "volatility_252").available).toBe(false);
+    expect(metric(priceEvidence(prices, "2026-09-25"), "momentum_12_1").value).toBeCloseTo(1.001 ** 334 - 1);
+    expect(metric(priceEvidence(calendarPrices(365)), "momentum_12_1").available).toBe(false);
+    expect(metric(priceEvidence([...calendarPrices(365), calendarPrices(365)[0]]), "volatility_252").available).toBe(false);
     expect(metric(priceEvidence(bars(), "2025-02-01"), "momentum_12_1").available).toBe(false);
     expect(priceEvidence([]).every((m) => m.value === null)).toBe(true);
-    const broken = bars().map((b) => ({ ...b, adjClose: null }));
+    const broken = calendarPrices().map((b) => ({ ...b, adjClose: null }));
     broken[12].close = 0;
     expect(priceEvidence(broken).every((m) => m.value === null)).toBe(true);
+  });
+  it("never stretches the calendar window over gaps and withholds gapped volatility", () => {
+    const prices = calendarPrices().filter((b) => b.barDate < "2026-01-01" || b.barDate > "2026-02-28");
+    const result = priceEvidence(prices, "2026-09-25");
+    expect(metric(result, "momentum_12_1").value).toBeCloseTo(1.002 ** 334 - 1);
+    expect(metric(result, "volatility_252").available).toBe(false);
+    expect(metric(result, "volatility_252").reason).toMatch(/gaps/);
+    const missingEndpoint = prices.filter((b) => b.barDate < "2026-08-10" || b.barDate > "2026-08-25");
+    expect(metric(priceEvidence(missingEndpoint), "momentum_12_1").available).toBe(false);
   });
 });
 

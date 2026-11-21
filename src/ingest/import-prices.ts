@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, lte, max } from "drizzle-orm";
 import { refreshAlertsForTicker } from "@/alerts/refresh";
 import { getDb, getSqlite } from "@/db/client";
 import { ingestReports, instruments, priceBars } from "@/db/schema";
@@ -26,6 +26,17 @@ export type PriceIngestOptions = {
 };
 
 type Checkpoint = { done: string[] };
+
+export function priceRangeSince(latest: string | null, now = new Date()): string {
+  const timestamp = latest ? yahooBarDateUtc(latest) : null;
+  if (timestamp == null || timestamp > now.getTime()) return "2y";
+  const days = Math.ceil((now.getTime() - timestamp) / 86400000);
+  if (days <= 3) return "5d";
+  for (const [range, length] of [["1mo", 28], ["3mo", 85], ["6mo", 175], ["1y", 360]] as const) {
+    if (days + 7 <= length) return range;
+  }
+  return "2y";
+}
 
 function loadCheckpoint(path: string | undefined): Set<string> {
   if (!path) return new Set();
@@ -85,7 +96,9 @@ export async function importYahooPrices(
       continue;
     }
     try {
-      const fetched = await fetchYahooDailyBars(yahooTicker, range);
+      const latest = range === "auto" ? db.select({ date: max(priceBars.barDate) }).from(priceBars)
+        .where(and(eq(priceBars.instrumentId, instrument.id), gt(priceBars.close, 0), lte(priceBars.barDate, retrievedAt.slice(0, 10)))).get()?.date ?? null : null;
+      const fetched = await fetchYahooDailyBars(yahooTicker, range === "auto" ? priceRangeSince(latest) : range);
       const accepted = fetched.filter((bar) => usableYahooDailyBar(bar));
       if (accepted.length === 0) {
         throw new Error(`Yahoo missed ${yahooTicker}: no usable daily bars`);
