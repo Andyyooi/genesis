@@ -46,13 +46,13 @@ export function RefreshBar({ latestPriceDate, missing, allowed }: { latestPriceD
   }
 
   return (
-    <div className="mx-auto mt-3 flex max-w-7xl flex-wrap items-center justify-between gap-3 border-t pt-3 text-sm">
+    <div className="mx-auto mt-3 flex max-w-[88rem] flex-wrap items-center justify-between gap-3 border-t pt-3 text-sm">
       <p className="font-semibold">Data as of {latestPriceDate ?? "unavailable"}</p>
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="outline" onClick={() => void refresh()} disabled={!allowed || !configured || submitting || running}>Refresh data</Button>
-        <span className="text-muted-foreground">usually 10–20 minutes</span>
+        <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Update info</summary><p className="mt-2 max-w-md">Usually 10–20 minutes. {!configured ? `Refresh setup is incomplete: ${(status?.missing ?? missing).join(", ")}.` : "Updated data appears after publication."}</p></details>
         <p role="status" aria-live="polite">
-          {!configured ? `Refresh isn't set up yet — missing ${(status?.missing ?? missing).join(", ")}`
+          {!configured ? "Refresh unavailable"
             : !allowed ? "Sign in to refresh data" : submitting ? "Requesting refresh…" : status ? labels[status.phase] : "Checking refresh status…"}
           {status && status.elapsedSeconds > 0 ? ` · ${Math.floor(status.elapsedSeconds / 60)}m ${status.elapsedSeconds % 60}s` : ""}
           {status?.html_url ? <> · <a className="underline" href={status.html_url} target="_blank" rel="noreferrer">View run</a></> : null}

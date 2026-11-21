@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { Disclosure } from "@/components/research/disclosure";
+import { StatusLabel } from "@/components/research/status-label";
 import { loadLatestFundamentalsQuality } from "@/market/fundamentals-quality";
 import { loadLatestMarketScan } from "@/market/scan";
 import { filterMarketRows } from "@/market/filters";
-import { isSnapshotReadOnly } from "@/lib/data-mode";
 import { dataConfidenceLabel, formatScore100 } from "@/lib/research-copy";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -31,18 +32,16 @@ export default async function MarketPage({ searchParams }: PageProps<"/market">)
         <Link href="/" className="underline underline-offset-4">
           Dashboard
         </Link>
-        {" · market scan · research lists, not buy orders"}
+
       </p>
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold tracking-tight">Market scan</h1>
         <p className="max-w-3xl text-muted-foreground">
-          {isSnapshotReadOnly()
-            ? "Last stored market scan from the bundled snapshot. npm run market:scan cannot write on Vercel."
-            : "Last npm run market:scan snapshot. Universe comes from the Yahoo Malaysia equity screener (COMMON_STOCK + REIT). Warrants/ETFs excluded. Missing filings stay unavailable."}
+          Explore the wider market. Open a company to understand its score and data quality.
         </p>
       </header>
 
-      {quality ? (
+      <Disclosure title="Market data quality" hint="Coverage, account age and missing data across the market.">      {quality ? (
         <section className="flex flex-col gap-3 rounded-lg border p-4">
           <h2 className="text-xl font-semibold">Fundamentals data quality</h2>
           <p className="text-sm text-muted-foreground">
@@ -83,6 +82,8 @@ export default async function MarketPage({ searchParams }: PageProps<"/market">)
         </p>
       )}
 
+</Disclosure>
+
       {!summary ? (
         <p className="text-sm text-muted-foreground">
           No scan stored yet. Run <code className="font-mono">npm run market:scan</code> on this
@@ -105,7 +106,7 @@ export default async function MarketPage({ searchParams }: PageProps<"/market">)
             Yahoo statement misses {summary.fundamentalsYahoo.failed} · asOf {summary.asOf.slice(0, 19)}
           </p>
 
-          <ScanTable
+          <Disclosure title="Market highlights" hint="Highest scores, price moves and companies needing verification.">          <ScanTable
             title="Highest Research Score"
             rows={(summary.highlights.highestResearch ?? []).map((r) => ({
               ticker: r.ticker,
@@ -149,6 +150,7 @@ export default async function MarketPage({ searchParams }: PageProps<"/market">)
               extra: "Coverage too thin or no Research Score",
             }))}
           />
+</Disclosure>
 
           <section>
             <h2 className="mb-2 text-xl font-semibold">All scored names</h2>
@@ -200,7 +202,7 @@ export default async function MarketPage({ searchParams }: PageProps<"/market">)
                         {formatScore100(typeof row.valuationScore === "number" ? row.valuationScore : null)}
                       </TableCell>
                       <TableCell>
-                        {dataConfidenceLabel(String(row.confidence ?? "LOW"))}
+                        <StatusLabel level={String(row.confidence ?? "LOW")}>{dataConfidenceLabel(String(row.confidence ?? "LOW"))}</StatusLabel>
                         {row.needsVerification ? (
                           <Badge className="ml-1" variant="outline">
                             Needs verification
@@ -208,9 +210,9 @@ export default async function MarketPage({ searchParams }: PageProps<"/market">)
                         ) : null}
                       </TableCell>
                       <TableCell className="max-w-80 text-sm">
-                        {row.eligible === true ? "Eligible" : `Excluded: ${Array.isArray(row.exclusionReasons) ? row.exclusionReasons.join(" ") : "not verified"}`}
+                        {row.eligible === true ? <StatusLabel level="eligible">Eligible</StatusLabel> : <details><summary className="cursor-pointer text-amber-800">Excluded · why?</summary><p className="mt-2 whitespace-normal">{Array.isArray(row.exclusionReasons) ? row.exclusionReasons.join(" ") : "Not verified"}</p></details>}
                       </TableCell>
-                      <TableCell>{String(row.freshness ?? "—").replaceAll("_", " ")}</TableCell>
+                      <TableCell><StatusLabel level={String(row.freshness)}>{String(row.freshness ?? "—").replaceAll("_", " ")}</StatusLabel></TableCell>
                       <TableCell className="text-right">
                         {typeof row.coreCoverageRatio === "number"
                           ? `${Math.round(row.coreCoverageRatio * 100)}% (${row.availableFactors}/${row.expectedFactors})`
@@ -232,7 +234,7 @@ export default async function MarketPage({ searchParams }: PageProps<"/market">)
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border p-4">
+    <div className="summary-stat info">
       <p className="text-sm text-muted-foreground">{label}</p>
       <p className="text-2xl font-semibold tabular-nums">{value}</p>
     </div>

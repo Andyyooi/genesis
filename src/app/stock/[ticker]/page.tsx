@@ -1,3 +1,4 @@
+import { Disclosure } from "@/components/research/disclosure";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CategoryDisclosure } from "@/components/research/category-disclosure";
@@ -170,7 +171,7 @@ export default async function ResearchPage({
   const fairValue = loadPersistedFairValueForPage(instrument.id);
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-8 sm:px-6">
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-5 px-4 py-8 sm:px-6">
       <p className="text-sm text-muted-foreground">
         <Link href="/" className="text-foreground underline underline-offset-4">
           Dashboard
@@ -199,7 +200,7 @@ export default async function ResearchPage({
         </p>
         <dl className="grid gap-2 text-sm sm:grid-cols-3">
           <div>
-            <dt className="text-muted-foreground">Current price</dt>
+            <dt className="text-muted-foreground">Last close (RM)</dt>
             <dd className="text-lg font-medium tabular-nums">{fmtRatio(lastClose)}</dd>
           </div>
           <div>
@@ -213,16 +214,14 @@ export default async function ResearchPage({
         </dl>
         <DataLagBanner dates={snapshotDates} />
         {isReit ? (
-          <p className="text-sm text-muted-foreground">
-            REIT profile: distribution yield, book NAV, DPU growth, gearing and related REIT
+          <details className="text-sm text-muted-foreground"><summary className="cursor-pointer text-primary">About REIT research</summary><p className="mt-2">REIT profile: distribution yield, book NAV, DPU growth, gearing and related REIT
             metrics. Industrial FCF and EV/EBITDA are not used.
-          </p>
+          </p></details>
         ) : null}
         {isBank ? (
-          <p className="text-sm text-muted-foreground">
-            Bank profile: P/B, ROE, and bank health overlays where data exists. Industrial FCF and
+          <details className="text-sm text-muted-foreground"><summary className="cursor-pointer text-primary">About bank research</summary><p className="mt-2">Bank profile: P/B, ROE, and bank health overlays where data exists. Industrial FCF and
             EV/EBITDA are not scoring factors.
-          </p>
+          </p></details>
         ) : null}
       </header>
 
@@ -230,9 +229,8 @@ export default async function ResearchPage({
       <ResearchScoreCard result={result} />
 
       {/* C. Score breakdown */}
-      <section className="flex flex-col gap-3">
+      <Disclosure title="Score breakdown" hint="See the factors and evidence behind this score.">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Score breakdown</h2>
           <p className="text-sm text-muted-foreground">
             Live weight is the share of this run after unavailable categories are dropped and
             remaining weights are renormalized. Unavailable factors are excluded — never treated as
@@ -240,15 +238,14 @@ export default async function ResearchPage({
           </p>
         </div>
         <CategoryDisclosure categories={result.categories} />
-      </section>
+      </Disclosure>
 
       {/* 3. Data Quality */}
       <DataQualitySection result={result} />
 
       {/* 4. Research interpretation */}
-      <section className="flex flex-col gap-3">
+      <Disclosure title="Research interpretation" hint="Read the main observations from stored metrics.">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Research interpretation</h2>
           <p className="text-sm text-muted-foreground">
             Factual observations from stored metrics and context labels. Not a recommendation.
           </p>
@@ -258,10 +255,10 @@ export default async function ResearchPage({
             <li key={bullet}>{bullet}</li>
           ))}
         </ul>
-      </section>
+      </Disclosure>
 
       {/* 5. Relative Value vs Contextual */}
-      <section className="flex flex-col gap-4">
+      <Disclosure title="Valuation & comparisons" hint="Relative value, historical context and peer comparisons.">
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Relative Value</h2>
           <p className="text-sm text-muted-foreground">{absoluteValuationBlurb()}</p>
@@ -283,22 +280,19 @@ export default async function ResearchPage({
           <ValuationContextCard block={result.valuationContext.historical} />
           <ValuationContextCard block={result.valuationContext.peer} />
         </div>
-      </section>
+      </Disclosure>
 
       <PersistedFairValue stored={fairValue} />
 
       {/* Profile metrics */}
-      <section className="flex flex-col gap-3">
+      <Disclosure title={isReit ? "REIT metrics" : isBank ? "Bank metrics" : "Company metrics"} hint="Explore the profile-specific numbers.">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">
-            {isReit ? "REIT metrics" : isBank ? "Bank metrics" : "Company metrics"}
-          </h2>
           <p className="text-sm text-muted-foreground">
             Profile-relevant stored metrics. Missing values stay Unavailable.
           </p>
         </div>
         <MetricTable ids={profileIds} metrics={metrics} />
-      </section>
+      </Disclosure>
 
       {result.concerns.length > 0 || instrument.pn17 ? (
         <section className="flex flex-col gap-3">
@@ -328,8 +322,8 @@ export default async function ResearchPage({
         </section>
       ) : null}
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold tracking-tight">Financials</h2>
+      <Disclosure title="Financials" hint="Annual accounts and reported line items.">
+
         {annuals.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Unavailable — no annual periods stored for this name.
@@ -411,10 +405,10 @@ export default async function ResearchPage({
             </TableBody>
           </Table>
         )}
-      </section>
+      </Disclosure>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold tracking-tight">Price</h2>
+      <Disclosure title="Price" hint="Last close, trading range and moving averages.">
+
         <Table>
           <TableHeader>
             <TableRow>
@@ -467,12 +461,12 @@ export default async function ResearchPage({
             </TableRow>
           </TableBody>
         </Table>
-      </section>
+      </Disclosure>
 
-      <RecentEventsSection events={scored.events} />
+      <Disclosure title="Company news" hint="News availability and source information."><RecentEventsSection events={scored.events} /></Disclosure>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xl font-semibold tracking-tight">Score history</h2>
+      <Disclosure title="Score history" hint="See how the stored research score has changed.">
+
         {history.length === 0 ? (
           <p className="text-sm text-muted-foreground">Unavailable — no persisted score runs yet.</p>
         ) : (
@@ -492,9 +486,9 @@ export default async function ResearchPage({
             </span>
           </p>
         )}
-      </section>
+      </Disclosure>
 
-      <ExportActions ticker={instrument.ticker} />
+      <Disclosure title="Export research" hint="Download or copy a report for further research."><ExportActions ticker={instrument.ticker} /></Disclosure>
     </main>
   );
 }

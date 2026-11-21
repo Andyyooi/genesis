@@ -1,3 +1,4 @@
+import { Disclosure } from "@/components/research/disclosure";
 import Link from "next/link";
 import {
   Card,
@@ -41,6 +42,8 @@ export default function IngestReportPage() {
       </p>
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold tracking-tight">Import report</h1>
+        <p className="text-muted-foreground">Review what was imported and which records need attention.</p>
+        <Disclosure title="About data imports" hint="Sources, limitations and maintenance instructions.">
         <p className="max-w-2xl text-muted-foreground">
           {isSnapshotReadOnly()
             ? "This website is serving a published snapshot. CSV ingest and Yahoo price pulls stop here because this host cannot save results. Publishing updated data is a separate local snapshot pack and deploy."
@@ -59,6 +62,7 @@ export default function IngestReportPage() {
           <br />
           <code className="font-mono">npm run ingest:prices</code>
         </p>
+</Disclosure>
       </header>
 
       <Card>

@@ -1,3 +1,4 @@
+import { Disclosure } from "@/components/research/disclosure";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -98,7 +99,7 @@ export default async function ScoresDebugPage({
           <CardTitle>Categories</CardTitle>
           <CardDescription>config hash {result.configHash}</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent><Disclosure title="View details">
           <Table>
             <TableHeader>
               <TableRow>
@@ -127,7 +128,7 @@ export default async function ScoresDebugPage({
               ))}
             </TableBody>
           </Table>
-        </CardContent>
+        </Disclosure></CardContent>
       </Card>
 
       <Card>
@@ -135,7 +136,7 @@ export default async function ScoresDebugPage({
           <CardTitle>Factor evidence</CardTitle>
           <CardDescription>Every factor, including unavailable ones</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent><Disclosure title="View details">
           <Table>
             <TableHeader>
               <TableRow>
@@ -168,7 +169,7 @@ export default async function ScoresDebugPage({
               )}
             </TableBody>
           </Table>
-        </CardContent>
+        </Disclosure></CardContent>
       </Card>
 
       <Card>

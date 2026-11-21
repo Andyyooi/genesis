@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { Disclosure } from "@/components/research/disclosure";
+import { DashboardFilters } from "@/components/research/dashboard-filters";
+import { StatusLabel } from "@/components/research/status-label";
 import { TopPicks } from "@/components/research/top-picks";
 import { cn } from "cn";
 import { loadRecentAlerts } from "@/alerts/refresh";
@@ -132,61 +135,35 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   const yahooFails = priceReport?.failed ?? [];
 
   return (
-    <main className="mx-auto flex w-full max-w-[96rem] flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+    <main className="mx-auto flex w-full max-w-[88rem] flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Genesis Research</h1>
+        <p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">Bursa Malaysia · Research workspace</p>
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Your research, at a glance.</h1>
         <p className="max-w-3xl text-muted-foreground">
-          Personal investment research for Bursa names. Scores show what the evidence supports —
-          with coverage and confidence — not a ranked buy list.
+          Follow your watchlist, compare the evidence, and open a company to explore.
         </p>
-        <dl className="grid gap-2 text-sm sm:grid-cols-4">
-          <div className="rounded-md border px-3 py-2">
-            <dt className="text-muted-foreground">Covered on watchlist</dt>
+        <dl className="mt-4 grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
+          <div className="summary-stat">
+            <dt className="text-muted-foreground">On your watchlist</dt>
             <dd className="text-lg font-medium tabular-nums">{rows.length}</dd>
           </div>
-          <div className="rounded-md border px-3 py-2">
+          <div className="summary-stat positive">
             <dt className="text-muted-foreground">High confidence</dt>
             <dd className="text-lg font-medium tabular-nums">{highConf}</dd>
           </div>
-          <div className="rounded-md border px-3 py-2">
-            <dt className="text-muted-foreground">Low / needs verification</dt>
+          <div className="summary-stat caution">
+            <dt className="text-muted-foreground">Needs a closer look</dt>
             <dd className="text-lg font-medium tabular-nums">{lowConf}</dd>
           </div>
-          <div className="rounded-md border px-3 py-2">
-            <dt className="text-muted-foreground">With stored events</dt>
+          <div className="summary-stat info">
+            <dt className="text-muted-foreground">With events</dt>
             <dd className="text-lg font-medium tabular-nums">{withEvents}</dd>
           </div>
         </dl>
-        <p className="text-sm">
-          <Link href="/alerts" className="underline underline-offset-4">
-            Alerts
-          </Link>
-          {" · "}
-          <Link href="/market" className="underline underline-offset-4">
-            Market scan
-          </Link>
-          {" · "}
-          <Link href="/ingest" className="underline underline-offset-4">
-            Import report
-          </Link>
-        </p>
       </header>
 
       {lagDates ? <DataLagBanner dates={lagDates} /> : null}
       <TopPicks />
-
-      <section className="flex flex-col gap-2">
-        <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-xl font-semibold">Recent alerts</h2>
-          <Link href="/alerts" className="text-sm underline underline-offset-4">
-            All alerts
-          </Link>
-        </div>
-        <AlertsList
-          rows={recentAlerts}
-          empty="No in-app alerts yet. Open All alerts to evaluate stored scores and announcements."
-        />
-      </section>
 
       {yahooFails.length > 0 ? (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
@@ -216,227 +193,14 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
             );
           })}
         </div>
-        <p className="text-sm text-muted-foreground">{activeList.description}</p>
+        <details className="text-sm text-muted-foreground"><summary className="w-fit cursor-pointer text-primary">About this list</summary><p className="mt-2">{activeList.description}</p></details>
         {activeList.disabled ? (
           <p className="text-sm text-muted-foreground">{activeList.disabledReason}</p>
         ) : null}
       </nav>
 
-      <nav className="flex flex-col gap-3" aria-label="Filters and sort">
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium">Sort by</p>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { label: "Ticker", sort: "ticker" as const },
-                { label: "Research Score", sort: "research" as const },
-                { label: "Valuation Score", sort: "valuation" as const },
-                { label: "Confidence", sort: "confidence" as const },
-                { label: "Coverage", sort: "coverage" as const },
-                { label: "Freshness", sort: "freshness" as const },
-                { label: "Profile", sort: "profile" as const },
-                { label: "Sector", sort: "sector" as const },
-              ] as const
-            ).map((item) => (
-              <Link
-                key={item.sort}
-                href={listHref(listId, {
-                  ...filterQuery,
-                  sort: item.sort === "ticker" ? undefined : item.sort,
-                })}
-                className={cn(
-                  buttonVariants({
-                    variant: sortId === item.sort ? "default" : "outline",
-                    size: "sm",
-                  }),
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium">Evidence filters</p>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { label: "Any confidence", confidence: undefined },
-                { label: "High", confidence: "HIGH" },
-                { label: "Medium", confidence: "MEDIUM" },
-                { label: "Low", confidence: "LOW" },
-              ] as const
-            ).map((item) => (
-              <Link
-                key={item.label}
-                href={listHref(listId, { ...filterQuery, confidence: item.confidence })}
-                className={cn(
-                  buttonVariants({
-                    variant:
-                      (flagFilters.confidence ?? undefined) === item.confidence
-                        ? "default"
-                        : "outline",
-                    size: "sm",
-                  }),
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
-            {(
-              [
-                { label: "Any freshness", freshness: undefined },
-                { label: "Fresh", freshness: "FRESH" },
-                { label: "Aging", freshness: "AGING" },
-                { label: "Stale", freshness: "STALE" },
-                { label: "Very stale", freshness: "VERY_STALE" },
-              ] as const
-            ).map((item) => (
-              <Link
-                key={item.label}
-                href={listHref(listId, { ...filterQuery, freshness: item.freshness })}
-                className={cn(
-                  buttonVariants({
-                    variant:
-                      (flagFilters.freshness ?? undefined) === item.freshness
-                        ? "default"
-                        : "outline",
-                    size: "sm",
-                  }),
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
-            {(
-              [
-                { label: "Any profile", profile: undefined },
-                { label: "GENERAL", profile: "GENERAL" },
-                { label: "BANK", profile: "BANK" },
-                { label: "REIT", profile: "REIT" },
-              ] as const
-            ).map((item) => (
-              <Link
-                key={item.label}
-                href={listHref(listId, { ...filterQuery, profile: item.profile })}
-                className={cn(
-                  buttonVariants({
-                    variant:
-                      (flagFilters.profile ?? undefined) === item.profile ? "default" : "outline",
-                    size: "sm",
-                  }),
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
-            <Link
-              href={listHref(listId, {
-                ...filterQuery,
-                events: flagFilters.events ? undefined : "yes",
-              })}
-              className={cn(
-                buttonVariants({
-                  variant: flagFilters.events ? "default" : "outline",
-                  size: "sm",
-                }),
-              )}
-            >
-              Has events
-            </Link>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium">Stored flags (not scored)</p>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { label: "All types", type: undefined },
-                { label: "Common stock", type: "COMMON_STOCK" as const },
-                { label: "REIT", type: "REIT" as const },
-              ] as const
-            ).map((item) => (
-              <Link
-                key={item.label}
-                href={listHref(listId, { ...filterQuery, type: item.type })}
-                className={cn(
-                  buttonVariants({
-                    variant:
-                      (flagFilters.instrumentType ?? undefined) === item.type
-                        ? "default"
-                        : "outline",
-                    size: "sm",
-                  }),
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
-            <Link
-              href={listHref(listId, {
-                ...filterQuery,
-                shariah: flagFilters.shariah ? undefined : "yes",
-              })}
-              className={cn(
-                buttonVariants({
-                  variant: flagFilters.shariah ? "default" : "outline",
-                  size: "sm",
-                }),
-              )}
-            >
-              Shariah only
-            </Link>
-            {(
-              [
-                { label: "Any board", board: undefined },
-                { label: "Main", board: "MAIN" },
-                { label: "ACE", board: "ACE" },
-              ] as const
-            ).map((item) => (
-              <Link
-                key={item.label}
-                href={listHref(listId, { ...filterQuery, board: item.board })}
-                className={cn(
-                  buttonVariants({
-                    variant: (flagFilters.board ?? undefined) === item.board ? "default" : "outline",
-                    size: "sm",
-                  }),
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
-            {(
-              [
-                { label: "Any cap", cap: undefined },
-                { label: "Large", cap: "large" as const },
-                { label: "Mid", cap: "mid" as const },
-                { label: "Small", cap: "small" as const },
-              ] as const
-            ).map((item) => (
-              <Link
-                key={item.label}
-                href={listHref(listId, { ...filterQuery, cap: item.cap })}
-                className={cn(
-                  buttonVariants({
-                    variant: (flagFilters.cap ?? undefined) === item.cap ? "default" : "outline",
-                    size: "sm",
-                  }),
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Showing {visible.length} of {listed.length} in this list
-            {listed.length !== rows.length ? ` (${rows.length} on watchlist)` : ""}. Sort and filters
-            are factual attributes — not a best-stock ranking.
-          </p>
-        </div>
-      </nav>
+      <DashboardFilters key={JSON.stringify(filterQuery)} listId={listId} values={filterQuery} />
+      <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-xl font-semibold">{activeList.label}</h2><p className="text-sm text-muted-foreground">{visible.length} of {listed.length} companies · select a company for details</p></div>
 
       <div className="overflow-x-auto rounded-lg border">
         {visible.length === 0 ? (
@@ -455,127 +219,42 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
           </p>
         ) : (
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Ticker</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Sector</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Research</TableHead>
-                <TableHead className="text-right">Valuation</TableHead>
-                <TableHead>Data confidence</TableHead>
-                <TableHead>Freshness</TableHead>
-                <TableHead className="text-right">Coverage</TableHead>
-                <TableHead className="text-right">Quality</TableHead>
-                <TableHead className="text-right">Growth</TableHead>
-                <TableHead>Events</TableHead>
-                <TableHead>Notes</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visible.map((row) => (
-                <TableRow key={row.ticker} className="relative hover:bg-muted/40">
-                  <TableCell className="font-mono font-medium">
-                    <Link
-                      href={`/stock/${row.ticker}`}
-                      className="absolute inset-0"
-                      aria-label={`Open ${row.ticker} research`}
-                    />
-                    <span className="relative z-10 underline underline-offset-4">{row.ticker}</span>
-                    {row.instrumentType === "REIT" ? (
-                      <Badge className="relative z-10 ml-1" variant="secondary">
-                        REIT
-                      </Badge>
-                    ) : null}
-                    <Badge className="relative z-10 ml-1" variant="outline">
-                      {row.researchProfile}
-                    </Badge>
-                    {row.pn17 ? (
-                      <Badge className="relative z-10 ml-1" variant="destructive">
-                        PN17
-                      </Badge>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>
-                    {row.name}
-                    {!row.result.eligibility?.eligible ? <p className="mt-1 text-xs text-muted-foreground">Excluded: {row.result.eligibility?.reasons.join(" ") ?? "Eligibility not verified"}</p> : null}
-                  </TableCell>
-                  <TableCell className="max-w-36 truncate text-muted-foreground">
-                    {row.sector ?? "Unavailable"}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {row.price === null || !Number.isFinite(row.price)
-                      ? "Unavailable"
-                      : formatMyr(row.price)}
-                  </TableCell>
-                  <TableCell
-                    className={cn(
-                      "text-right tabular-nums",
-                      row.needsVerification ||
-                        row.confidence === "VERY_LOW" ||
-                        row.confidence === "LOW"
-                        ? "text-muted-foreground"
-                        : "font-medium",
-                    )}
-                  >
-                    {formatScore100(row.researchScore)}
-                  </TableCell>
-                  <TableCell
-                    className={cn(
-                      "text-right tabular-nums",
-                      row.needsVerification ||
-                        row.confidence === "VERY_LOW" ||
-                        row.confidence === "LOW"
-                        ? "text-muted-foreground"
-                        : undefined,
-                    )}
-                  >
-                    {formatScore100(row.valuationScore)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        row.confidence === "VERY_LOW"
-                          ? "destructive"
-                          : row.confidence === "HIGH"
-                            ? "secondary"
-                            : "outline"
-                      }
-                    >
-                      {dataConfidenceLabel(row.confidence)}
-                    </Badge>
-                    {row.needsVerification ? (
-                      <span className="mt-1 block text-xs text-muted-foreground">
-                        Needs verification
-                      </span>
-                    ) : null}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">
-                    {formatFreshnessBand(row.freshness)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {row.coreCoverageLabel ?? fmtCoverage(row.coverage)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatScore100(row.qualityScore)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatScore100(row.growthScore)}
-                  </TableCell>
-                  <TableCell className="tabular-nums text-muted-foreground">
-                    {row.hasEvents ? row.eventCount : "—"}
-                  </TableCell>
-                  <TableCell className="max-w-48 text-sm text-muted-foreground">
-                    {row.catalystLabel ? <span className="block">{row.catalystLabel}</span> : null}
-                    {row.mainConcern ? <span className="block">Concern: {row.mainConcern}</span> : null}
-                    {!row.catalystLabel && !row.mainConcern ? "—" : null}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
+            <TableHeader><TableRow>
+              <TableHead>Company</TableHead><TableHead className="text-right">Price (RM)</TableHead>
+              <TableHead className="text-right">Research</TableHead><TableHead className="text-right">Valuation</TableHead>
+              <TableHead>Data confidence</TableHead><TableHead>Accounts</TableHead><TableHead className="text-right">Coverage</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>{visible.map((row) => <TableRow key={row.ticker} className="hover:bg-secondary/30">
+              <TableCell className="min-w-56 whitespace-normal">
+                <Link href={`/stock/${row.ticker}`} className="font-semibold text-primary underline-offset-4 hover:underline">{row.ticker}<span className="sr-only"> research</span></Link>
+                {row.pn17 ? <Badge className="ml-2" variant="destructive">PN17</Badge> : null}
+                <p className="mt-1 text-sm">{row.name}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{row.sector ?? "Sector unavailable"} · {row.researchProfile}</p>
+                {!row.result.eligibility?.eligible ? <span className="mt-1 block text-xs text-amber-800">Excluded from recommendations</span> : null}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">{row.price === null || !Number.isFinite(row.price) ? "Unavailable" : formatMyr(row.price)}</TableCell>
+              <TableCell className={cn("text-right text-base tabular-nums", row.needsVerification || row.confidence === "VERY_LOW" || row.confidence === "LOW" ? "text-muted-foreground" : "font-semibold text-primary")}>{formatScore100(row.researchScore)}</TableCell>
+              <TableCell className="text-right tabular-nums text-muted-foreground">{formatScore100(row.valuationScore)}</TableCell>
+              <TableCell><StatusLabel level={row.confidence}>{dataConfidenceLabel(row.confidence)}</StatusLabel>{row.needsVerification ? <span className="mt-1 block text-xs text-amber-800">Needs verification</span> : null}</TableCell>
+              <TableCell><StatusLabel level={row.freshness}>{formatFreshnessBand(row.freshness)}</StatusLabel></TableCell>
+              <TableCell className="text-right tabular-nums">{row.coreCoverageLabel ?? fmtCoverage(row.coverage)}</TableCell>
+            </TableRow>)}</TableBody>
           </Table>
         )}
       </div>
+      <Disclosure title="Recent alerts" hint={`${recentAlerts.length} recent updates · open to review`}>
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-xl font-semibold">Recent alerts</h2>
+          <Link href="/alerts" className="text-sm underline underline-offset-4">
+            All alerts
+          </Link>
+        </div>
+        <AlertsList
+          rows={recentAlerts}
+          empty="No in-app alerts yet. Open All alerts to evaluate stored scores and announcements."
+        />
+      </Disclosure>
+
     </main>
   );
 }

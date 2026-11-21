@@ -1,3 +1,5 @@
+import { Disclosure } from "./disclosure";
+import { StatusLabel } from "./status-label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCoverageSummary } from "@/scoring/confidence";
@@ -44,14 +46,14 @@ export function ResearchScoreCard({ result }: { result: ScoreResult }) {
     <Card className={result.dataConfidence.needsVerification ? "border-destructive/40" : undefined}>
       <CardHeader>
         <CardTitle>Research Score</CardTitle>
-        <CardDescription>{researchScoreBlurb(result)}</CardDescription>
+        <CardDescription>Evidence-based score, not a buy or sell signal.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <ScoreWithConfidence result={result} kind="research" />
         <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-muted-foreground">Data confidence</dt>
-            <dd className="font-medium">{dataConfidenceLabel(result.dataConfidence.level)}</dd>
+            <dd className="mt-1"><StatusLabel level={result.dataConfidence.level}>{dataConfidenceLabel(result.dataConfidence.level)}</StatusLabel></dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Coverage</dt>
@@ -61,15 +63,16 @@ export function ResearchScoreCard({ result }: { result: ScoreResult }) {
           </div>
           <div>
             <dt className="text-muted-foreground">Freshness</dt>
-            <dd className="font-medium">{formatFreshnessBand(c.freshness)}</dd>
+            <dd className="mt-1"><StatusLabel level={c.freshness}>{formatFreshnessBand(c.freshness)}</StatusLabel></dd>
           </div>
         </dl>
-        <div className="rounded-md border p-3 text-sm">
-          <p className="font-medium">{result.eligibility?.eligible ? "Eligible for research recommendations" : "Excluded from recommendations"}</p>
+        <div className="rounded-lg border bg-muted/30 p-3 text-sm"><StatusLabel level={result.eligibility?.eligible ? "eligible" : "excluded"}>{result.eligibility?.eligible ? "Eligible for research lists" : "Excluded from recommendations"}</StatusLabel>
+          {result.dataConfidence.needsVerification ? <p className="mt-2 font-medium text-amber-800">Needs verification — check coverage and account age.</p> : null}
+          <details className="mt-2"><summary className="cursor-pointer text-primary">Why this status?</summary>
           <ul className="list-disc pl-5">
             {(result.eligibility?.reasons ?? ["Eligibility not verified; run market:rescore."]).map((reason) => <li key={reason}>{reason}</li>)}
           </ul>
-          <p className="text-muted-foreground">Eligibility does not alter the score. Research lists are not buy or sell advice.</p>
+          <p className="text-muted-foreground">Eligibility does not alter the score. Research lists are not buy or sell advice.</p><p className="mt-2 text-muted-foreground">{researchScoreBlurb(result)}</p></details>
         </div>
       </CardContent>
     </Card>
@@ -81,7 +84,7 @@ export function DataQualitySection({ result }: { result: ScoreResult }) {
   const d = result.dataConfidence;
   const pitSafe = Boolean(c.availableAt);
   return (
-    <section className="flex flex-col gap-3">
+    <Disclosure title="Data quality" hint={`${dataConfidenceLabel(d.level)} confidence · ${Math.round(c.coverageRatio * 100)}% coverage · ${formatFreshnessBand(c.freshness)}`}>
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Data Quality</h2>
         <p className="text-sm text-muted-foreground">
@@ -138,6 +141,6 @@ export function DataQualitySection({ result }: { result: ScoreResult }) {
           </ul>
         </CardContent>
       </Card>
-    </section>
+    </Disclosure>
   );
 }
