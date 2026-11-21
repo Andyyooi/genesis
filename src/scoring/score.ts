@@ -38,7 +38,7 @@ export function scoreFromMetrics(args: ScoreInput, ranks: Map<string, Percentile
   for (const category of live) { category.inThisRun = true; category.liveWeight = category.configuredWeight / liveWeight; }
   const researchScore = liveWeight ? live.reduce((sum, c) => sum + c.score! * c.liveWeight!, 0) : null;
   const valuationScore = categories.find((c) => c.id === "valuation")?.score ?? null;
-  const quality = assessDataQuality({ asOf, categories, researchScore, valuationScore, latestAnnual: args.latestAnnual, config: args.config });
+  const quality = assessDataQuality({ asOf, researchProfile: classified.profile, categories, researchScore, valuationScore, latestAnnual: args.latestAnnual, config: args.config });
   return {
     methodology: "cross-sectional-v2", asOf, configHash: hashScoringConfig(args.config), profile: profileName(args.instrumentType, args.ticker, hints, args.config),
     researchProfile: classified.profile, researchProfileReason: classified.reason, researchScore, valuationScore, categories,

@@ -36,6 +36,7 @@ function result(over: Partial<ScoreResult> = {}): ScoreResult {
       expected: 9,
       available: 7,
       unavailable: 2,
+      notApplicable: 0,
       coverageRatio: 7 / 9,
       freshCount: 7,
       agingCount: 0,

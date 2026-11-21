@@ -100,6 +100,7 @@ function result(partial: Partial<ScoreResult> = {}): ScoreResult {
       expected: 9,
       available: 6,
       unavailable: 3,
+      notApplicable: 0,
       coverageRatio: 6 / 9,
       freshCount: 6,
       agingCount: 0,

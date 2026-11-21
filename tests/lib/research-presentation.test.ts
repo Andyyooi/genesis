@@ -48,6 +48,7 @@ function baseResult(over: Partial<ScoreResult> = {}): ScoreResult {
       expected: 8,
       available: 4,
       unavailable: 4,
+      notApplicable: 0,
       coverageRatio: 0.5,
       freshCount: 2,
       agingCount: 1,

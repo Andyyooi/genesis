@@ -21,6 +21,7 @@ export function scoreTicker(ticker: string, persist = false, opts?: { attachValu
     const evidence = JSON.parse(row?.evidenceJson ?? "{}");
     if (evidence.storedResult?.methodology === "cross-sectional-v2") {
       result = evidence.storedResult;
+      evidence.storedResult.dataCoverage.notApplicable ??= 0;
       metrics = evidence.scoredMetrics ?? [];
     }
   } catch { /* An unreadable legacy run is not a current percentile score. */ }
