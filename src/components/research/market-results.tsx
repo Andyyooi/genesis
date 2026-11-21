@@ -55,7 +55,12 @@ export function MarketResults({
           {total.toLocaleString("en-MY")} names
         </span>
       </div>
-      <form className="scan-filters" action="/market">
+      {/* Remount uncontrolled fields when submitted filters change via a Link. */}
+      <form
+        key={JSON.stringify([query, eligibility])}
+        className="scan-filters"
+        action="/market"
+      >
         <label className="scan-search">
           <span className="sr-only">Search ticker, company or sector</span>
           <Search size={17} aria-hidden="true" />
