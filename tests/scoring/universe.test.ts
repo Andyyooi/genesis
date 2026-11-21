@@ -53,6 +53,8 @@ describe("published universe scores", () => {
   it("uses real publication / annual dates and reads ranked picks from that publication", () => {
     expect(storedSnapshotDates()).toBeNull();
     expect(loadTopPicks().picks).toEqual([]);
+    getSqlite().exec("UPDATE financial_periods SET line_items_json = json_set(line_items_json, '$.shares', 200000000)");
+    getSqlite().exec("UPDATE price_bars SET volume = 100000");
     rescoreListedMarket();
     expect(storedSnapshotDates()).toMatchObject({ score_as_of: asOf, fundamentals_period: "2025-12-31" });
     const picks = loadTopPicks();

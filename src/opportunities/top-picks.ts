@@ -1,8 +1,24 @@
 import { getSqlite } from "@/db/client";
 import { loadLatestMarketScan } from "@/market/scan";
 import type { ScoreResult } from "@/scoring/types";
+import { loadScoringConfig, type ScoringConfig } from "@/config/load-scoring";
+import type { MetricValue } from "@/metrics/types";
 
-export type PickCandidate = { ticker: string; name: string; lastTrade: string | null; result: ScoreResult };
+export type PickCandidate = { ticker: string; name: string; lastTrade: string | null; marketCap: number | null; lastClose: number | null; result: ScoreResult };
+export type TopPicksOptions = { qualityTilt?: boolean; lotBudget?: number };
+
+export function parseTopPicksOptions(params: Record<string, string | string[] | undefined>): TopPicksOptions {
+  const budget = typeof params.lotBudget === "string" && params.lotBudget.trim() ? Number(params.lotBudget) : NaN;
+  return { qualityTilt: params.qualityTilt === "on", lotBudget: Number.isFinite(budget) && budget > 0 ? budget : undefined };
+}
+
+export function topPickScore(row: PickCandidate, options: TopPicksOptions, settings: ScoringConfig["top_picks"]): number | null {
+  if (!options.qualityTilt || row.result.researchProfile !== "GENERAL") return row.result.researchScore;
+  const weights: Record<string, number> = settings.quality_tilt_weights;
+  const live = row.result.categories.filter((category) => category.score !== null && Number.isFinite(category.score) && weights[category.id] > 0);
+  const weight = live.reduce((sum, category) => sum + weights[category.id], 0);
+  return weight ? live.reduce((sum, category) => sum + category.score! * weights[category.id], 0) / weight : null;
+}
 
 const descriptions: Record<string, string> = {
   earnings_yield: "Cheap vs peers: earnings yield", book_to_price: "Cheap vs peers: book value relative to price",
@@ -19,9 +35,17 @@ export function pickReasons(result: ScoreResult): string[] {
     .map((factor) => `${factor.score! >= 50 ? descriptions[factor.metricId] ?? factor.label : factor.label}: blended peer percentile ${factor.score!.toFixed(0)} (top ${Math.max(1, Math.ceil(100 - factor.score!))}%).`);
 }
 
-export function selectTopPicks(rows: PickCandidate[], limit = 15) {
+export function selectTopPicks(rows: PickCandidate[], limit = 15, options: TopPicksOptions = {}, settings = loadScoringConfig().top_picks) {
+  const budget = options.lotBudget !== undefined && Number.isFinite(options.lotBudget) && options.lotBudget > 0 ? options.lotBudget : null;
   return rows.filter((row) => row.result.methodology === "cross-sectional-v2" && row.result.eligibility?.eligible === true && row.result.researchScore !== null && Number.isFinite(row.result.researchScore))
-    .sort((a, b) => b.result.researchScore! - a.result.researchScore! || a.ticker.localeCompare(b.ticker)).slice(0, limit);
+    .filter((row) => {
+      const tradedValue = row.result.eligibility?.medianTradedValue;
+      return row.marketCap !== null && Number.isFinite(row.marketCap) && row.marketCap >= settings.min_market_cap && tradedValue != null && Number.isFinite(tradedValue) && tradedValue >= settings.min_median_traded_value;
+    })
+    .filter((row) => budget === null || (row.lastClose !== null && Number.isFinite(row.lastClose) && row.lastClose > 0 && Math.round(row.lastClose * 100 * 100) <= Math.round(budget * 100)))
+    .map((row) => ({ ...row, selectionScore: topPickScore(row, options, settings), qualityTilted: options.qualityTilt === true && row.result.researchProfile === "GENERAL" }))
+    .filter((row) => row.selectionScore !== null && Number.isFinite(row.selectionScore))
+    .sort((a, b) => b.selectionScore! - a.selectionScore! || a.ticker.localeCompare(b.ticker)).slice(0, limit);
 }
 
 export function exclusionCounts(rows: Record<string, unknown>[]) {
@@ -33,20 +57,27 @@ export function exclusionCounts(rows: Record<string, unknown>[]) {
   return [...counts].sort((a, b) => b[1] - a[1]);
 }
 
-export function loadTopPicks() {
+export function loadTopPicks(options: TopPicksOptions = {}) {
+  const settings = loadScoringConfig().top_picks;
   const { summary, rows } = loadLatestMarketScan();
-  if (!summary) return { summary: null, picks: [], excluded: 0, exclusions: [] as [string, number][] };
+  if (!summary) return { summary: null, picks: [], excluded: 0, exclusions: [] as [string, number][], settings };
   const published = new Map(rows.map((row) => [String(row.ticker), row]));
   const stored = getSqlite().prepare("SELECT i.ticker, s.evidence_json AS evidence FROM score_runs s JOIN instruments i ON i.id = s.instrument_id WHERE s.as_of = ? ORDER BY s.id DESC").all(summary.asOf) as { ticker: string; evidence: string }[];
   const candidates = new Map<string, PickCandidate>();
   for (const row of stored) {
     if (candidates.has(row.ticker)) continue;
     try {
-      const result = JSON.parse(row.evidence).storedResult as ScoreResult | undefined;
+      const evidence = JSON.parse(row.evidence);
+      const result = evidence.storedResult as ScoreResult | undefined;
       const market = published.get(row.ticker);
       if (!result || result.asOf !== summary.asOf || !market || market.researchScore !== result.researchScore || market.eligible !== true) continue;
-      candidates.set(row.ticker, { ticker: row.ticker, name: String(market.name), lastTrade: typeof market.lastTrade === "string" ? market.lastTrade : null, result });
+      const metrics: MetricValue[] = Array.isArray(evidence.scoredMetrics) ? evidence.scoredMetrics : [];
+      const metric = (id: string) => {
+        const item = metrics.find((value) => value.id === id);
+        return item?.available && item.value !== null && Number.isFinite(item.value) ? item.value : null;
+      };
+      candidates.set(row.ticker, { ticker: row.ticker, name: String(market.name), lastTrade: typeof market.lastTrade === "string" ? market.lastTrade : null, marketCap: metric("market_cap"), lastClose: metric("last_close"), result });
     } catch { /* Unreadable evidence is not a recommendation. */ }
   }
-  return { summary, picks: selectTopPicks([...candidates.values()]), excluded: rows.filter((row) => row.eligible !== true).length, exclusions: exclusionCounts(rows) };
+  return { summary, picks: selectTopPicks([...candidates.values()], 15, options, settings), excluded: rows.filter((row) => row.eligible !== true).length, exclusions: exclusionCounts(rows), settings };
 }

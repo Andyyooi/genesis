@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { ArrowUpRight, Telescope } from "lucide-react";
-import { loadTopPicks, pickReasons } from "@/opportunities/top-picks";
+import { loadTopPicks, pickReasons, type TopPicksOptions } from "@/opportunities/top-picks";
 import { formatScore100 } from "@/lib/research-copy";
 
-export function TopPicks() {
-  const { summary, picks, excluded, exclusions } = loadTopPicks();
+export function TopPicks({ options = {}, preservedParams = {} }: { options?: TopPicksOptions; preservedParams?: Record<string, string> }) {
+  const { summary, picks, excluded, exclusions, settings } = loadTopPicks(options);
+  const money = (value: number) => `RM${value.toLocaleString("en-MY", { notation: "compact", maximumFractionDigits: 1 })}`;
   return (
     <section className="market-card overflow-hidden">
       <div className="radar-heading">
@@ -17,9 +18,14 @@ export function TopPicks() {
         </div>
       </div>
       <p className="px-5 pb-3 text-xs text-muted-foreground">
-        Highest eligible published research scores. A starting point, not a buy
-        list.
+        {options.qualityTilt ? "Quality-tilted scores for general companies; published scores for other profiles." : "Highest eligible published research scores."} A starting point, not a buy list.
       </p>
+      <form action="/" method="get" className="flex flex-col gap-3 px-5 pb-4 text-xs">
+        {Object.entries(preservedParams).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
+        <label className="flex items-center gap-2"><input type="checkbox" name="qualityTilt" defaultChecked={options.qualityTilt} />Lean towards quality</label>
+        <label className="flex flex-col gap-1.5">Max cost per 100-share lot (RM)<input type="number" name="lotBudget" min="0.01" step="0.01" defaultValue={options.lotBudget ?? ""} placeholder="No limit" className="h-9 w-full min-w-0 rounded-lg border bg-background px-3" /></label>
+        <button type="submit" className="self-start rounded-lg bg-primary px-3 py-2 font-medium text-primary-foreground">Update picks</button>
+      </form>
       {picks.length ? (
         <ol className="radar-list">
           {picks.slice(0, 3).map((pick, index) => {
@@ -47,9 +53,10 @@ export function TopPicks() {
                     >
                       {pick.name}
                     </p>
+                    <p className="mt-1 text-[10px] text-muted-foreground">{pick.qualityTilted ? "Quality-tilted score" : "Published score"}</p>
                   </div>
                   <span className="radar-score">
-                    {pick.result.researchScore?.toFixed(0) ?? "—"}
+                    {pick.selectionScore?.toFixed(0) ?? "—"}
                     <small>/100</small>
                   </span>
                 </div>
@@ -58,7 +65,7 @@ export function TopPicks() {
                     Evidence & cautions
                   </summary>
                   <p className="mt-2 font-medium">
-                    Research {formatScore100(pick.result.researchScore)} ·{" "}
+                    {pick.qualityTilted ? "Quality-tilted score" : "Published score"} {formatScore100(pick.selectionScore)} ·{" "}
                     {pick.result.researchProfile}
                   </p>
                   <ul className="mt-2 list-disc space-y-1 pl-4">
@@ -85,23 +92,21 @@ export function TopPicks() {
         </ol>
       ) : (
         <p className="px-5 py-4 text-sm text-muted-foreground">
-          No eligible published candidates. Check data reports or request a
-          manual refresh.
+          {summary ? "No picks meet the company-size, trading-value and selected lot-budget requirements. Try increasing or clearing the lot budget." : "No published picks are available. Check data reports or request a manual refresh."}
         </p>
       )}
       <details className="border-t px-5 py-4 text-xs text-muted-foreground">
         <summary className="cursor-pointer">
-          Selection & publication details
+          How these are selected
         </summary>
         <p className="mt-2">
-          Highest eligible published scores, not personalised advice.
-          Publication: {summary?.asOf ?? "unavailable"}.
+          Larger companies only: worth at least {money(settings.min_market_cap)}, with at least {money(settings.min_median_traded_value)} traded a day (the median over 60 sessions). They must also pass the published eligibility checks. Lean towards quality gives more weight to quality and a smoother price history, and less to valuation, for general companies only; other profiles keep their published score. A lot budget limits the last closing price × 100, before fees. Leave it blank for no limit. These options only change this list, not the published scores. Factor reasons describe relative blended profile/sector percentiles, not promises of returns or safety. Publication: {summary?.asOf ?? "unavailable"}.
         </p>
         <Link
           className="mt-2 inline-block text-primary underline"
           href="/market?eligibility=excluded"
         >
-          {excluded} names excluded from recommendations
+          {excluded} names excluded by the published eligibility checks
         </Link>
         {exclusions.length ? (
           <ul className="mt-2 space-y-1">

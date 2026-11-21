@@ -1,6 +1,16 @@
 # Editable evidence-model settings. Percentile ranks replace fixed score anchors.
 version: 2
 currency: MYR
+top_picks:
+  min_market_cap: 2000000000
+  min_median_traded_value: 1000000
+  quality_tilt_weights:
+    valuation: 15
+    quality: 35
+    momentum: 20
+    low_volatility: 15
+    financial_health: 10
+    growth: 5
 # Ordinary-company category weights (must sum to 100).
 category_weights:
   valuation: 30

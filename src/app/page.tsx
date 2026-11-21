@@ -31,6 +31,7 @@ import {
   type ListId,
 } from "@/opportunities/lists";
 import { scanWatchlist } from "@/opportunities/scan";
+import { parseTopPicksOptions } from "@/opportunities/top-picks";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,8 @@ function listHref(
 
 export default async function HomePage({ searchParams }: PageProps<"/">) {
   const params = await searchParams;
+  const topPicksOptions = parseTopPicksOptions(params);
+  const topPicksPreservedParams = Object.fromEntries(Object.entries(params).filter(([key, value]) => key !== "qualityTilt" && key !== "lotBudget" && typeof value === "string")) as Record<string, string>;
   const value = (key: string) =>
     typeof params[key] === "string" ? (params[key] as string) : undefined;
   const listId = parseListId(value("list"));
@@ -61,6 +64,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     profile: value("profile"),
   });
   const filterQuery = {
+    qualityTilt: topPicksOptions.qualityTilt ? "on" : undefined,
+    lotBudget: topPicksOptions.lotBudget?.toString(),
     type: flagFilters.instrumentType,
     shariah: flagFilters.shariah ? "yes" : undefined,
     board: flagFilters.board,
@@ -332,7 +337,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
           className="flex min-w-0 flex-col gap-5"
           aria-label="Research context"
         >
-          <TopPicks />
+          <TopPicks key={JSON.stringify(topPicksOptions)} options={topPicksOptions} preservedParams={topPicksPreservedParams} />
           <section className="market-card p-5">
             <div className="mb-4 flex items-center gap-2">
               <Activity className="size-4 text-primary" aria-hidden="true" />
