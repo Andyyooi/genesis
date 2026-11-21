@@ -74,7 +74,7 @@ describe("gate decisions", () => {
     expect(await gateDecision(path, "POST", "bad", env)).toBe("redirect");
     expect(await gateDecision(path, "GET", undefined, { NODE_ENV: "production" })).toBe("unconfigured");
   });
-  it.each(["/api", "/api/refresh-research", "/api/refresh-research/watchlist"]) ("rejects API %s", async (path) => {
+  it.each(["/api", "/api/refresh", "/api/refresh/status"]) ("rejects API %s", async (path) => {
     expect(await gateDecision(path, "POST", undefined, env)).toBe("unauthorized");
     expect(await gateDecision(path, "GET", "invalid", env)).toBe("unauthorized");
   });
@@ -90,7 +90,7 @@ describe("gate decisions", () => {
   it("allows valid sessions and dev requests, never missing production credentials", async () => {
     const token = await signSession(env);
     expect(await gateDecision("/export/MAYBANK/full", "GET", token, env)).toBe("allow");
-    expect(await gateDecision("/api/refresh-research", "POST", token, env)).toBe("allow");
+    expect(await gateDecision("/api/refresh", "POST", token, env)).toBe("allow");
     expect(await gateDecision("/", "GET", undefined, {})).toBe("allow");
     expect(await gateDecision("/", "GET", token, { VERCEL: "1" })).toBe("unconfigured");
   });

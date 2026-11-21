@@ -139,11 +139,6 @@ export default async function MarketPage({ searchParams }: PageProps<"/market">)
             }))}
           />
           <ScanTable
-            title="PN17 / higher-risk status"
-            rows={summary.highlights.pn17.map((ticker) => ({ ticker, extra: "PN17 (not a score penalty)" }))}
-            empty="None flagged in this universe snapshot."
-          />
-          <ScanTable
             title="Insufficient data (sample)"
             rows={summary.highlights.insufficientData.map((ticker) => ({
               ticker,

@@ -124,7 +124,3 @@ export function buildTablesCsv(payload: ExportPayload): string {
   }
   return lines.join("\n") + "\n";
 }
-
-export function buildRawJson(payload: ExportPayload): string {
-  return `${JSON.stringify(payload, null, 2)}\n`;
-}
