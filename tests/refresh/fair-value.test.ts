@@ -322,7 +322,7 @@ describe("fair value daily refresh", () => {
     const page = readFileSync("src/app/stock/[ticker]/page.tsx", "utf8");
     expect(page).not.toContain("persistFairValueRun");
     expect(page).not.toContain("refresh/fair-value");
-    expect(page).toContain("loadFairValueForPage");
+    expect(page).toContain("loadPersistedFairValueForPage");
     expect(readFileSync("src/fair-value/load-for-page.ts", "utf8")).not.toContain("persistFairValueRun");
   });
 

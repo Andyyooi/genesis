@@ -73,7 +73,8 @@ export function researchInterpretationBullets(args: {
     bullets.push("Relative Value category is not in this run (insufficient valuation inputs).");
   }
 
-  for (const id of ["price_to_earnings", "price_to_book", "dividend_yield", "book_nav_premium"]) {
+  const valueMetrics = result.profile === "reit" ? ["dividend_yield", "book_nav_premium"] : ["price_to_earnings", "price_to_book", "dividend_yield"];
+  for (const id of valueMetrics) {
     const m = byId(id);
     if (m?.available && m.value !== null) {
       bullets.push(`${m.label}: ${formatMetricValue(m)}${m.period ? ` (period ${m.period})` : ""}.`);
@@ -98,11 +99,13 @@ export function researchInterpretationBullets(args: {
     if (peer.limitation) bullets.push(peer.limitation);
   }
 
-  for (const id of ["roe", "net_margin", "revenue_cagr", "pat_cagr", "dpu_cagr", "reit_gearing"]) {
+  const profileMetrics = result.profile === "reit" ? ["dpu_cagr", "reit_gearing"] : ["roe", "revenue_cagr", "eps_cagr"];
+  for (const id of profileMetrics) {
     const m = byId(id);
     if (m?.available && m.value !== null) {
       bullets.push(`${m.label}: ${formatMetricValue(m)}${m.period ? ` (period ${m.period})` : ""}.`);
     }
+    if (!m?.available && m?.reason?.includes("definition break")) bullets.push(m.reason);
   }
 
   const c = result.dataCoverage;

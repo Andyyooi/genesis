@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TopPicks } from "@/components/research/top-picks";
 import { cn } from "cn";
 import { loadRecentAlerts } from "@/alerts/refresh";
 import { loadScoringConfig } from "@/config/load-scoring";
@@ -172,6 +173,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       </header>
 
       {lagDates ? <DataLagBanner dates={lagDates} /> : null}
+      <TopPicks />
 
       <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between gap-2">

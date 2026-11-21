@@ -39,7 +39,6 @@ export type AlertInputs = {
   distanceFrom52wHighAvailable: boolean;
   catalystWatch: boolean;
   fundamentalsPeriod: string | null;
-  demoPriorScore: number | null;
 };
 
 function href(ticker: string): string {
@@ -96,12 +95,9 @@ export function evaluateAlertDrafts(
   const ticker = input.ticker;
   const thresholds = config.alerts;
   const currentLists = buildCurrentSnapshot(input).lastListIds;
-  const fyNote = `Fundamentals period ${input.fundamentalsPeriod ?? "Data unavailable"}; price as-of ${input.lastCloseDate ?? "Data unavailable"}. Later calendar years are not invented filings.`;
+  const fyNote = `Fundamentals FY end ${input.fundamentalsPeriod ?? "Data unavailable"}; price as-of ${input.lastCloseDate ?? "Data unavailable"}. Later calendar years are not invented filings.`;
 
-  const priorScore =
-    input.demoPriorScore !== null
-      ? input.demoPriorScore
-      : (previous?.lastResearchScore ?? null);
+  const priorScore = previous?.lastResearchScore ?? null;
   const currentScore = input.result.researchScore;
   if (priorScore !== null && currentScore !== null) {
     const delta = currentScore - priorScore;
@@ -112,16 +108,11 @@ export function evaluateAlertDrafts(
         ticker,
         title: `${ticker} Research Score ${fmtScore(priorScore)} → ${fmtScore(currentScore)}`,
         why: up
-          ? `${ticker} Research Score ${fmtScore(priorScore)} → ${fmtScore(currentScore)}. ${
-              input.demoPriorScore !== null
-                ? "The earlier figure is a documented demo score_run (same FY filings; news omitted) so a change is visible. "
-                : ""
-            }Latest mix: ${input.result.notes[0] ?? "see category breakdown"}. ${fyNote} Not a buy or sell.`
+          ? `${ticker} Research Score ${fmtScore(priorScore)} → ${fmtScore(currentScore)}. Latest mix: ${input.result.notes[0] ?? "see category breakdown"}. ${fyNote} Not a buy or sell.`
           : `${ticker} Research Score ${fmtScore(priorScore)} → ${fmtScore(currentScore)}. ${fyNote} Not a sell signal.`,
         evidence: {
           from: priorScore,
           to: currentScore,
-          demo: input.demoPriorScore !== null,
           notes: input.result.notes,
         },
         fingerprint: `${priorScore.toFixed(2)}->${currentScore.toFixed(2)}`,

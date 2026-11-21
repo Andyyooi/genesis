@@ -3,7 +3,7 @@ import { loadScoringConfig } from "@/config/load-scoring";
 import { getDb } from "@/db/client";
 import { loadInstrumentSnapshots } from "@/db/queries";
 import { scoreRuns } from "@/db/schema";
-import type { MetricValue } from "@/metrics/types";
+import type { EventSnapshot, MetricValue } from "@/metrics/types";
 import { scoreFromMetrics } from "@/scoring/score";
 import type { ScoreResult } from "@/scoring/types";
 
@@ -28,5 +28,5 @@ export function scoreTicker(ticker: string, persist = false, opts?: { attachValu
     result = scoreFromMetrics({ config: loadScoringConfig(), metrics: [], instrumentType, ticker: data.instrument.ticker, sector: data.instrument.sector, industry: data.instrument.industry, pn17: data.instrument.pn17, asOf: row?.asOf ?? new Date().toISOString() });
     result.notes = ["No published percentile score. Run npm run market:rescore on the writable research database, then publish a snapshot."];
   }
-  return { ticker: data.instrument.ticker, name: data.instrument.name, instrumentType, pn17: data.instrument.pn17, ...data, metrics, result };
+  return { ticker: data.instrument.ticker, name: data.instrument.name, instrumentType, pn17: data.instrument.pn17, ...data, events: [] as EventSnapshot[], metrics, result };
 }

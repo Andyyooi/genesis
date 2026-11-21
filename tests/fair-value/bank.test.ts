@@ -653,7 +653,7 @@ describe("BANK fair value", () => {
     const bankSource = readFileSync("src/fair-value/calculate-bank.ts", "utf8");
     expect(scoreSource).not.toContain("fair-value");
     expect(runnerSource).not.toContain("fair-value");
-    expect(pageSource).toContain("loadFairValueForPage");
+    expect(pageSource).toContain("loadPersistedFairValueForPage");
     expect(pageSource).not.toContain("calculateBankFairValue");
     expect(pageSource).not.toContain("persistFairValueRun");
     expect(dailySource).toContain("@/refresh/fair-value");

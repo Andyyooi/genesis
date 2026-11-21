@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { loadLatestFundamentalsQuality } from "@/market/fundamentals-quality";
 import { loadLatestMarketScan } from "@/market/scan";
+import { filterMarketRows } from "@/market/filters";
 import { isSnapshotReadOnly } from "@/lib/data-mode";
 import { dataConfidenceLabel, formatScore100 } from "@/lib/research-copy";
 import { Badge } from "@/components/ui/badge";
@@ -15,8 +16,12 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default function MarketPage() {
+export default async function MarketPage({ searchParams }: PageProps<"/market">) {
+  const params = await searchParams;
+  const q = typeof params.q === "string" ? params.q : "";
+  const eligibility = typeof params.eligibility === "string" ? params.eligibility : "";
   const { summary, rows } = loadLatestMarketScan();
+  const visible = filterMarketRows(rows, q, eligibility);
   const quality = loadLatestFundamentalsQuality();
   const dq = summary?.dataQuality;
 
@@ -147,6 +152,12 @@ export default function MarketPage() {
 
           <section>
             <h2 className="mb-2 text-xl font-semibold">All scored names</h2>
+            <form className="mb-3 flex flex-wrap items-end gap-3" action="/market">
+              <label className="flex flex-col gap-1 text-sm">Search ticker, company or sector<input className="rounded border px-3 py-2" type="search" name="q" defaultValue={q} /></label>
+              <label className="flex flex-col gap-1 text-sm">Recommendation filter<select className="rounded border px-3 py-2" name="eligibility" defaultValue={eligibility}><option value="">All names</option><option value="eligible">Recommendable only</option><option value="excluded">Excluded only</option></select></label>
+              <button className="rounded border px-3 py-2 text-sm" type="submit">Apply filters</button>
+            </form>
+            <p className="mb-2 text-sm">Showing {visible.length} of {rows.length} names. Excluded names remain scored.</p>
             <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
@@ -162,7 +173,7 @@ export default function MarketPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.slice(0, 200).map((row) => (
+                  {visible.map((row) => (
                     <TableRow key={String(row.ticker)}>
                       <TableCell className="font-mono">
                         <Link href={`/stock/${row.ticker}`} className="underline underline-offset-4">
@@ -212,9 +223,6 @@ export default function MarketPage() {
                 </TableBody>
               </Table>
             </div>
-            {rows.length > 200 ? (
-              <p className="mt-2 text-sm text-muted-foreground">Showing 200 of {rows.length}.</p>
-            ) : null}
           </section>
         </>
       )}

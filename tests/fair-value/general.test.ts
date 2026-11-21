@@ -601,7 +601,7 @@ describe("GENERAL fair value", () => {
     const fairSource = readFileSync("src/fair-value/calculate.ts", "utf8");
     expect(scoreSource).not.toContain("fair-value");
     expect(runnerSource).not.toContain("fair-value");
-    expect(pageSource).toContain("loadFairValueForPage");
+    expect(pageSource).toContain("loadPersistedFairValueForPage");
     expect(pageSource).not.toContain("calculateGeneralFairValue");
     expect(pageSource).not.toContain("persistFairValueRun");
     expect(fairSource).not.toContain("yahoo");

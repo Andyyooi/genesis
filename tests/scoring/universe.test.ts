@@ -3,12 +3,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getDb, getSqlite } from "@/db/client";
-import { financialPeriods, instruments, marketScanRuns, priceBars, scoreRuns } from "@/db/schema";
+import { alerts, financialPeriods, instruments, marketScanRuns, priceBars, scoreRuns } from "@/db/schema";
 import { emptyLineItems } from "@/ingest/merge-line-items";
 import { loadLatestMarketScan, rescoreListedMarket } from "@/market/scan";
 import { rowMatchesList } from "@/opportunities/lists";
 import { clearOpportunityScanCache, scanWatchlist } from "@/opportunities/scan";
 import { scoreTicker } from "@/scoring/run-ticker";
+import { storedSnapshotDates } from "@/lib/stored-snapshot-dates";
+import { loadTopPicks } from "@/opportunities/top-picks";
 
 const asOf = "2026-09-25T12:00:00.000Z";
 let directory: string;
@@ -37,6 +39,25 @@ beforeEach(() => {
 afterEach(() => { close(); vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); rmSync(directory, { recursive: true, force: true }); });
 
 describe("published universe scores", () => {
+  it("uses real publication / annual dates and reads ranked picks from that publication", () => {
+    expect(storedSnapshotDates()).toBeNull();
+    expect(loadTopPicks().picks).toEqual([]);
+    rescoreListedMarket();
+    expect(storedSnapshotDates()).toMatchObject({ score_as_of: asOf, fundamentals_period: "2025-12-31" });
+    const picks = loadTopPicks();
+    expect(picks.picks).toHaveLength(2);
+    expect(picks.picks[0].ticker).toBe("CIMB");
+    expect(picks.picks[0].result.researchScore).toBe(scoreTicker("CIMB")!.result.researchScore);
+    expect(scoreTicker("MAYBANK")!.events).toEqual([]);
+  });
+  it("purges only demo alerts during publication and never regenerates them", () => {
+    const db = getDb();
+    const instrument = db.select().from(instruments).get()!;
+    for (const demo of [true, false]) db.insert(alerts).values({ instrumentId: instrument.id, ticker: instrument.ticker, ruleId: "research_score_up", title: "Rise", why: "Evidence", evidenceJson: JSON.stringify({ demo }), href: "/stock/MAYBANK", fingerprint: String(demo), triggeredAt: asOf, createdAt: asOf }).run();
+    rescoreListedMarket();
+    rescoreListedMarket();
+    expect(db.select().from(alerts).all().map((r) => JSON.parse(r.evidenceJson))).toEqual([{ demo: false }]);
+  });
   it("does not present legacy anchor scans as current percentile scores", () => {
     getDb().insert(marketScanRuns).values({ asOf, createdAt: asOf, summaryJson: JSON.stringify({ kind: "market-scan", highlights: {} }) }).run();
     expect(loadLatestMarketScan()).toEqual({ summary: null, rows: [] });

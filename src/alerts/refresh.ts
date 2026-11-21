@@ -14,6 +14,7 @@ import {
   type AlertSnapshot,
 } from "@/alerts/evaluate";
 import { scoreTicker } from "@/scoring/run-ticker";
+import { isDemoAlert } from "@/alerts/purge-demo";
 
 function metric(metrics: MetricValue[], id: string): MetricValue | undefined {
   return metrics.find((m) => m.id === id);
@@ -111,14 +112,13 @@ function closesFromBars(bars: { barDate: string; close: number | null }[]) {
   };
 }
 
-export function refreshAlertsForTicker(ticker: string): { drafts: number; inserted: number; demoPrior: boolean } {
+export function refreshAlertsForTicker(ticker: string): { drafts: number; inserted: number } {
   const data = scoreTicker(ticker);
-  if (!data) return { drafts: 0, inserted: 0, demoPrior: false };
+  if (!data) return { drafts: 0, inserted: 0 };
   const { metrics, result } = data;
   const config = loadScoringConfig();
 
   const history = loadScoreHistory(data.instrument.id, 8);
-  const demoPriorScore = null;
 
   const prices = closesFromBars(data.bars);
   const dist = metric(metrics, "distance_from_52w_high");
@@ -126,7 +126,7 @@ export function refreshAlertsForTicker(ticker: string): { drafts: number; insert
     ticker: data.instrument.ticker,
     name: data.instrument.name,
     result,
-    events: data.events,
+    events: [],
     lastClose: prices.lastClose,
     lastCloseDate: prices.lastCloseDate,
     close1dAgo: prices.close1dAgo,
@@ -136,19 +136,15 @@ export function refreshAlertsForTicker(ticker: string): { drafts: number; insert
     persistedResearchScores: history.map((row) => row.researchScore),
     distanceFrom52wHigh: dist?.available ? dist.value : null,
     distanceFrom52wHighAvailable: Boolean(dist?.available && dist.value !== null),
-    catalystWatch: data.events.some((event) => {
-      const c = event.classification;
-      return c === "Positive catalyst" || c === "Negative" || c === "Uncertain";
-    }),
+    catalystWatch: false,
     fundamentalsPeriod: latestAnnualPeriod(data.periods),
-    demoPriorScore,
   };
 
   const previous = loadState(data.instrument.id);
   const drafts = evaluateAlertDrafts(config, input, previous);
   const inserted = insertDrafts(data.instrument.id, drafts);
   saveState(data.instrument.id, buildCurrentSnapshot(input));
-  return { drafts: drafts.length, inserted, demoPrior: demoPriorScore !== null };
+  return { drafts: drafts.length, inserted };
 }
 
 export function refreshAlertsForUniverse() {
@@ -168,13 +164,14 @@ export function loadRecentAlerts(limit = 40) {
       why: alerts.why,
       href: alerts.href,
       triggeredAt: alerts.triggeredAt,
+      evidenceJson: alerts.evidenceJson,
       name: instruments.name,
     })
     .from(alerts)
     .innerJoin(instruments, eq(instruments.id, alerts.instrumentId))
     .orderBy(desc(alerts.id))
     .limit(limit)
-    .all();
+    .all().filter((row) => !isDemoAlert(row.evidenceJson));
 }
 
 export function countAlerts() {

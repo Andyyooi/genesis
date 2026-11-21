@@ -70,6 +70,15 @@ function baseResult(over: Partial<ScoreResult> = {}): ScoreResult {
 }
 
 describe("research presentation helpers", () => {
+  it("shows REIT-only interpretation factors only for REITs", () => {
+    const metrics: MetricValue[] = ["reit_gearing", "dpu_cagr", "roe"].map((id) => ({ id, label: id === "reit_gearing" ? "REIT gearing" : id, value: 0.2, unit: "ratio", available: true, reason: null, period: null, inputs: [], formula: "test" }));
+    for (const profile of ["default", "bank"] as const) {
+      const text = researchInterpretationBullets({ result: baseResult({ profile }), metrics, events: [] }).join(" ");
+      expect(text).not.toContain("REIT gearing");
+      expect(text).not.toContain("dpu_cagr");
+    }
+    expect(researchInterpretationBullets({ result: baseResult({ profile: "reit", researchProfile: "REIT" }), metrics, events: [] }).join(" ")).toContain("REIT gearing");
+  });
   it("labels unavailable factors without scoring them as zero", () => {
     expect(factorAvailabilityLabel(true, null)).toBe("Available");
     expect(factorAvailabilityLabel(false, null)).toBe("Unavailable — insufficient data");

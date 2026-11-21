@@ -11,8 +11,10 @@ import { liveCoverage } from "@/opportunities/lists";
 import { scoreTicker } from "@/scoring/run-ticker";
 import { persistUniverseScores } from "@/scoring/universe";
 import { clearOpportunityScanCache } from "@/opportunities/scan";
+import { purgeDemoAlerts } from "@/alerts/purge-demo";
 
 export type MarketScanRowPayload = {
+  sector: string | null;
   eligible: boolean;
   exclusionReasons: string[];
   ticker: string;
@@ -137,6 +139,7 @@ function persistListedScores(meta: {
   fundamentalsYahoo: { upserted: number; skippedHadFilings: number; failed: number };
 }): MarketScanSummary {
   const summary = getSqlite().transaction(() => {
+    purgeDemoAlerts();
     persistUniverseScores(meta.asOf);
     return publishListedScores(meta);
   })();
@@ -186,6 +189,7 @@ function publishListedScores(meta: {
     const confidence = scoredRow.result.dataConfidence;
     const dataCoverage = scoredRow.result.dataCoverage;
     const payload: MarketScanRowPayload = {
+      sector: instrument.sector,
       eligible: scoredRow.result.eligibility?.eligible ?? false,
       exclusionReasons: scoredRow.result.eligibility?.reasons ?? ["Eligibility not verified"],
       ticker: instrument.ticker,
@@ -318,6 +322,7 @@ export function loadLatestMarketScan(): {
     summary = null;
   }
   if (summary?.methodology !== "cross-sectional-v2") return { summary: null, rows: [] };
+  const sectors = new Map(db.select({ ticker: instruments.ticker, sector: instruments.sector }).from(instruments).all().map((row) => [row.ticker, row.sector]));
   const rows = db
     .select()
     .from(marketScanRows)
@@ -325,7 +330,8 @@ export function loadLatestMarketScan(): {
     .all()
     .map((row) => {
       try {
-        return JSON.parse(row.payloadJson) as Record<string, unknown>;
+        const payload = JSON.parse(row.payloadJson) as Record<string, unknown>;
+        return { ...payload, sector: payload.sector ?? sectors.get(row.ticker) ?? null };
       } catch {
         return { ticker: row.ticker };
       }
