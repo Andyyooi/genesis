@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildFullMarkdown } from "@/export/full";
 import { EXPORT_SCHEMA, type ExportPayload } from "@/export/payload";
 import { buildQuickMarkdown } from "@/export/quick";
-import { buildRawJson, buildTablesCsv } from "@/export/raw";
+import { buildTablesCsv } from "@/export/raw";
 import { loadScoringConfig } from "@/config/load-scoring";
 import type { MetricValue } from "@/metrics/types";
 import { scoreFromMetrics } from "@/scoring/score";
@@ -94,8 +94,8 @@ describe("ChatGPT export", () => {
     m("pat_cagr", 0.06),
   ]);
 
-  it("includes instrument_type and ScoreResult in raw JSON", () => {
-    const parsed = JSON.parse(buildRawJson(common)) as ExportPayload;
+  it("includes instrument_type and ScoreResult in the export payload", () => {
+    const parsed: ExportPayload = common;
     expect(parsed.schema).toBe(EXPORT_SCHEMA);
     expect(parsed.instrument.instrument_type).toBe("COMMON_STOCK");
     expect(parsed.score.profile).toBe("default");
@@ -141,7 +141,7 @@ describe("ChatGPT export", () => {
     const md = buildFullMarkdown(reit);
     expect(md).toMatch(/REIT factor profile/);
     expect(md).toMatch(/ordinary-company P\/E are not scoring factors/);
-    expect(JSON.parse(buildRawJson(reit)).instrument.instrument_type).toBe("REIT");
+    expect(reit.instrument.instrument_type).toBe("REIT");
     expect(buildTablesCsv(reit)).toMatch(/REIT/);
   });
 

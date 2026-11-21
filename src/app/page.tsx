@@ -19,9 +19,7 @@ import { loadScoringConfig } from "@/config/load-scoring";
 import { loadLatestIngestReports } from "@/db/queries";
 import { loadMarketPricePulse, loadSavedPrices } from "@/db/price-history";
 import { AlertsList } from "@/components/alerts/alerts-list";
-import { DataLagBanner } from "@/components/research/data-lag-banner";
 import type { PricesImportReport } from "@/ingest/types";
-import { buildSnapshotDates } from "@/lib/snapshot-dates";
 import {
   OPPORTUNITY_LISTS,
   parseDashboardFilters,
@@ -64,7 +62,6 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     confidence: value("confidence"),
     freshness: value("freshness"),
     profile: value("profile"),
-    events: value("events"),
   });
   const filterQuery = {
     qualityTilt: topPicksOptions.qualityTilt ? "on" : undefined,
@@ -76,7 +73,6 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     confidence: flagFilters.confidence,
     freshness: flagFilters.freshness,
     profile: flagFilters.profile,
-    events: flagFilters.events,
     sort: sortId === "ticker" ? undefined : sortId,
   };
   let rows: ReturnType<typeof scanWatchlist>;
@@ -152,14 +148,6 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       row.confidence === "VERY_LOW" ||
       row.needsVerification,
   ).length;
-  const sample = rows.find((row) => row.ticker === "MAYBANK") ?? rows[0];
-  const lagDates = sample
-    ? buildSnapshotDates({
-        scoreAsOf: sample.result.asOf,
-        lastTradeDate: sample.lastTradeDate,
-        fundamentalsPeriod: sample.fundamentalsPeriod,
-      })
-    : null;
   const priceReport = reports.prices
     ? (JSON.parse(reports.prices.summaryJson) as PricesImportReport)
     : null;
@@ -293,10 +281,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
                       {item.label}
                     </Link>
                     <p className="mt-1">
-                      {item.description}{" "}
-                      {item.id === "catalyst"
-                        ? "No classified announcements are saved for these companies; this is not a live news feed."
-                        : "No tracked company currently meets this rule in the saved data."}
+                      {item.description} No tracked company currently meets
+                      this rule in the saved data.
                     </p>
                   </div>
                 ))}
@@ -310,9 +296,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
             emptyReason={
               listed.length > 0
                 ? "No companies meet your selected filters. Open Filters & sort to change or clear them."
-                : activeList.id === "catalyst"
-                  ? "No classified announcements are saved for these companies. This is not a live news feed."
-                  : `No tracked company currently meets this rule in the saved data: ${activeList.description}`
+                : `No tracked company currently meets this rule in the saved data: ${activeList.description}`
             }
           >
             <div className="workspace-advanced">
@@ -364,10 +348,6 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
               <strong className="text-amber-800">{lowConf}</strong>
             </div>
             <div className="context-line">
-              <span>With saved events</span>
-              <strong>{rows.filter((row) => row.hasEvents).length}</strong>
-            </div>
-            <div className="context-line">
               <span>Price import misses</span>
               <strong>{failures.length}</strong>
             </div>
@@ -390,15 +370,6 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
               <ArrowUpRight className="size-3.5" aria-hidden="true" />
             </Link>
           </section>
-          {lagDates ? (
-            <div>
-              <p className="mb-2 text-[11px] text-muted-foreground">
-                Example data dates · {sample?.ticker}. Each company has its own
-                dates.
-              </p>
-              <DataLagBanner dates={lagDates} />
-            </div>
-          ) : null}
           <div className="research-note">
             <p className="mb-2 font-semibold">
               Built for research. Not trading.

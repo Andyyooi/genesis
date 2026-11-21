@@ -27,7 +27,6 @@ export function DashboardFilters({ listId, values }: { listId: string; values: R
       </div>
       <div className="flex flex-wrap gap-5 text-sm">
         <label className="flex items-center gap-2"><input type="checkbox" name="shariah" value="yes" defaultChecked={values.shariah === "yes"} />Shariah only</label>
-        <label className="flex items-center gap-2"><input type="checkbox" name="events" value="yes" defaultChecked={values.events === "yes"} />Has events</label>
       </div>
       <div className="flex items-center gap-4"><button type="submit" className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Apply filters</button><Link href={resetParams.size ? `/?${resetParams}` : "/"} className="text-sm text-primary underline underline-offset-4">Reset</Link></div>
     </form>

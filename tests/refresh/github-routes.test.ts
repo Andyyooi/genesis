@@ -4,8 +4,6 @@ import { POST } from "@/app/api/refresh/route";
 import { GET } from "@/app/api/refresh/status/route";
 import { mapRefreshStatus, resetGithubRefreshStateForTests, type WorkflowRun } from "@/refresh/github";
 import { proxy } from "@/proxy";
-import { POST as retiredTickerRefresh } from "@/app/api/refresh-research/route";
-import { POST as retiredWatchlistRefresh } from "@/app/api/refresh-research/watchlist/route";
 
 const snapshot = vi.hoisted(() => ({ latestPriceDate: "2026-09-25", publishedAt: "2026-09-26T00:00:00Z" }));
 vi.mock("@/refresh/deployed-snapshot", () => ({ deployedSnapshotState: () => ({ ...snapshot }) }));
@@ -23,12 +21,6 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe("GitHub refresh API", () => {
-  it("retires the old website-local refresh endpoints without dispatching or downloading", async () => {
-    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
-    expect((await retiredTickerRefresh()).status).toBe(410);
-    expect((await retiredWatchlistRefresh()).status).toBe(410);
-    expect(fetch).not.toHaveBeenCalled();
-  });
   it("dispatches the named workflow on main with a server-only bearer token", async () => {
     const fetch = vi.fn(async (_url: string, options: RequestInit) => options.method === "POST" ? new Response(null, { status: 204 }) : json({ workflow_runs: [] }));
     vi.stubGlobal("fetch", fetch);

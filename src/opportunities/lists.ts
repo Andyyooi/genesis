@@ -7,7 +7,6 @@ export const LIST_IDS = [
   "quality-value",
   "improving",
   "discounted",
-  "catalyst",
 ] as const;
 
 export type ListId = (typeof LIST_IDS)[number];
@@ -58,13 +57,6 @@ export const OPPORTUNITY_LISTS: OpportunityList[] = [
     label: "Recently Discounted",
     description:
       "At least 15% below the stored 52-week high, with Quality still at least 50/100. Skipped if 52-week history is unavailable.",
-    disabled: false,
-  },
-  {
-    id: "catalyst",
-    label: "Catalyst Watch",
-    description:
-      "Names with a stored Positive catalyst, Negative, or Uncertain announcement. Research list, not a buy list.",
     disabled: false,
   },
 ];
@@ -135,7 +127,6 @@ export type DashboardFlagFilter = {
   confidence?: "HIGH" | "MEDIUM" | "LOW" | "VERY_LOW";
   freshness?: string;
   profile?: string;
-  events?: "yes";
 };
 
 /** Cap buckets in MYR. Not a scored factor. Missing market cap is excluded when a cap filter is on. */
@@ -153,7 +144,6 @@ export function parseDashboardFilters(params: {
   confidence?: string;
   freshness?: string;
   profile?: string;
-  events?: string;
 }): DashboardFlagFilter {
   const filters: DashboardFlagFilter = {};
   if (params.type === "REIT" || params.type === "COMMON_STOCK") filters.instrumentType = params.type;
@@ -170,7 +160,6 @@ export function parseDashboardFilters(params: {
   }
   if (params.freshness && params.freshness.trim()) filters.freshness = params.freshness.trim().toUpperCase();
   if (params.profile && params.profile.trim()) filters.profile = params.profile.trim().toUpperCase();
-  if (params.events === "yes") filters.events = "yes";
   return filters;
 }
 
@@ -248,7 +237,6 @@ export function rowMatchesFilters(row: OpportunityRow, filters: DashboardFlagFil
   if (filters.confidence && row.confidence !== filters.confidence) return false;
   if (filters.freshness && (row.freshness ?? "").toUpperCase() !== filters.freshness) return false;
   if (filters.profile && row.researchProfile !== filters.profile) return false;
-  if (filters.events === "yes" && !row.hasEvents) return false;
   return true;
 }
 
@@ -292,7 +280,6 @@ export function researchListIds(
 export function rowMatchesList(row: OpportunityRow, list: ListId): boolean {
   if (list === "watchlist") return true;
   if (!row.result.eligibility?.eligible) return false;
-  if (list === "catalyst") return row.catalystWatch;
   if (list === "undervalued") return (row.valuationScore ?? -1) >= 70;
   if (list === "quality") return (row.qualityScore ?? -1) >= 70;
   if (list === "quality-value") {

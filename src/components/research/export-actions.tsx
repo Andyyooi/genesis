@@ -7,7 +7,6 @@ import { cn } from "cn";
 const KINDS = [
   { kind: "quick", label: "Quick report", ext: "Markdown" },
   { kind: "full", label: "Full report", ext: "Markdown" },
-  { kind: "json", label: "Raw JSON", ext: "JSON" },
   { kind: "csv", label: "Tables CSV", ext: "CSV" },
 ] as const;
 
@@ -32,8 +31,7 @@ export function ExportActions({ ticker }: { ticker: string }) {
     <section className="flex flex-col gap-2 rounded-lg border px-4 py-3">
       <p className="text-sm font-medium">Export for ChatGPT</p>
       <p className="text-sm text-muted-foreground">
-        Download or copy Quick Markdown, Full Markdown, Raw JSON (ScoreResult payload), or CSV
-        tables. Missing numbers stay unavailable. Not a buy or sell note.
+        Download or copy Quick Markdown, Full Markdown, or CSV tables. Missing numbers stay unavailable. Not a buy or sell note.
       </p>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {KINDS.map((item) => (

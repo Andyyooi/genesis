@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Radar, Bell, Database } from "lucide-react";
+import { LayoutDashboard, Radar, Bell } from "lucide-react";
 
 const links = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/market", label: "Market scan", icon: Radar },
   { href: "/alerts", label: "Alerts", icon: Bell },
-  { href: "/ingest", label: "Data reports", icon: Database },
 ];
 
 export function SiteNav() {

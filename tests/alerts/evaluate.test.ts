@@ -131,7 +131,7 @@ describe("alert rules", () => {
         lastResearchScore: 71,
         lastHealthScore: 40,
         lastConcernIds: [],
-        lastListIds: ["undervalued", "catalyst"],
+        lastListIds: ["undervalued"],
         lastEventKeys: [],
         lastClose: 10,
         lastCloseDate: "2026-09-18",
@@ -179,7 +179,7 @@ describe("alert rules", () => {
   it("fires large price move and new opportunity list membership", () => {
     const drafts = evaluateAlertDrafts(
       config,
-      input({ lastClose: 9, lastCloseDate: "2026-09-18", close1dAgo: 10, close5dAgo: 10, catalystWatch: true }),
+      input({ lastClose: 9, lastCloseDate: "2026-09-18", close1dAgo: 10, close5dAgo: 10 }),
       {
         lastResearchScore: 71,
         lastHealthScore: 40,
@@ -192,6 +192,5 @@ describe("alert rules", () => {
     );
     expect(drafts.some((d) => d.ruleId === "large_price_move")).toBe(true);
     expect(drafts.some((d) => d.ruleId === "new_opportunity" && d.fingerprint === "undervalued")).toBe(true);
-    expect(drafts.some((d) => d.ruleId === "new_opportunity" && d.fingerprint === "catalyst")).toBe(true);
   });
 });
