@@ -1,6 +1,9 @@
 import { cookies } from "next/headers";
 import { protectionMode, SESSION_COOKIE, verifySession } from "@/auth/session";
 import { Button } from "@/components/ui/button";
+import { RefreshBar } from "@/components/refresh-bar";
+import { deployedSnapshotState } from "@/refresh/deployed-snapshot";
+import { refreshConfiguration } from "@/refresh/github";
 
 export async function AuthNav() {
   const mode = protectionMode(process.env);
@@ -12,6 +15,7 @@ export async function AuthNav() {
         {mode === "disabled" ? <span className="text-muted-foreground">password protection off (dev)</span> : null}
         {authenticated ? <form action="/logout" method="post"><Button type="submit" variant="outline">Log out</Button></form> : null}
       </nav>
+      <RefreshBar latestPriceDate={deployedSnapshotState().latestPriceDate} missing={refreshConfiguration().missing} allowed={mode === "disabled" || authenticated} />
     </header>
   );
 }

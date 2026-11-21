@@ -5,7 +5,6 @@ import { loadScoringConfig } from "@/config/load-scoring";
 import { loadLatestIngestReports } from "@/db/queries";
 import { AlertsList } from "@/components/alerts/alerts-list";
 import { DataLagBanner } from "@/components/research/data-lag-banner";
-import { WatchlistRefreshPanel } from "@/components/research/watchlist-refresh-panel";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -17,7 +16,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { PricesImportReport } from "@/ingest/types";
-import { isSnapshotReadOnly } from "@/lib/data-mode";
 import { formatMyr } from "@/lib/format-myr";
 import { dataConfidenceLabel, formatFreshnessBand, formatScore100 } from "@/lib/research-copy";
 import { buildSnapshotDates } from "@/lib/snapshot-dates";
@@ -174,7 +172,6 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       </header>
 
       {lagDates ? <DataLagBanner dates={lagDates} /> : null}
-      <WatchlistRefreshPanel readOnly={isSnapshotReadOnly()} watchlistCount={rows.length} />
 
       <section className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between gap-2">
