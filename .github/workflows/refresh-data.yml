@@ -46,7 +46,7 @@ jobs:
       - name: Validate refresh results
         run: npx tsx scripts/validate-refresh.ts 2>&1 | tee -a refresh.log
       - name: Pack and validate snapshot
-        run: npm run snapshot:pack -- --write-production 2>&1 | tee -a refresh.log
+        run: npm run snapshot:pack -- --dest data/snapshots/research.db.gz --write-production 2>&1 | tee -a refresh.log
       - name: Commit and push snapshot
         run: |
           git config user.name "github-actions[bot]"
