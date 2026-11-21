@@ -11,6 +11,7 @@ import {
   type YahooFundamentalsReport,
 } from "@/market/ingest-fundamentals-yahoo";
 import { rescoreListedMarket } from "@/market/scan";
+import { loadAlertRefreshStatus, refreshPublishedAlertSafety } from "@/alerts/publication";
 import { DAILY_FUNDAMENTALS_RECHECK_DAYS } from "@/refresh/fundamentals-freshness";
 import {
   fairValueInputsReady,
@@ -490,8 +491,11 @@ export async function runDailyRefresh(
   const fundamentals = await refreshFundamentals(runId, marketDate, deps);
   const events = await refreshEvents(runId, marketDate, deps);
   const news = refreshNews(runId, marketDate, deps);
-  const fairValue = refreshFairValue(runId, marketDate, deps, [prices, fundamentals], startedAt);
+  const previousPublicationId = loadAlertRefreshStatus()?.runId ?? null;
   const scores = refreshScores(runId, marketDate, deps, [prices, fundamentals]);
+  const publicationId = loadAlertRefreshStatus()?.runId;
+  const fairValue = refreshFairValue(runId, marketDate, deps, [prices, fundamentals], startedAt);
+  refreshPublishedAlertSafety(previousPublicationId, publicationId, nowFn().toISOString());
   if (fairValue.status === "PARTIAL" || fairValue.status === "SOURCE_FAILED") {
     notes.push(
       `Fair Value dataset ${fairValue.status}: ${fairValue.errorSummary ?? "see fair_value refresh metadata."}`,

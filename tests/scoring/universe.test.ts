@@ -12,6 +12,7 @@ import { scoreTicker } from "@/scoring/run-ticker";
 import { storedSnapshotDates } from "@/lib/stored-snapshot-dates";
 import { loadTopPicks } from "@/opportunities/top-picks";
 import { loadRecentAlerts } from "@/alerts/refresh";
+import { refreshPublishedAlertSafety } from "@/alerts/publication";
 
 const asOf = "2026-09-25T12:00:00.000Z";
 let directory: string;
@@ -102,6 +103,21 @@ describe("published universe scores", () => {
     expect(() => rescoreListedMarket()).toThrow("alert publication failure");
     expect(getDb().select().from(scoreRuns).all()).toHaveLength(4);
     expect(getDb().select().from(marketScanRuns).all()).toHaveLength(2);
+    expect(getDb().select().from(alerts).all()).toEqual(before);
+    getSqlite().prepare("UPDATE market_scan_rows SET payload_json = json_set(payload_json, '$.fairValueSafety', 'CLEAR') WHERE run_id = 2").run();
+    expect(() => refreshPublishedAlertSafety(1, 2, asOf)).toThrow("alert publication failure");
+    expect(getSqlite().prepare("SELECT DISTINCT json_extract(payload_json, '$.fairValueSafety') AS safety FROM market_scan_rows WHERE run_id = 2").all()).toEqual([{ safety: "CLEAR" }]);
+    expect(getDb().select().from(alerts).all()).toEqual(before);
+  });
+  it("does not rewrite alerts for a skipped or superseded publication", () => {
+    rescoreListedMarket();
+    getSqlite().prepare("UPDATE instruments SET warning_flag = 1 WHERE ticker = 'MAYBANK'").run();
+    rescoreListedMarket();
+    const before = getDb().select().from(alerts).all();
+    expect(before).toHaveLength(2);
+    expect(refreshPublishedAlertSafety(2, 2, asOf)).toBeNull();
+    expect(refreshPublishedAlertSafety(1, undefined, asOf)).toBeNull();
+    expect(refreshPublishedAlertSafety(null, 1, asOf)).toBeNull();
     expect(getDb().select().from(alerts).all()).toEqual(before);
   });
   it("does not present legacy anchor scans as current percentile scores", () => {

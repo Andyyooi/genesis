@@ -13,8 +13,6 @@ import {
 } from "@/fair-value/quality";
 import type { FairValueResult } from "@/fair-value/types";
 import type { PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
-import type { ResearchProfile } from "@/research/profiles";
-import { RESEARCH_PROFILES } from "@/research/profiles";
 import type { PeerUniverseRow } from "@/scoring/peer-group";
 import { periodsToSnapshots } from "@/scoring/valuation-context";
 import type { RefreshStatus } from "@/refresh/types";
@@ -147,7 +145,8 @@ export function refreshFairValueUniverse(args: {
   const calculate = args.calculate ?? calculateFairValue;
   const assess = args.assess ?? assessFairValueQuality;
   const persist = args.persist ?? persistFairValueRun;
-  const loaded = loadStoredUniverse();
+  const config = loadScoringConfig();
+  const loaded = loadStoredUniverse(config);
   const requested = args.onlyTicker?.trim().toUpperCase();
   const listed = requested
     ? loaded.listed.filter((row) => row.ticker.toUpperCase() === requested)
@@ -167,7 +166,6 @@ export function refreshFairValueUniverse(args: {
     withheld: 0,
     persistenceRefused: false,
   };
-  const config = loadScoringConfig();
 
   for (const instrument of listed) {
     const periods = snapshots.get(instrument.id) ?? [];
@@ -308,7 +306,7 @@ function annualsFrom(periods: StatementSnapshot[]): FairValueQualityAnnual[] {
     }));
 }
 
-function loadStoredUniverse(): {
+function loadStoredUniverse(config: ReturnType<typeof loadScoringConfig>): {
   listed: InstrumentRow[];
   snapshots: Map<number, StatementSnapshot[]>;
   bars: Map<number, PriceBarSnapshot[]>;
@@ -372,7 +370,7 @@ function loadStoredUniverse(): {
       name: instrument.name,
       listingStatus: instrument.listingStatus,
       instrumentType: instrument.instrumentType,
-      researchProfile: storedProfile(instrument.researchProfile),
+      researchProfile: resolveResearchProfile(instrument.instrumentType === "REIT" ? "REIT" : "COMMON_STOCK", instrument.ticker, { sector: instrument.sector, industry: instrument.industry }, config).profile,
       industry: instrument.industry,
       sector: instrument.sector,
       lastClose: close?.close ?? null,
@@ -394,9 +392,4 @@ function loadStoredUniverse(): {
     bars,
     peers,
   };
-}
-
-function storedProfile(value: string | null): ResearchProfile {
-  if (value && (RESEARCH_PROFILES as readonly string[]).includes(value)) return value as ResearchProfile;
-  return "GENERAL";
 }

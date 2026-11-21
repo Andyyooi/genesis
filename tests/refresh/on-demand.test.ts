@@ -208,7 +208,7 @@ describe("on-demand refresh and research", () => {
       },
     );
 
-    expect(order).toEqual(["prices", "fundamentals", "fairValue", "scores"]);
+    expect(order).toEqual(["prices", "fundamentals", "scores", "fairValue"]);
     expect(report.startedAt < report.completedAt).toBe(true);
     expect(report.market.cadence).toBe("end-of-day");
     expect(report.market.realtime).toBe(false);
@@ -225,7 +225,7 @@ describe("on-demand refresh and research", () => {
     expect(report.persistence).toBe("local-sqlite");
   });
 
-  it("keeps the independent fair-value result when subsequent scoring fails", async () => {
+  it("keeps the independent fair-value result when scoring fails", async () => {
     const fairValue = vi.fn(() => fairReport());
     const report = await runRefreshAndResearch({ ticker: "MAYBANK" }, {
       importPrices: async () => priceReport(["MAYBANK"]),

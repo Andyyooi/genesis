@@ -161,7 +161,7 @@ afterEach(() => {
 });
 
 describe("fair value daily refresh", () => {
-  it.each(["daily", "on-demand", "workflow"])("publishes this refresh's safety change without lag in the %s path", async (path) => {
+  it.each(["daily", "on-demand", "workflow"])("uses fresh peer classifications and publishes current safety changes in the %s path", async (path) => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-07T00:00:00.000Z"));
     seed("WIDGET", "Industrial Products");
@@ -178,15 +178,25 @@ describe("fair value daily refresh", () => {
       kind: "prices", startedAt: AS_OF, finishedAt: AS_OF,
       succeeded: ["WIDGET"], failed: [], barsUpserted: 0,
     });
-    const importFundamentals = async (): Promise<YahooFundamentalsReport> => ({
-      kind: "fundamentals-yahoo", startedAt: AS_OF, finishedAt: AS_OF,
-      attempted: 1, upserted: 0, inserted: 0, filled: 0, unchanged: 1,
-      skippedHadFilings: 0, skippedOtherSource: 0, instrumentsUpdated: 0,
-      instrumentsUnchanged: 1, instrumentsSkippedFresh: 1, instrumentsFetched: 0, failed: [],
-    });
+    const importFundamentals = async (): Promise<YahooFundamentalsReport> => {
+      getSqlite().prepare("UPDATE instruments SET industry = 'Banks' WHERE ticker = 'WIDGET'").run();
+      return {
+        kind: "fundamentals-yahoo", startedAt: AS_OF, finishedAt: AS_OF,
+        attempted: 1, upserted: 0, inserted: 0, filled: 0, unchanged: 1,
+        skippedHadFilings: 0, skippedOtherSource: 0, instrumentsUpdated: 0,
+        instrumentsUnchanged: 1, instrumentsSkippedFresh: 1, instrumentsFetched: 0, failed: [],
+      };
+    };
+    let calculated = false;
     const freshFairValue = () => refreshFairValueUniverse({
       asOf: AS_OF,
-      calculate: (input) => valuedResult(input.ticker),
+      calculate: (input) => {
+        calculated = true;
+        expect(getDb().select().from(instruments).get()!.researchProfile).toBe(path === "workflow" ? "GENERAL" : "BANK");
+        expect(input.researchProfile).toBe("BANK");
+        expect(input.peers?.find((row) => row.ticker === "WIDGET")?.researchProfile).toBe("BANK");
+        return valuedResult(input.ticker);
+      },
       assess: () => qualityFor("WITHHELD"),
     });
     const deps = { now: () => new Date(), importPrices, importFundamentals };
@@ -201,10 +211,15 @@ describe("fair value daily refresh", () => {
       }
     }
     const rows = loadRecentAlerts();
+    expect(calculated).toBe(true);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ ticker: "WIDGET", ruleId: "fair_value_safety_changed", triggeredAt: AS_OF });
     expect(JSON.parse(rows[0].evidenceJson)).toMatchObject({ from: "CLEAR", to: "FLAGGED", previousRunDate: "2026-10-07" });
     expect(rows[0].why).toContain("previous run 2026-10-07 → this run's price date unavailable");
+    expect(getSqlite().prepare("SELECT COUNT(*) AS count FROM market_scan_runs").get()).toEqual({ count: 2 });
+    expect(getSqlite().prepare("SELECT json_extract(payload_json, '$.fairValueSafety') AS safety FROM market_scan_rows WHERE run_id = 2").get()).toEqual({ safety: "FLAGGED" });
+    rescoreListedMarket();
+    expect(loadRecentAlerts()).toEqual([]);
   });
 
   it("inserts one observation and leaves it unchanged on a repeat run", () => {

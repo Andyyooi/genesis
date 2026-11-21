@@ -17,6 +17,7 @@ import { persistDatasetRefresh } from "@/refresh/persist";
 import type { DatasetRefreshResult } from "@/refresh/types";
 import { scoreTicker } from "@/scoring/run-ticker";
 import { rescoreListedMarket } from "@/market/scan";
+import { loadAlertRefreshStatus, refreshPublishedAlertSafety } from "@/alerts/publication";
 
 const inFlight = new Set<string>();
 let watchlistActive = false;
@@ -279,10 +280,13 @@ export async function runRefreshAndResearch(
     categories.events = persistQuiet(runId, symbol, "events", "bursa-live-unavailable", stamp, latestDate, EVENTS_DETAIL);
     categories.news = persistQuiet(runId, symbol, "news", "none", stamp, latestDate, NEWS_DETAIL);
 
-    const fair = runFairValue(runId, symbol, stamp, latestDate, now, deps);
-    categories.fairValue = fair;
+    const previousPublicationId = loadAlertRefreshStatus()?.runId ?? null;
     const scored = runScores(runId, symbol, latestDate, now, deps);
     categories.scores = scored.category;
+    const publicationId = loadAlertRefreshStatus()?.runId;
+    const fair = runFairValue(runId, symbol, scored.research.ranAt ?? stamp, latestDate, now, deps);
+    categories.fairValue = fair;
+    refreshPublishedAlertSafety(previousPublicationId, publicationId, now().toISOString());
 
     const overall = overallStatus(categories);
     const notes = [

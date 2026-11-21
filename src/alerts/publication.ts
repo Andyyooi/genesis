@@ -34,9 +34,9 @@ export function fairValueSafetyAt(instrumentId: number, asOf: string): string | 
   return stored?.ok ? stored.run.quality.status : null;
 }
 
-export function loadAlertPublication(): AlertPublication | null {
+export function loadAlertPublication(runId?: number): AlertPublication | null {
   const sqlite = getSqlite();
-  const run = sqlite.prepare("SELECT id, as_of AS asOf, summary_json AS summary FROM market_scan_runs ORDER BY id DESC LIMIT 1").get() as { id: number; asOf: string; summary: string } | undefined;
+  const run = sqlite.prepare("SELECT id, as_of AS asOf, summary_json AS summary FROM market_scan_runs WHERE id = COALESCE(?, (SELECT MAX(id) FROM market_scan_runs))").get(runId ?? null) as { id: number; asOf: string; summary: string } | undefined;
   if (!run || JSON.parse(run.summary).methodology !== "cross-sectional-v2") return null;
   const stored = sqlite.prepare("SELECT instrument_id AS instrumentId, payload_json AS payload FROM market_scan_rows WHERE run_id = ?").all(run.id) as { instrumentId: number; payload: string }[];
   const rows = stored.map((row): AlertCompany => {
@@ -133,6 +133,25 @@ export function replacePublicationAlerts(previous: AlertPublication | null, curr
   const insert = sqlite.prepare("INSERT INTO alerts (instrument_id, ticker, rule_id, title, why, evidence_json, href, fingerprint, triggered_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
   for (const draft of [...drafts].reverse()) insert.run(companies.get(draft.ticker)!.instrumentId, draft.ticker, draft.ruleId, draft.title, draft.why, JSON.stringify(draft.evidence), draft.href, draft.fingerprint, current.asOf, current.asOf);
   return { method: PUBLICATION_ALERT_METHOD, previousRunDate: previous?.asOf.slice(0, 10) ?? null, priceDate: current.priceDate, count: drafts.length };
+}
+
+export function refreshPublishedAlertSafety(previousRunId: number | null, publicationRunId: number | undefined, asOf: string): PublicationAlertSummary | null {
+  if (publicationRunId === undefined || publicationRunId === previousRunId) return null;
+  const sqlite = getSqlite();
+  return sqlite.transaction(() => {
+    const current = loadAlertPublication();
+    if (!current || current.id !== publicationRunId) return null;
+    const previous = previousRunId === null ? null : loadAlertPublication(previousRunId);
+    const update = sqlite.prepare("UPDATE market_scan_rows SET payload_json = json_set(payload_json, '$.fairValueSafety', ?) WHERE run_id = ? AND instrument_id = ?");
+    for (const row of current.rows) {
+      row.fairValueSafety = fairValueSafetyAt(row.instrumentId, asOf);
+      update.run(row.fairValueSafety, current.id, row.instrumentId);
+    }
+    const config = loadScoringConfig().alerts;
+    const summary = replacePublicationAlerts(previous, current, config.score_delta, config.publication);
+    sqlite.prepare("UPDATE market_scan_runs SET summary_json = json_set(summary_json, '$.alerts', json(?)) WHERE id = ?").run(JSON.stringify(summary), current.id);
+    return summary;
+  })();
 }
 
 export function loadAlertRefreshStatus(): { runId: number; asOf: string; alerts: PublicationAlertSummary | null } | null {
