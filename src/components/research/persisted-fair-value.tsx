@@ -9,7 +9,7 @@ export function PersistedFairValue({ stored }: { stored: FairValueRunRead | null
   const reasons = [...quality.methods.flatMap((method) => [...method.flags, ...method.notes].map((reason) => reason.text)), ...quality.notes.map((note) => note.text)];
   const usable = quality.status === "CLEAR" && quality.baseUse === "POINT_OK";
   return <section className="flex flex-col gap-3 rounded-lg border p-4">
-    <h2 className="text-xl font-semibold">Fair value</h2><StatusLabel level={usable ? "HIGH" : "LOW"}>{usable ? "Quality checks passed" : "Caution · point value withheld"}</StatusLabel>
+    <h2 className="text-xl font-semibold">Fair value</h2><StatusLabel level={usable ? "HIGH" : "LOW"}>{quality.status} · {usable ? "Quality checks passed" : "Point value withheld"}</StatusLabel>
     <Disclosure title="Quality checks & valuation details">
     <p className="text-sm text-muted-foreground">Stored assessment {calculatedAt} · {quality.baseUse.replaceAll("_", " ")}</p>
     {reasons.length ? <ul className="list-inside list-disc text-sm">{[...new Set(reasons)].map((reason) => <li key={reason}>{reason}</li>)}</ul> : <p>No quality flags recorded.</p>}
