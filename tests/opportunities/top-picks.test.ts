@@ -68,6 +68,9 @@ describe("published picks and market filtering", () => {
     expect(selectTopPicks([general], 15, { qualityTilt: true })).toEqual([]);
   });
   it("uses last close times 100 for an optional inclusive lot budget", () => {
+    const exact = candidate("EXACT", 75); exact.lastClose = 2.49;
+    expect(selectTopPicks([exact], 15, { lotBudget: 249 }).map(r => r.ticker)).toEqual(["EXACT"]);
+    expect(selectTopPicks([exact], 15, { lotBudget: 248.99 })).toEqual([]);
     const expensive = candidate("EXPENSIVE", 99); expensive.lastClose = 10.01;
     const missing = candidate("MISSING", 99); missing.lastClose = null;
     const invalid = candidate("INVALID", 99); invalid.lastClose = NaN;

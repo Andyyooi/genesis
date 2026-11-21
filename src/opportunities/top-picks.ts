@@ -42,7 +42,7 @@ export function selectTopPicks(rows: PickCandidate[], limit = 15, options: TopPi
       const tradedValue = row.result.eligibility?.medianTradedValue;
       return row.marketCap !== null && Number.isFinite(row.marketCap) && row.marketCap >= settings.min_market_cap && tradedValue != null && Number.isFinite(tradedValue) && tradedValue >= settings.min_median_traded_value;
     })
-    .filter((row) => budget === null || (row.lastClose !== null && Number.isFinite(row.lastClose) && row.lastClose > 0 && row.lastClose * 100 <= budget))
+    .filter((row) => budget === null || (row.lastClose !== null && Number.isFinite(row.lastClose) && row.lastClose > 0 && Math.round(row.lastClose * 100 * 100) <= Math.round(budget * 100)))
     .map((row) => ({ ...row, selectionScore: topPickScore(row, options, settings), qualityTilted: options.qualityTilt === true && row.result.researchProfile === "GENERAL" }))
     .filter((row) => row.selectionScore !== null && Number.isFinite(row.selectionScore))
     .sort((a, b) => b.selectionScore! - a.selectionScore! || a.ticker.localeCompare(b.ticker)).slice(0, limit);
