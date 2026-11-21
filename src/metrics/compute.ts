@@ -3,6 +3,8 @@ import { fundamentalMetrics } from "@/metrics/fundamentals";
 import { priceMetrics } from "@/metrics/prices";
 import { available, unavailable } from "@/metrics/types";
 import { safeDivide } from "@/metrics/ratio";
+import { loadScoringConfig, type ScoringConfig } from "@/config/load-scoring";
+import { annualAccounts, dailyPriceBars, evidenceMetrics, usableAccounts } from "@/metrics/evidence";
 import type { EventSnapshot, MetricValue, PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
 
 export function computeMetrics(args: {
@@ -13,7 +15,12 @@ export function computeMetrics(args: {
   periods: StatementSnapshot[];
   bars: PriceBarSnapshot[];
   events?: EventSnapshot[];
+  asOf?: string;
+  config?: ScoringConfig;
 }): MetricValue[] {
+  const config = args.config ?? loadScoringConfig();
+  const asOf = args.asOf ?? new Date().toISOString();
+  args = { ...args, periods: annualAccounts(usableAccounts(args.periods, asOf, config.reporting_lag_months)), bars: dailyPriceBars(args.bars, asOf) };
   const fundamentals = fundamentalMetrics(args.periods, args.instrumentType, args.ticker, {
     sector: args.sector,
     industry: args.industry,
@@ -195,6 +202,8 @@ export function computeMetrics(args: {
           pePeriod,
         );
 
+  const evidence = evidenceMetrics(args.periods, args.bars, config, asOf);
+  const replaced = new Set(evidence.map((m) => m.id));
   return [
     ...fundamentals,
     ...prices,
@@ -205,5 +214,5 @@ export function computeMetrics(args: {
     navPremium,
     marketCap,
     news,
-  ];
+  ].filter((m) => !replaced.has(m.id)).concat(evidence);
 }

@@ -14,8 +14,8 @@ export const CATEGORY_KEYS = [
   "quality",
   "financial_health",
   "growth",
-  "news",
-  "technical",
+  "momentum",
+  "low_volatility",
 ] as const;
 
 export type CategoryKey = (typeof CATEGORY_KEYS)[number];
@@ -26,8 +26,7 @@ const factorSchema = z.object({
   label: z.string().min(1),
   weight: z.number().positive(),
   direction: z.enum(["higher_better", "lower_better"]),
-  worse: z.number(),
-  better: z.number(),
+  explanation: z.string(),
 });
 
 const factorSetsSchema = z.object({
@@ -35,12 +34,19 @@ const factorSetsSchema = z.object({
   quality: z.array(factorSchema),
   financial_health: z.array(factorSchema),
   growth: z.array(factorSchema),
-  news: z.array(factorSchema),
-  technical: z.array(factorSchema),
+  momentum: z.array(factorSchema),
+  low_volatility: z.array(factorSchema),
+});
+
+const categoryWeightsSchema = z.object({
+  valuation: z.number().nonnegative(), quality: z.number().nonnegative(),
+  financial_health: z.number().nonnegative(), growth: z.number().nonnegative(),
+  momentum: z.number().nonnegative(), low_volatility: z.number().nonnegative(),
 });
 
 const instrumentProfileSchema = z.object({
   description: z.string(),
+  category_weights: categoryWeightsSchema.optional(),
   factor_sets: factorSetsSchema,
 });
 
@@ -57,14 +63,11 @@ const scoringSchema = z
   .object({
     version: z.number(),
     currency: z.literal("MYR"),
-    category_weights: z.object({
-      valuation: z.number(),
-      quality: z.number(),
-      financial_health: z.number(),
-      growth: z.number(),
-      news: z.number(),
-      technical: z.number(),
-    }),
+    category_weights: categoryWeightsSchema,
+    reporting_lag_months: z.number().int().min(0).default(4),
+    growth_years: z.number().int().positive().default(3),
+    ranking: z.object({ sector_min_names: z.number().int().min(2), sector_blend: z.number().min(0).max(1) }),
+    eligibility: z.object({ min_median_traded_value: z.number().nonnegative(), min_price_days: z.number().int().positive(), min_coverage: z.number().min(0).max(1) }),
     unavailable_until_data: z.array(z.enum(CATEGORY_KEYS)),
     min_category_coverage: z.number().min(0).max(1),
     alerts: z
@@ -128,6 +131,10 @@ const scoringSchema = z
     }
     for (const profileName of ["default", "reit", "bank"] as const) {
       const sets = value.instrument_profiles[profileName].factor_sets;
+      const weights = value.instrument_profiles[profileName].category_weights;
+      if (weights && Object.values(weights).reduce((a, b) => a + b, 0) !== 100) {
+        ctx.addIssue({ code: "custom", message: `${profileName} category weights must sum to 100` });
+      }
       for (const key of CATEGORY_KEYS) {
         const factors = sets[key];
         if (factors.length === 0) continue;

@@ -1,321 +1,110 @@
-# Category, factor weights, and thresholds. Scoring reads this file — not the UI.
-
-version: 1
+# Editable evidence-model settings. Percentile ranks replace fixed score anchors.
+version: 2
 currency: MYR
-
+# Ordinary-company category weights (must sum to 100).
 category_weights:
-  valuation: 25
+  valuation: 30
   quality: 25
-  financial_health: 15
-  growth: 15
-  news: 10
-  technical: 10
-
-# Live runs mark these unavailable and renormalize remaining weights.
-# Configured 10% technical is still shown as "not in this run".
-# News is omitted the same way when no stored announcements exist (not scored as 50).
-unavailable_until_data:
-  - technical
-
+  momentum: 20
+  low_volatility: 10
+  financial_health: 10
+  growth: 5
+# Annual accounts are usable at known available_at, else FY end plus this lag.
+reporting_lag_months: 4
+growth_years: 3
+ranking:
+  sector_min_names: 8
+  sector_blend: 0.5
+eligibility:
+  min_median_traded_value: 100000
+  min_price_days: 200
+  min_coverage: 0.5
+unavailable_until_data: []
 min_category_coverage: 0.5
-
-# Classification uses stored industry / instrument_type / this explicit ticker list.
-# Not issuer-name matching.
 research_profile_rules:
-  bank_industry_includes:
-    - banks
-  other_financial_industry_includes:
-    - insurance
-    - takaful
-    - asset management
-    - capital markets
-    - credit services
-    - financial data
-    - stock exchanges
-  bank_tickers:
-    - MAYBANK
-    - CIMB
-    - PBBANK
-    - HLBANK
-    - RHBBANK
-
-
-# In-app alerts (Phase 9). Thresholds are research triggers, not trade signals.
+  bank_industry_includes: [banks]
+  other_financial_industry_includes: [insurance, takaful, asset management, capital markets, credit services, financial data, stock exchanges]
+  bank_tickers: [MAYBANK, CIMB, PBBANK, HLBANK, RHBBANK]
 alerts:
   score_delta: 5
   price_move_1d: 0.05
   price_move_5d: 0.08
   health_delta: 8
-
-# Potential Concerns never change the Research Score unless this is true.
 concerns:
   apply_score_penalty: false
   rules:
-    - id: falling_revenue
-      label: Falling revenue
-      metric: revenue_cagr
-      when: value_lt
-      threshold: 0
-      message: Revenue CAGR over the stored annual window is negative.
-    - id: falling_earnings
-      label: Falling earnings
-      metric: pat_cagr
-      when: value_lt
-      threshold: 0
-      message: PAT CAGR over the stored annual window is negative.
-    - id: expensive_pe
-      label: Demanding P/E
-      metric: price_to_earnings
-      when: value_gt
-      threshold: 22
-      message: Price / EPS is above the configured expensive threshold.
-    - id: weak_fcf
-      label: Weak free cash flow
-      metric: fcf
-      when: value_lt
-      threshold: 0
-      message: Latest annual FCF is negative. Missing FCF does not trigger this.
-    - id: pn17
-      label: PN17 / higher risk status
-      when: instrument_pn17
-      message: This name is flagged PN17 in the universe (status warning, not a score penalty).
-
+    - {id: pn17, label: PN17 warning, message: Stored PN17 warning flag., when: instrument_pn17}
+    - {id: falling_revenue, label: Falling revenue, message: Fixed-window revenue CAGR is negative., metric: revenue_cagr, when: value_lt, threshold: 0}
+    - {id: negative_ocf, label: Negative operating cash flow, message: Stored annual operating cash flow is negative., metric: ocf, when: value_lt, threshold: 0}
 instrument_profiles:
   default:
-    description: Ordinary companies (industrial, consumer, financials, etc.)
+    description: "Ordinary companies: value, profitability, price trends and balance-sheet resilience."
     factor_sets:
       valuation:
-        - id: pe
-          metric: price_to_earnings
-          label: Price / EPS
-          weight: 60
-          direction: lower_better
-          worse: 25
-          better: 8
-        - id: dividend_yield
-          metric: dividend_yield
-          label: Dividend yield
-          weight: 40
-          direction: higher_better
-          worse: 0.02
-          better: 0.06
+        - {id: earnings_yield, metric: earnings_yield, label: "Earnings yield", weight: 40, direction: higher_better, explanation: "Annual earnings per ringgit of share price. Higher means less paid for reported earnings."}
+        - {id: book_to_price, metric: book_to_price, label: "Book-to-price", weight: 30, direction: higher_better, explanation: "Book equity per ringgit of market value. Higher means a lower price relative to accounting equity."}
+        - {id: ebit_ev, metric: ebit_ev, label: "EBIT / enterprise value", weight: 25, direction: higher_better, explanation: "Operating earnings relative to the value of equity plus debt less cash. Compares operating earning power across capital structures."}
+        - {id: dividend_yield, metric: dividend_yield, label: "Dividend yield", weight: 5, direction: higher_better, explanation: "Annual cash dividend per share divided by price. Captures distributions, not a promise of future income."}
       quality:
-        - id: roe
-          metric: roe
-          label: ROE
-          weight: 55
-          direction: higher_better
-          worse: 0.05
-          better: 0.18
-        - id: net_margin
-          metric: net_margin
-          label: Net margin
-          weight: 45
-          direction: higher_better
-          worse: 0.05
-          better: 0.25
+        - {id: roe, metric: roe, label: "Return on equity", weight: 40, direction: higher_better, explanation: "Annual profit divided by book equity. Measures profitability of shareholders' capital."}
+        - {id: gross_profitability, metric: gross_profitability, label: "Gross profitability", weight: 30, direction: higher_better, explanation: "Gross profit divided by total assets. Measures how productively assets generate gross profit."}
+        - {id: piotroski, metric: piotroski, label: "Piotroski F-score", weight: 30, direction: higher_better, explanation: "Nine profitability, cash flow, leverage, liquidity and operating-efficiency checks. At least six must be computable; points are scaled to nine."}
       financial_health:
-        - id: debt_to_equity
-          metric: debt_to_equity
-          label: Debt / equity
-          weight: 40
-          direction: lower_better
-          worse: 2
-          better: 0.3
-        - id: fcf
-          metric: fcf
-          label: Free cash flow
-          weight: 35
-          direction: higher_better
-          worse: 0
-          better: 1
-        - id: net_debt_to_ebitda
-          metric: net_debt_to_ebitda
-          label: Net debt / EBITDA
-          weight: 25
-          direction: lower_better
-          worse: 4
-          better: 1
+        - {id: debt_to_equity, metric: debt_to_equity, label: "Debt / equity", weight: 40, direction: lower_better, explanation: "Debt relative to book equity. Lower debt can mean more balance-sheet resilience."}
+        - {id: net_debt_to_ebitda, metric: net_debt_to_ebitda, label: "Net debt / EBITDA", weight: 30, direction: lower_better, explanation: "Debt less cash relative to EBITDA. Lower means less leverage against operating earnings."}
+        - {id: interest_coverage, metric: interest_coverage, label: "Interest coverage", weight: 30, direction: higher_better, explanation: "EBIT divided by interest expense. Higher indicates more earnings available to meet interest payments."}
       growth:
-        - id: revenue_cagr
-          metric: revenue_cagr
-          label: Revenue CAGR
-          weight: 50
-          direction: higher_better
-          worse: 0
-          better: 0.12
-        - id: pat_cagr
-          metric: pat_cagr
-          label: PAT CAGR
-          weight: 50
-          direction: higher_better
-          worse: 0
-          better: 0.12
-      news:
-        - id: news_tone
-          metric: news_tone
-          label: Stored announcement tone
-          weight: 100
-          direction: higher_better
-          worse: 0
-          better: 1
-      technical: []
-  reit:
-    description: REITs — DPU yield, book NAV premium, DPU CAGR, debt/capital gearing. Not industrial FCF or EV/EBITDA.
-    factor_sets:
-      valuation:
-        - id: dpu_yield
-          metric: dividend_yield
-          label: Distribution yield (DPU / price)
-          weight: 55
-          direction: higher_better
-          worse: 0.03
-          better: 0.07
-        - id: nav_premium
-          metric: book_nav_premium
-          label: Price vs book NAV
-          weight: 45
-          direction: lower_better
-          worse: 0.4
-          better: -0.1
-      quality:
-        - id: dpu_stability
-          metric: dpu_cagr
-          label: DPU CAGR
-          weight: 100
-          direction: higher_better
-          worse: 0
-          better: 0.08
-      financial_health:
-        - id: gearing
-          metric: reit_gearing
-          label: REIT gearing (debt / capital)
-          weight: 40
-          direction: lower_better
-          worse: 0.5
-          better: 0.25
-        - id: occupancy
-          metric: occupancy
-          label: Occupancy
-          weight: 15
-          direction: higher_better
-          worse: 0.85
-          better: 0.97
-        - id: wale
-          metric: wale_years
-          label: WALE
-          weight: 15
-          direction: higher_better
-          worse: 2
-          better: 6
-        - id: npi
-          metric: npi
-          label: Net property income
-          weight: 15
-          direction: higher_better
-          worse: 0
-          better: 1
-        - id: reit_interest_coverage
-          metric: reit_interest_coverage
-          label: REIT interest coverage
-          weight: 15
-          direction: higher_better
-          worse: 1.5
-          better: 4
-      growth:
-        - id: revenue_cagr
-          metric: revenue_cagr
-          label: Revenue CAGR
-          weight: 100
-          direction: higher_better
-          worse: 0
-          better: 0.08
-      news:
-        - id: news_tone
-          metric: news_tone
-          label: Stored announcement tone
-          weight: 100
-          direction: higher_better
-          worse: 0
-          better: 1
-      technical: []
-  # Overlay for MAYBANK, CIMB, PBBANK (COMMON_STOCK). Not a third universe.
+        - {id: revenue_cagr, metric: revenue_cagr, label: "Revenue CAGR", weight: 50, direction: higher_better, explanation: "Annualised revenue growth over the configured fixed fiscal-year window. Both endpoint annuals are required."}
+        - {id: eps_cagr, metric: eps_cagr, label: "EPS CAGR", weight: 50, direction: higher_better, explanation: "Annualised earnings-per-share growth over the configured fixed window. Requires positive starting EPS and a nonnegative endpoint."}
+      momentum:
+        - {id: momentum_12_1, metric: momentum_12_1, label: "12–1 month momentum", weight: 100, direction: higher_better, explanation: "Price return from trading day t−252 to t−21, skipping the latest month to reduce short-term reversal effects. Uses adjusted prices when the full window is available."}
+      low_volatility:
+        - {id: volatility_252, metric: volatility_252, label: "Annualised daily volatility", weight: 100, direction: lower_better, explanation: "Sample standard deviation of 252 daily returns multiplied by the square root of 252. Lower means a smoother historical price path, not guaranteed safety."}
   bank:
-    description: Banks — prefer P/B and ROE. Skip industrial FCF and EV/EBITDA.
+    description: "Banks ranked only against banks; no industrial debt or cash-flow health model."
+    # Editable profile-specific weights (must sum to 100).
+    category_weights:
+      valuation: 35
+      quality: 25
+      financial_health: 0
+      growth: 5
+      momentum: 20
+      low_volatility: 15
     factor_sets:
       valuation:
-        - id: pb
-          metric: price_to_book
-          label: Price / book
-          weight: 70
-          direction: lower_better
-          worse: 2.2
-          better: 0.9
-        - id: dividend_yield
-          metric: dividend_yield
-          label: Dividend yield
-          weight: 30
-          direction: higher_better
-          worse: 0.02
-          better: 0.06
+        - {id: book_to_price, metric: book_to_price, label: "Book-to-price", weight: 50, direction: higher_better, explanation: "Book equity per ringgit of market value. Compares bank equity valuation."}
+        - {id: earnings_yield, metric: earnings_yield, label: "Earnings yield", weight: 40, direction: higher_better, explanation: "Annual EPS divided by price. Measures bank earnings per ringgit invested."}
+        - {id: dividend_yield, metric: dividend_yield, label: "Dividend yield", weight: 10, direction: higher_better, explanation: "Annual distributions per share divided by price. Measures cash income from the bank."}
       quality:
-        - id: roe
-          metric: roe
-          label: ROE
-          weight: 100
-          direction: higher_better
-          worse: 0.05
-          better: 0.18
-      financial_health:
-        - id: nim
-          metric: nim
-          label: Net interest margin
-          weight: 25
-          direction: higher_better
-          worse: 0.015
-          better: 0.025
-        - id: cost_to_income
-          metric: cost_to_income
-          label: Cost / income
-          weight: 25
-          direction: lower_better
-          worse: 0.55
-          better: 0.35
-        - id: impaired_loans
-          metric: impaired_loans_ratio
-          label: Impaired loans ratio
-          weight: 25
-          direction: lower_better
-          worse: 0.04
-          better: 0.01
-        - id: cet1
-          metric: cet1_ratio
-          label: CET1 ratio
-          weight: 25
-          direction: higher_better
-          worse: 0.12
-          better: 0.16
+        - {id: roe, metric: roe, label: "Return on equity", weight: 100, direction: higher_better, explanation: "Annual profit divided by equity. Measures the bank's profitability on shareholder capital."}
+      financial_health: []
       growth:
-        - id: revenue_cagr
-          metric: revenue_cagr
-          label: Revenue CAGR
-          weight: 50
-          direction: higher_better
-          worse: 0
-          better: 0.12
-        - id: pat_cagr
-          metric: pat_cagr
-          label: PAT CAGR
-          weight: 50
-          direction: higher_better
-          worse: 0
-          better: 0.12
-      news:
-        - id: news_tone
-          metric: news_tone
-          label: Stored announcement tone
-          weight: 100
-          direction: higher_better
-          worse: 0
-          better: 1
-      technical: []
+        - {id: revenue_cagr, metric: revenue_cagr, label: "Revenue CAGR", weight: 50, direction: higher_better, explanation: "Annualised revenue growth between the fixed-window annual endpoints."}
+        - {id: eps_cagr, metric: eps_cagr, label: "EPS CAGR", weight: 50, direction: higher_better, explanation: "Annualised EPS growth between the fixed-window annual endpoints."}
+      momentum:
+        - {id: momentum_12_1, metric: momentum_12_1, label: "12–1 month momentum", weight: 100, direction: higher_better, explanation: "Price return from trading day t−252 to t−21, skipping the latest month to reduce short-term reversal effects. Uses adjusted prices when the full window is available."}
+      low_volatility:
+        - {id: volatility_252, metric: volatility_252, label: "Annualised daily volatility", weight: 100, direction: lower_better, explanation: "Sample standard deviation of 252 daily returns multiplied by the square root of 252. Lower means a smoother historical price path, not guaranteed safety."}
+  reit:
+    description: "REITs ranked only against REITs; distributions, NAV, gearing and price evidence."
+    # Editable profile-specific weights (must sum to 100).
+    category_weights:
+      valuation: 35
+      quality: 0
+      financial_health: 20
+      growth: 10
+      momentum: 20
+      low_volatility: 15
+    factor_sets:
+      valuation:
+        - {id: distribution_yield, metric: dividend_yield, label: "Distribution yield", weight: 60, direction: higher_better, explanation: "Annual distribution per unit divided by unit price. Measures cash distributions relative to price."}
+        - {id: nav_to_price, metric: nav_to_price, label: "NAV / price", weight: 40, direction: higher_better, explanation: "Reported NAV per unit divided by price, or book equity per unit if reported NAV is absent. Higher indicates a larger NAV discount."}
+      quality: []
+      financial_health:
+        - {id: reit_gearing, metric: reit_gearing, label: "REIT gearing", weight: 100, direction: lower_better, explanation: "Total debt divided by total assets. Lower gearing provides more balance-sheet headroom."}
+      growth:
+        - {id: dpu_cagr, metric: dpu_cagr, label: "DPU CAGR", weight: 100, direction: higher_better, explanation: "Annualised distribution-per-unit growth over the configured fixed fiscal-year window. Both endpoints are required."}
+      momentum:
+        - {id: momentum_12_1, metric: momentum_12_1, label: "12–1 month momentum", weight: 100, direction: higher_better, explanation: "Price return from trading day t−252 to t−21, skipping the latest month to reduce short-term reversal effects. Uses adjusted prices when the full window is available."}
+      low_volatility:
+        - {id: volatility_252, metric: volatility_252, label: "Annualised daily volatility", weight: 100, direction: lower_better, explanation: "Sample standard deviation of 252 daily returns multiplied by the square root of 252. Lower means a smoother historical price path, not guaranteed safety."}

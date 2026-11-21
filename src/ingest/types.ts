@@ -1,4 +1,9 @@
 export type LineItems = {
+  grossProfit?: number | null;
+  ebit?: number | null;
+  currentAssets?: number | null;
+  currentLiabilities?: number | null;
+  longTermDebt?: number | null;
   revenue: number | null;
   pat: number | null;
   eps: number | null;

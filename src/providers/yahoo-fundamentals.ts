@@ -63,6 +63,12 @@ type TimeseriesResponse = {
 };
 
 const TIMESERIES_FIELDS: { key: string; line: keyof LineItems; abs?: boolean }[] = [
+  { key: "annualGrossProfit", line: "grossProfit" },
+  { key: "annualEBIT", line: "ebit" },
+  { key: "annualOperatingIncome", line: "ebit" },
+  { key: "annualCurrentAssets", line: "currentAssets" },
+  { key: "annualCurrentLiabilities", line: "currentLiabilities" },
+  { key: "annualLongTermDebt", line: "longTermDebt" },
   { key: "annualTotalRevenue", line: "revenue" },
   { key: "annualNetIncome", line: "pat" },
   { key: "annualDilutedEPS", line: "eps" },
@@ -110,7 +116,8 @@ export function parseYahooTimeseries(json: TimeseriesResponse, source: string): 
         let value = num(point.reportedValue);
         if (value === null) continue;
         if (field.abs) value = Math.abs(value);
-        ensure(periodEnd).lineItems[field.line] = value;
+        const items = ensure(periodEnd).lineItems;
+        if (field.key !== "annualOperatingIncome" || items.ebit == null) items[field.line] = value;
       }
     }
   }

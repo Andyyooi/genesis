@@ -136,6 +136,13 @@ export function parseFundamentalsCsv(csvText: string): {
           : record.actual_or_estimate.trim(),
         source,
         lineItems: {
+          ...Object.fromEntries([
+            ["grossProfit", "gross_profit"], ["ebit", "ebit"], ["currentAssets", "current_assets"],
+            ["currentLiabilities", "current_liabilities"], ["longTermDebt", "long_term_debt"],
+          ].map(([key, column]) => {
+            const value = parseNumber(record[column], column, rowNumber);
+            return [key, value === null ? null : value * unit];
+          })),
           revenue: statementFields.revenue,
           pat: statementFields.pat,
           eps: perShare.eps,

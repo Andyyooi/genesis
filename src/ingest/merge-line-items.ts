@@ -1,6 +1,7 @@
 import type { LineItems } from "@/ingest/types";
 
 const KEYS: (keyof LineItems)[] = [
+  "grossProfit", "ebit", "currentAssets", "currentLiabilities", "longTermDebt",
   "revenue",
   "pat",
   "eps",
@@ -17,6 +18,7 @@ const KEYS: (keyof LineItems)[] = [
 
 export function emptyLineItems(): LineItems {
   return {
+    grossProfit: null, ebit: null, currentAssets: null, currentLiabilities: null, longTermDebt: null,
     revenue: null,
     pat: null,
     eps: null,
@@ -36,7 +38,7 @@ export function emptyLineItems(): LineItems {
 export function mergeLineItems(existing: LineItems, incoming: LineItems): LineItems {
   const next = { ...existing };
   for (const key of KEYS) {
-    if (next[key] === null && incoming[key] !== null && incoming[key] !== undefined) {
+    if (next[key] == null && incoming[key] !== null && incoming[key] !== undefined) {
       next[key] = incoming[key];
     }
   }
