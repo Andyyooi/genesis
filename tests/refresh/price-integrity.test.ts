@@ -419,8 +419,8 @@ describe("refresh price integrity", () => {
     expect(report.categories.prices.status).toBe("SUCCESS");
     expect(report.categories.fundamentals.status).toBe("SUCCESS");
     expect(report.categories.scores.status).toBe("SOURCE_FAILED");
-    expect(report.categories.fairValue.status).toBe("SOURCE_FAILED");
-    expect(report.categories.fairValue.detail).toContain("research scoring failed");
+    expect(report.categories.fairValue.status).toBe("SUCCESS");
+    expect(report.categories.fairValue.detail).toBeNull();
     expect(storedBars("MAYBANK").at(-1)).toEqual({ barDate: "2026-10-12", close: 11 });
   });
 
