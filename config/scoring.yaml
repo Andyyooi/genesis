@@ -12,6 +12,11 @@ category_weights:
 # Annual accounts are usable at known available_at, else FY end plus this lag.
 reporting_lag_months: 4
 growth_years: 3
+consistency:
+  # Revenue jump/drop guard when PAT stays within the tolerance below.
+  revenue_break_ratio: 0.5
+  pat_stability_tolerance: 0.25
+  eps_scale_tolerance: 3
 ranking:
   sector_min_names: 8
   sector_blend: 0.5
@@ -46,7 +51,7 @@ instrument_profiles:
     description: "Ordinary companies: value, profitability, price trends and balance-sheet resilience."
     factor_sets:
       valuation:
-        - {id: earnings_yield, metric: earnings_yield, label: "Earnings yield", weight: 40, direction: higher_better, explanation: "Annual earnings per ringgit of share price. Higher means less paid for reported earnings."}
+        - {id: earnings_yield, metric: earnings_yield, label: "Earnings yield", weight: 40, direction: higher_better, explanation: "Annual PAT / market capitalisation. Losses stay negative; conflicting reported EPS is never substituted."}
         - {id: book_to_price, metric: book_to_price, label: "Book-to-price", weight: 30, direction: higher_better, explanation: "Book equity per ringgit of market value. Higher means a lower price relative to accounting equity."}
         - {id: ebit_ev, metric: ebit_ev, label: "EBIT / enterprise value", weight: 25, direction: higher_better, explanation: "Operating earnings relative to the value of equity plus debt less cash. Compares operating earning power across capital structures."}
         - {id: dividend_yield, metric: dividend_yield, label: "Dividend yield", weight: 5, direction: higher_better, explanation: "Annual cash dividend per share divided by price. Captures distributions, not a promise of future income."}
@@ -78,7 +83,7 @@ instrument_profiles:
     factor_sets:
       valuation:
         - {id: book_to_price, metric: book_to_price, label: "Book-to-price", weight: 50, direction: higher_better, explanation: "Book equity per ringgit of market value. Compares bank equity valuation."}
-        - {id: earnings_yield, metric: earnings_yield, label: "Earnings yield", weight: 40, direction: higher_better, explanation: "Annual EPS divided by price. Measures bank earnings per ringgit invested."}
+        - {id: earnings_yield, metric: earnings_yield, label: "Earnings yield", weight: 40, direction: higher_better, explanation: "Annual PAT / market capitalisation. Measures bank earnings per ringgit invested; losses remain negative."}
         - {id: dividend_yield, metric: dividend_yield, label: "Dividend yield", weight: 10, direction: higher_better, explanation: "Annual distributions per share divided by price. Measures cash income from the bank."}
       quality:
         - {id: roe, metric: roe, label: "Return on equity", weight: 100, direction: higher_better, explanation: "Annual profit divided by equity. Measures the bank's profitability on shareholder capital."}

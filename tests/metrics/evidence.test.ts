@@ -55,6 +55,27 @@ describe("annual inputs and reporting lag", () => {
 });
 
 describe("evidence fundamentals", () => {
+  it("uses signed PAT / market cap, never conflicting positive EPS, and preserves EBIT losses", () => {
+    const prices = [{ barDate: "2026-09-25", close: 10, high: 10, low: 10 }];
+    const rows = evidenceMetrics([annual("2025-12-31", { pat: -10, eps: 1, ebit: -20 })], prices, config, "2026-09-25");
+    expect(metric(rows, "earnings_yield").value).toBe(-0.1);
+    expect(metric(rows, "price_to_earnings").available).toBe(false);
+    expect(metric(rows, "ebit_ev").value).toBeLessThan(0);
+    const missing = evidenceMetrics([annual("2025-12-31", { pat: null, cash: 10000 })], prices, config, "2026-09-25");
+    expect(metric(missing, "earnings_yield").available).toBe(false);
+    expect(metric(missing, "ebit_ev").available).toBe(false);
+  });
+  it("withholds revenue definition breaks with stable PAT but allows genuine operating declines", () => {
+    const rows = [annual("2025-12-31", { revenue: 40, pat: 10 }), annual("2024-12-31", { revenue: 100, pat: 10 }), annual("2022-12-31")];
+    const broken = metric(evidenceMetrics(rows, bars(), config, "2026-09-25"), "revenue_cagr");
+    expect(broken.available).toBe(false);
+    expect(broken.reason).toMatch(/definition break/);
+    rows[0].pat = 4;
+    expect(metric(evidenceMetrics(rows, bars(), config, "2026-09-25"), "revenue_cagr").value).toBeLessThan(0);
+    rows[0].revenue = 80;
+    rows[0].pat = 10;
+    expect(metric(evidenceMetrics(rows, bars(), config, "2026-09-25"), "revenue_cagr").available).toBe(true);
+  });
   it("computes value inputs, requiring every EV input and positive denominators", () => {
     const rows = evidenceMetrics([annual()], [{ barDate: "2026-09-25", close: 10, high: 10, low: 10 }], config, "2026-09-25");
     expect(metric(rows, "enterprise_value").value).toBe(110);

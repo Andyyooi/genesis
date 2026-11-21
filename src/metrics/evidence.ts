@@ -129,9 +129,25 @@ export function evidenceMetrics(periods: StatementSnapshot[], bars: PriceBarSnap
   const ev = cap !== null && finite(current?.totalDebt) && finite(current?.cash) ? cap + current.totalDebt - current.cash : null;
   const nav = finite(current?.navPerShare) ? current.navPerShare : divide(current?.equity, current?.shares);
   const f = piotroski(current, previous);
+  const window = annuals.filter((row) => current && Number(row.periodEnd.slice(0, 4)) >= Number(current.periodEnd.slice(0, 4)) - config.growth_years);
+  const definitionBreak = window.some((row, i) => {
+    const prior = window[i + 1];
+    if (!prior || Number(row.periodEnd.slice(0, 4)) - Number(prior.periodEnd.slice(0, 4)) !== 1) return false;
+    const revenueRatio = divide(row.revenue, prior.revenue);
+    const stablePAT = finite(row.pat) && finite(prior.pat) && prior.pat !== 0 && Math.abs(row.pat - prior.pat) / Math.abs(prior.pat) <= config.consistency.pat_stability_tolerance;
+    return revenueRatio !== null && (revenueRatio < config.consistency.revenue_break_ratio || revenueRatio > 1 / config.consistency.revenue_break_ratio) && stablePAT;
+  });
+  const epsConsistent = (row: StatementSnapshot | undefined) => {
+    const implied = divide(row?.pat, row?.shares);
+    if (!finite(implied) || !finite(row?.eps)) return true;
+    if (Math.sign(implied) !== Math.sign(row.eps)) return false;
+    return implied === 0 || Math.max(Math.abs(row.eps / implied), Math.abs(implied / row.eps)) <= config.consistency.eps_scale_tolerance;
+  };
   const ratio = (id: string, a: number | null | undefined, b: number | null | undefined, formula: string) =>
     metric(id, divide(a, b), formula, period, [{ name: "numerator", value: a ?? null }, { name: "denominator", value: b ?? null }]);
   const growth = (id: string, key: "revenue" | "eps" | "dividendPerShare") => {
+    if (key === "revenue" && definitionBreak) return unavailable(id, "Revenue CAGR", "fixed-window annual revenue CAGR", "Possible revenue definition break: revenue changed by more than the configured threshold while PAT stayed stable. Growth and falling-revenue flags are withheld for this window.", [], period);
+    if (key === "eps" && (!epsConsistent(current) || !epsConsistent(start))) return unavailable(id, "EPS CAGR", "fixed-window annual EPS CAGR", "Reported EPS sign/scale conflicts with PAT / shares at a growth endpoint.", [], period);
     const a = start?.[key];
     const b = current?.[key];
     const value = finite(a) && a > 0 && finite(b) && b >= 0 ? (b / a) ** (1 / config.growth_years) - 1 : null;
@@ -141,7 +157,8 @@ export function evidenceMetrics(periods: StatementSnapshot[], bars: PriceBarSnap
     ], "Both fixed-window annual endpoints are required, with a positive start and nonnegative end");
   };
   return [
-    ratio("earnings_yield", current?.eps, close, "annual EPS / current price"),
+    ratio("earnings_yield", current?.pat, cap, "annual PAT / (current price × shares); reported EPS is not substituted"),
+    metric("price_to_earnings", finite(current?.pat) && current.pat > 0 ? divide(cap, current.pat) : null, "market cap / positive annual PAT", period, [{ name: "marketCap", value: cap }, { name: "PAT", value: current?.pat ?? null }], "P/E is unavailable for zero or negative PAT or missing PAT / market cap"),
     ratio("book_to_price", divide(current?.equity, current?.shares), close, "(equity / shares) / current price"),
     metric("enterprise_value", ev, "current price × shares + total debt − cash (all inputs required)", period, [
       { name: "marketCap", value: cap }, { name: "totalDebt", value: current?.totalDebt ?? null }, { name: "cash", value: current?.cash ?? null },

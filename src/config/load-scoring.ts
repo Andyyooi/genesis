@@ -66,6 +66,7 @@ const scoringSchema = z
     category_weights: categoryWeightsSchema,
     reporting_lag_months: z.number().int().min(0).default(4),
     growth_years: z.number().int().positive().default(3),
+    consistency: z.object({ revenue_break_ratio: z.number().positive().max(1), pat_stability_tolerance: z.number().nonnegative(), eps_scale_tolerance: z.number().min(1) }),
     confidence: z.object({ high_coverage: z.number().min(0).max(1), medium_coverage: z.number().min(0).max(1), high_max_age_months: z.number().positive(), medium_max_age_months: z.number().positive() }),
     ranking: z.object({ sector_min_names: z.number().int().min(2), sector_blend: z.number().min(0).max(1) }),
     eligibility: z.object({ min_median_traded_value: z.number().nonnegative(), min_price_days: z.number().int().positive(), min_coverage: z.number().min(0).max(1) }),
