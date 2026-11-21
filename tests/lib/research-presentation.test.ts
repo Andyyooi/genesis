@@ -143,8 +143,8 @@ describe("research presentation helpers", () => {
       events: [],
     });
     expect(bullets.join(" ")).toMatch(/Research profile/);
-    expect(bullets.join(" ")).toMatch(/Price \/ EPS: 12\.5000/);
-    expect(bullets.join(" ")).toMatch(/confidence MEDIUM/);
+    expect(bullets.join(" ")).toContain("Price compared with yearly profit (P/E): 12.5000");
+    expect(bullets.join(" ")).toContain("Trust in the evidence: medium");
     expect(bullets.join(" ").toLowerCase()).not.toMatch(
       /\b(strong buy|buy now|sell now|good stock|bad stock|undervalued opportunity)\b/,
     );

@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { FinancialTerm } from "./financial-term";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -91,7 +92,7 @@ export function ValuationContextCard({ block }: { block: ValuationContextBlock }
             <TableBody>
               {quality.metrics.map((row) => (
                 <TableRow key={row.metricId}>
-                  <TableCell>{row.label}</TableCell>
+                  <TableCell><FinancialTerm id={row.metricId} fallback={row.label} /></TableCell>
                   <TableCell className="text-right tabular-nums">{fmt(row.metricId, row.subject)}</TableCell>
                   <TableCell className="text-right tabular-nums">{fmt(row.metricId, row.median)}</TableCell>
                   <TableCell className="hidden text-muted-foreground sm:table-cell">
@@ -119,7 +120,7 @@ export function ValuationContextCard({ block }: { block: ValuationContextBlock }
             <TableBody>
               {block.metrics.map((row) => (
                 <TableRow key={row.metricId}>
-                  <TableCell>{row.label}</TableCell>
+                  <TableCell><FinancialTerm id={row.metricId} fallback={row.label} /></TableCell>
                   <TableCell className="text-right tabular-nums">{fmt(row.metricId, row.current)}</TableCell>
                   <TableCell className="text-right tabular-nums">{fmt(row.metricId, row.median)}</TableCell>
                   <TableCell className="hidden text-muted-foreground sm:table-cell">

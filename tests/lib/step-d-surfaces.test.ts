@@ -19,7 +19,7 @@ describe("honest news and persisted safety surfaces", () => {
     const stored = (status: FairValueQualityStatus, baseUse: FairValueBaseUse): FairValueRunRead => ({ ok: true, run: { id: 1, instrumentId: 1, observationKey: "test", qualityVersion: "fair-value-quality-v1", calculatedAt: "2026-09-25", result: {} as FairValueResult, quality: { status, baseUse, methods: [], notes: [{ code: "EPS_PAT_SIGN_CONFLICT", text: "EPS conflicts with PAT" }], historicalLimitation: null } } });
     const flagged = renderToStaticMarkup(createElement(PersistedFairValue, { stored: stored("FLAGGED", "POINT_WITH_CAUTION") }));
     expect(flagged).toContain("FLAGGED");
-    expect(flagged).toContain("EPS conflicts with PAT");
+    expect(flagged).toContain("profit per share (EPS) conflicts with PAT");
     expect(flagged).not.toContain("USABLE_POINT");
     expect(renderToStaticMarkup(createElement(PersistedFairValue, { stored: stored("NO_VALUE", "NO_POINT") }))).not.toContain("USABLE_POINT");
     expect(renderToStaticMarkup(createElement(PersistedFairValue, { stored: null }))).toContain("withheld");

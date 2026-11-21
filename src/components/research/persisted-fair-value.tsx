@@ -1,4 +1,5 @@
 import { Disclosure } from "./disclosure";
+import { plainFinancialText } from "@/lib/financial-terms";
 import { StatusLabel } from "./status-label";
 import { EstimatedFairValue } from "@/components/research/estimated-fair-value";
 import type { FairValueRunRead } from "@/fair-value/load-run";
@@ -12,7 +13,7 @@ export function PersistedFairValue({ stored }: { stored: FairValueRunRead | null
     <h2 className="text-xl font-semibold">Fair value</h2><StatusLabel level={usable ? "HIGH" : "LOW"}>{quality.status} · {usable ? "Quality checks passed" : "Point value withheld"}</StatusLabel>
     <Disclosure title="Quality checks & valuation details">
     <p className="text-sm text-muted-foreground">Stored assessment {calculatedAt} · {quality.baseUse.replaceAll("_", " ")}</p>
-    {reasons.length ? <ul className="list-inside list-disc text-sm">{[...new Set(reasons)].map((reason) => <li key={reason}>{reason}</li>)}</ul> : <p>No quality flags recorded.</p>}
+    {reasons.length ? <ul className="list-inside list-disc text-sm">{[...new Set(reasons)].map((reason) => <li key={reason}>{plainFinancialText(reason)}</li>)}</ul> : <p>No quality flags recorded.</p>}
     {quality.historicalLimitation ? <p className="text-sm">{quality.historicalLimitation}</p> : null}
     {usable ? <EstimatedFairValue result={result} /> : <p className="font-semibold">Point fair value is not usable and is withheld. This safety check is not a valuation recommendation.</p>}
     </Disclosure>

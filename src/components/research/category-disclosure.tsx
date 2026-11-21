@@ -4,6 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import type { CategoryScore, FactorEvidence } from "@/scoring/types";
 import { CATEGORY_EXPLANATIONS, categoryTitle, formatScore100 } from "@/lib/research-copy";
 import { factorAvailabilityLabel, liveWeightLabel } from "@/lib/research-presentation";
+import { FinancialTerm } from "./financial-term";
 
 function fmtValue(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "Unavailable";
@@ -15,19 +16,21 @@ function FactorBlock({ factor }: { factor: FactorEvidence }) {
     <Collapsible className="rounded-md border px-3 py-2">
       <CollapsibleTrigger className="flex w-full items-start justify-between gap-3 text-left text-sm">
         <span>
-          <span className="font-medium">{factor.label}</span>
+          <span className="font-medium"><FinancialTerm id={factor.metricId} fallback={factor.label} /></span>
           <span className="mt-0.5 block text-xs text-muted-foreground">
-            Value {fmtValue(factor.value)} · {factor.explanation}
+            Value {fmtValue(factor.value)}
           </span>
           <span className="mt-0.5 block text-xs text-muted-foreground">
             {factorAvailabilityLabel(factor.available, factor.reason)}
           </span>
         </span>
         <span className="shrink-0 tabular-nums text-muted-foreground">
-          {factor.available ? `${factor.score?.toFixed(1)} percentile` : "Unavailable"}
+          {factor.available ? `${factor.score?.toFixed(1)}/100 rank` : "Unavailable"}
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-2 space-y-2 border-t pt-2 text-sm text-muted-foreground">
+        <p>Technical definition: {factor.explanation}</p>
+        <p>Rank (percentile) compares this check with other scored companies after allowing for whether higher or lower is better. Higher ranks are better; they are not predicted returns.</p>
         <p>
           <span className="text-foreground">Evidence / rule:</span> {factor.formula}
         </p>
@@ -73,13 +76,13 @@ export function CategoryDisclosure({ categories }: { categories: CategoryScore[]
               <span>
                 <span className="font-medium">{categoryTitle(category)}</span>
                 <span className="mt-0.5 block text-sm font-normal text-muted-foreground">
-                  Configured {category.configuredWeight}% · {liveWeightLabel(category)}
+                  Planned share {category.configuredWeight}% · {liveWeightLabel(category)}
                 </span>
               </span>
               <span className="tabular-nums">
                 {category.inThisRun ? formatScore100(category.score) : "Unavailable"}
                 <span className="ml-2 text-sm text-muted-foreground">
-                  coverage {(category.coverage * 100).toFixed(0)}%
+                  checks available {(category.coverage * 100).toFixed(0)}%
                 </span>
               </span>
             </CollapsibleTrigger>
@@ -90,8 +93,7 @@ export function CategoryDisclosure({ categories }: { categories: CategoryScore[]
               ) : null}
               {!category.inThisRun ? (
                 <p className="text-sm text-muted-foreground">
-                  Not included in this Research Score run. Weights were renormalized across remaining
-                  live categories.
+                  Not included in this score. Its share is redistributed among the categories with usable data.
                 </p>
               ) : null}
               {category.factors.length === 0 ? (
