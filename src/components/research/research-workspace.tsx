@@ -14,7 +14,7 @@ import {
 import { StatusLabel } from "./status-label";
 import { PriceSparkline } from "./price-sparkline";
 import { dataConfidenceLabel, formatScore100 } from "@/lib/research-copy";
-import { formatMyr } from "@/lib/format-myr";
+import { formatSharePrice } from "@/lib/format-myr";
 import {
   formatPriceChange,
   latestPriceChange,
@@ -301,7 +301,10 @@ export function ResearchWorkspace({
               <tbody>
                 {(
                   [
-                    ["Last close", (row: WorkspaceRow) => formatMyr(row.price)],
+                    [
+                      "Last close",
+                      (row: WorkspaceRow) => formatSharePrice(row.price),
+                    ],
                     [
                       "Price date",
                       (row: WorkspaceRow) => row.priceDate ?? "Unavailable",

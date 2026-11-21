@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { PriceChart } from "@/components/research/price-chart";
+import { formatMyr, formatSharePrice } from "@/lib/format-myr";
 import {
   formatPriceChange,
   summariseMarketPrices,
@@ -12,6 +16,37 @@ import {
 const point = (date: string, close: number | null): PricePoint => ({
   date,
   close,
+});
+
+describe("share-price precision", () => {
+  it("keeps half-sen closes distinct without changing financial-amount formatting", () => {
+    expect(formatSharePrice(0.245)).toMatch(/0\.245$/);
+    expect(formatSharePrice(0.25)).toMatch(/0\.25$/);
+    expect(formatSharePrice(0.245)).not.toBe(formatSharePrice(0.25));
+    expect(formatSharePrice(9.87)).toBe(formatMyr(9.87));
+    expect(formatMyr(0.245)).toMatch(/0\.25$/);
+  });
+
+  it("never presents missing or invalid closes as prices", () => {
+    for (const close of [null, undefined, 0, -1, NaN, Infinity]) {
+      expect(formatSharePrice(close)).toBe("Data unavailable");
+    }
+  });
+
+  it("preserves half-sen precision in the chart inspector and exact-close table", () => {
+    const html = renderToStaticMarkup(
+      createElement(PriceChart, {
+        ticker: "HALFSEN",
+        points: [point("2026-11-19", 0.25), point("2026-11-20", 0.245)],
+      }),
+    );
+    expect(html).toContain(
+      `aria-valuetext="2026-11-20: ${formatSharePrice(0.245)}"`,
+    );
+    const table = html.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1];
+    expect(table).toContain(formatSharePrice(0.245));
+    expect(table).toContain(formatSharePrice(0.25));
+  });
 });
 
 describe("published market breadth", () => {

@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { ChartNoAxesCombined } from "lucide-react";
-import { formatMyr } from "@/lib/format-myr";
+import { formatSharePrice } from "@/lib/format-myr";
 import {
   formatPriceChange,
   priceChange,
@@ -73,7 +73,7 @@ export function PriceChart({
       </div>
       <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <p className="text-2xl font-semibold tracking-tight tabular-nums">
-          {formatMyr(last?.close)}
+          {formatSharePrice(last?.close)}
         </p>
         <p
           className="text-sm font-semibold tabular-nums"
@@ -106,9 +106,7 @@ export function PriceChart({
               );
             }}
           >
-            <title id={`${chartId}-title`}>
-              {ticker} saved closing prices in MYR
-            </title>
+            <title id={`${chartId}-title`}>{`${ticker} saved closing prices in MYR`}</title>
             <desc id={`${chartId}-desc`}>
               From {selected[0]?.date} to {last?.date}. Use the price inspector
               or open the saved-price table for exact values. This is not a live
@@ -128,7 +126,7 @@ export function PriceChart({
                     strokeDasharray="3 5"
                   />
                   <text x="745" y={y + 3} fill="#7b8994" fontSize="10">
-                    {value.toFixed(2)}
+                    {value.toFixed(3)}
                   </text>
                 </g>
               );
@@ -175,13 +173,13 @@ export function PriceChart({
               min="0"
               max={selected.length - 1}
               value={index}
-              aria-valuetext={`${inspected?.date}: ${formatMyr(inspected?.close)}`}
+              aria-valuetext={`${inspected?.date}: ${formatSharePrice(inspected?.close)}`}
               onChange={(event) => setInspection(Number(event.target.value))}
             />
             <span className="tabular-nums">
               {inspected?.date}{" "}
               <strong className="ml-2 text-foreground">
-                {formatMyr(inspected?.close)}
+                {formatSharePrice(inspected?.close)}
               </strong>
             </span>
           </label>
@@ -189,13 +187,13 @@ export function PriceChart({
             <p>
               Range low{" "}
               <strong className="ml-1 font-medium text-foreground">
-                {formatMyr(Math.min(...values))}
+                {formatSharePrice(Math.min(...values))}
               </strong>
             </p>
             <p>
               Range high{" "}
               <strong className="ml-1 font-medium text-foreground">
-                {formatMyr(Math.max(...values))}
+                {formatSharePrice(Math.max(...values))}
               </strong>
             </p>
             <p>{values.length} saved closes</p>
@@ -246,7 +244,7 @@ export function PriceChart({
                 <tr key={point.date} className="border-t">
                   <td className="py-1.5">{point.date}</td>
                   <td className="text-right tabular-nums">
-                    {formatMyr(point.close)}
+                    {formatSharePrice(point.close)}
                   </td>
                 </tr>
               ))}
