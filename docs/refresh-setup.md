@@ -1,6 +1,6 @@
 # Set up the shared password and Refresh data
 
-The website never downloads prices or writes its research database. **Refresh data** asks GitHub Actions to refresh a writable copy, validate it, commit only the gzip snapshot to `main`, and push. Vercel's existing Git integration deploys that commit. There is no schedule and no Vercel integration setting to change.
+The website never downloads prices or writes its research database. **Refresh data** asks GitHub Actions to refresh a writable copy, validate it, publish the gzip on a data-only branch, then push a small snapshot pointer to `main`. Vercel's existing Git integration deploys that pointer commit. Its build downloads and verifies the pinned snapshot before bundling it. There is no schedule and no Vercel integration setting or environment variable to change for snapshot storage.
 
 The older per-company/watchlist “Refresh & Research” website controls are retired, including their local-execution API endpoints (HTTP 410). Local maintenance CLIs remain available; the new website button never falls back to executing them on the web server.
 
@@ -40,7 +40,7 @@ Sessions last about 30 days. Changing `SITE_PASSWORD` or `SESSION_SECRET` invali
 
 The workflow declares `permissions: contents: write` for its short-lived **GITHUB_TOKEN**. In **genesis → Settings → Actions → General → Workflow permissions**, allow **Read and write permissions**, or rely on the workflow-level permission if repository/organization policy permits it. This is separate from the fine-grained PAT.
 
-If `main` is protected or a ruleset requires pull requests, signed commits, or checks before pushes, the Actions bot may be blocked. An administrator must deliberately allow this snapshot-publishing workflow to push under the repository's policy, or agree on a PR-based publication flow instead. The job does not bypass protection or force-push. A rejected/non-fast-forward push fails safely; inspect the log before retrying. It will never overwrite intervening commits.
+If `main` is protected or a ruleset requires pull requests, signed commits, or checks before pushes, the Actions bot may be blocked. An administrator must deliberately allow this snapshot-publishing workflow to push under the repository's policy, or agree on a PR-based publication flow instead. The job does not bypass protection and **never force-pushes main**. It uses force-with-lease only on `data-snapshot` and `data-snapshot-previous`; rules for those two branches must permit that. A rejected/non-fast-forward main push fails safely; inspect the log before retrying. It will never overwrite intervening main commits.
 
 ## 5. Try a refresh
 
@@ -48,7 +48,7 @@ Sign in and press **Refresh data**. It usually takes **10–20 minutes**; the jo
 
 **Queued → Downloading prices & accounts → Re-scoring → Publishing → Deploying → Done — reload to see new data.**
 
-The daily refresh downloads stored-universe prices and due fundamentals (including the new fields where Yahoo provides them), and calculates fair value. Its normal fundamentals freshness gate still applies. The workflow then explicitly runs the new universe-wide rescore/publication before packing. Missing fields and unsupported fair values remain unavailable. Any failed/partial prices, fundamentals or fair-value stage, incomplete scoring, failed pack validation, or rejected push prevents publication. News/events have no live source and do not block publication.
+The daily refresh downloads stored-universe prices and due fundamentals (including the new fields where Yahoo provides them), and calculates fair value. Its normal fundamentals freshness gate still applies. The workflow then explicitly runs the new universe-wide rescore/publication before packing. Missing fields and unsupported fair values remain unavailable. Failed refresh validation, incomplete scoring, failed pack validation, or a rejected push prevents publication. News/events have no live source and do not block publication.
 
 After GitHub succeeds, **Deploying** remains until the site serves a snapshot whose publication timestamp is at least the run start. The prominent **Data as of** date is the latest stored price date; it need not change on weekends. The score/publication timestamp distinguishes a new snapshot on an unchanged market date. If deployment fails, the bar may remain Deploying: check Vercel's deployment logs. Once Done appears, reload to replace the page's old data.
 
@@ -56,4 +56,22 @@ On failure, use **View run** and download the **refresh-log** artifact (retained
 
 ## Repository size
 
-The existing gzip is about **20 MB**. Each published refresh adds another binary snapshot revision to Git history, roughly **20 MB per refresh** before Git's compression/delta savings (compressed database blobs may delta poorly). Fifty refreshes could add roughly **1 GB**; actual size grows with the database and score history. Clones and Vercel checkouts will become heavier. There is deliberately no schedule. Monitor repository size and refresh frequency; moving snapshots to versioned object storage would be a separate architecture change, not something this workflow silently does.
+The gzip is currently about **28 MB**. Main now tracks only `data/snapshot.json`: the immutable data commit SHA, SHA-256 checksum, byte count, publication timestamp and latest price date. The local `data/snapshots/research.db.gz` is ignored by Git. Existing binary revisions in main's history remain; this migration does not rewrite or shrink that history.
+
+There are two data-only branches. Each points to a **single orphan commit** whose only file is `research.db.gz`:
+
+- `data-snapshot`: the newest packed snapshot.
+- `data-snapshot-previous`: the exact commit main referenced immediately before publication, with its SHA unchanged.
+
+For each refresh, Actions fetches and verifies main's pinned snapshot first. After refresh and validation, publication is ordered:
+
+1. Check main has not changed since checkout; otherwise fail and retry from the latest main.
+2. Point `data-snapshot-previous` at the exact commit in main's pointer.
+3. Force-with-lease push a new, parentless data commit to `data-snapshot`.
+4. Update only `data/snapshot.json`, then make a normal, non-force push to main to trigger Vercel.
+
+If the pointer push fails, main's old SHA remains reachable on `data-snapshot-previous`. A retry preserves the SHA **main actually references**, not the last attempted data tip. Do not hand-edit the pointer or independently update the data branches while a refresh is running; the serialized workflow owns publication.
+
+The two data branches retain at most **two reachable snapshot commits**, about **56 MB** at today's size, rather than another permanent 28 MB revision per refresh. Old unreachable objects may remain on GitHub until its garbage collection runs, so reported repository storage will not necessarily shrink immediately. Explicitly checking out main does not pull data-branch blobs; a normal all-branches clone can include both snapshots. Database growth can still make each individual snapshot larger.
+
+`npm run build` runs `prebuild`, which downloads from the public, commit-pinned URL `https://raw.githubusercontent.com/Andyyooi/genesis/<commit>/research.db.gz`. No token or new Vercel configuration is needed. An already matching local file skips the download. A network failure, wrong size or checksum fails the build; a download is renamed into place only after verification. The existing Next output tracing includes the downloaded gzip in the deployment. `npm run dev` fetches only when the local gzip is missing; use `npm run snapshot:fetch` to explicitly verify/update an existing local copy.
