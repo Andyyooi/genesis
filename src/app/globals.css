@@ -317,10 +317,9 @@ summary:focus-visible, a:focus-visible, button:focus-visible { outline: 2px soli
   .scan-filters { gap: .65rem; padding: 0 1rem 1rem; }
   .scan-search { flex-basis: 100%; max-width: none; min-width: 0; }
   .scan-search input { font-size: 1rem; }
-  .scan-filter { flex: 1; justify-content: space-between; padding: .5rem; }
+  .scan-filter { flex: 1; min-width: 11rem; justify-content: space-between; padding: .5rem; }
   .scan-filter > span { display: none; }
   .scan-filter select { width: 100%; font-size: 1rem; }
-  .scan-reset { flex-basis: 100%; }
   .scan-list-note { padding: .75rem 1rem; }
   .scan-table, .scan-table tbody { display: block; }
   .scan-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); }
