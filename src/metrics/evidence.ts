@@ -148,8 +148,12 @@ export function evidenceMetrics(periods: StatementSnapshot[], bars: PriceBarSnap
     ]),
     ratio("ebit_ev", current?.ebit, ev, "annual EBIT (or operating income) / (market cap + debt − cash)"),
     ratio("gross_profitability", current?.grossProfit, current?.totalAssets, "annual gross profit / year-end total assets"),
+    ratio("roe", current?.pat, current?.equity, "annual PAT / positive book equity"),
+    ratio("debt_to_equity", current?.totalDebt, current?.equity, "total debt / positive book equity"),
     ratio("nav_to_price", nav, close, "reported NAV / price; book equity per share if reported NAV is absent"),
     metric("piotroski", f.scaled, `Piotroski: ${f.points} passed / ${f.computable} computable × 9; minimum 6 of 9; year-end assets convention`, period, f.components, "Fewer than 6 of 9 Piotroski components computable from consecutive usable annuals"),
+    metric("piotroski_computable", f.computable, "Number of available Piotroski checks out of nine", period),
+    metric("piotroski_points", f.points, "Passed Piotroski checks (not scaled)", period),
     growth("revenue_cagr", "revenue"), growth("eps_cagr", "eps"), growth("dpu_cagr", "dividendPerShare"),
     ...priceEvidence(bars, asOf),
   ];

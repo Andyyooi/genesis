@@ -73,6 +73,7 @@ export function buildCurrentSnapshot(input: AlertInputs): AlertSnapshot {
     lastHealthScore: categoryScore(input.result, "financial_health"),
     lastConcernIds: input.result.concerns.map((c) => c.id),
     lastListIds: researchListIds({
+      result: input.result,
       valuationScore: input.valuationScore,
       qualityScore: input.qualityScore,
       persistedResearchScores: input.persistedResearchScores,

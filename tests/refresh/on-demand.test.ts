@@ -225,7 +225,7 @@ describe("on-demand refresh and research", () => {
     expect(report.persistence).toBe("local-sqlite");
   });
 
-  it("replaces a stale stored price and recalculates research from that bar", async () => {
+  it("replaces a stale price without publishing per-ticker scores through the injected reader", async () => {
     const report = await runRefreshAndResearch(
       { ticker: "MAYBANK" },
       {
@@ -243,8 +243,8 @@ describe("on-demand refresh and research", () => {
     expect(report.market.previousDate).toBe("2026-09-18");
     expect(report.market.latestDate).toBe("2026-10-12");
     expect(report.market.updatedThisRun).toBe(true);
-    expect(report.research.priceDateUsed).toBe("2026-10-12");
-    expect(report.research.priceUsed).toBe(12);
+    expect(report.research.priceDateUsed).toBeNull();
+    expect(report.research.priceUsed).toBeNull();
     expect(report.research.ranAt).not.toBe(report.market.latestDate);
     expect(report.categories.scores.status).toBe("NO_DATA");
     expect(report.calculations.scores).toBe(false);
@@ -257,11 +257,10 @@ describe("on-demand refresh and research", () => {
     expect(saved[0]?.currentPrice).toBe(12);
     expect(saved[0]?.valuationDate).toBe("2026-10-12");
     const scoreRows = getDb().select().from(scoreRuns).all();
-    expect(scoreRows).toHaveLength(1);
-    expect(scoreRows[0]?.researchScore).toBeNull();
+    expect(scoreRows).toHaveLength(0);
     scoreTicker("MAYBANK");
     const appended = getDb().select().from(scoreRuns).all();
-    expect(appended).toHaveLength(2);
+    expect(appended).toHaveLength(0);
     expect(appended.every((row) => row.researchScore == null)).toBe(true);
 
     const stored = loadOnDemandCategoryStatus("MAYBANK");
@@ -298,8 +297,8 @@ describe("on-demand refresh and research", () => {
     expect(report.market.updatedThisRun).toBe(false);
     expect(report.categories.prices.status).toBe("SOURCE_FAILED");
     expect(report.categories.prices.lastSuccessfulAt).toBeNull();
-    expect(report.research.priceDateUsed).toBe("2026-09-18");
-    expect(report.research.priceUsed).toBe(10);
+    expect(report.research.priceDateUsed).toBeNull();
+    expect(report.research.priceUsed).toBeNull();
     expect(report.instruments).toMatchObject({ attempted: 1, priceFailed: 1, priceSucceeded: 0 });
   });
 

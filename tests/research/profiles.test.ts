@@ -80,6 +80,6 @@ describe("research profile classification", () => {
     );
     expect(resolveResearchProfile("REIT", "PAVREIT", {}, config).factorSet).toBe("reit");
     const generalFactors = config.instrument_profiles.default.factor_sets.valuation.map((f) => f.id);
-    expect(generalFactors).toEqual(["pe", "dividend_yield"]);
+    expect(generalFactors).toEqual(["earnings_yield", "book_to_price", "ebit_ev", "dividend_yield"]);
   });
 });

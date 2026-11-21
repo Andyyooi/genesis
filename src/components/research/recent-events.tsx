@@ -18,7 +18,7 @@ export function RecentEventsSection({ events }: { events: EventSnapshot[] }) {
         <h2 className="text-xl font-semibold tracking-tight">Recent Events</h2>
         <p className="text-sm text-muted-foreground">
           Stored company events only. Not scraped when you open this page. Labels are rule-based,
-          not recommendations. Events do not change Research Score or Absolute Valuation Score.
+          not recommendations. Events do not change Research Score or Relative Value Score.
         </p>
       </div>
       {events.length === 0 ? (

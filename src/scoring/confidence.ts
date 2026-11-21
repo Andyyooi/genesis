@@ -1,5 +1,6 @@
 import { freshnessBand, monthsBetween } from "@/scoring/freshness";
 import type { CategoryScore, DataConfidence, DataCoverage } from "@/scoring/types";
+import { loadScoringConfig, type ScoringConfig } from "@/config/load-scoring";
 
 export const CORE_SCORE_CATEGORIES = ["valuation", "quality", "financial_health", "growth", "momentum", "low_volatility"] as const;
 
@@ -7,14 +8,15 @@ export function formatCoverageSummary(coverage: DataCoverage): string {
   return `Coverage ${Math.round(coverage.coverageRatio * 100)}% (${coverage.available} of ${coverage.expected} factors). Missing evidence is excluded, never zero.`;
 }
 
-export function assessDataQuality(args: { asOf: string; categories: CategoryScore[]; researchScore: number | null; valuationScore: number | null; latestAnnual?: { periodEnd: string; availableAt: string | null } | null }): { dataCoverage: DataCoverage; dataConfidence: DataConfidence } {
+export function assessDataQuality(args: { asOf: string; categories: CategoryScore[]; researchScore: number | null; valuationScore: number | null; config?: ScoringConfig; latestAnnual?: { periodEnd: string; availableAt: string | null } | null }): { dataCoverage: DataCoverage; dataConfidence: DataConfidence } {
   const factors = args.categories.filter((c) => c.configuredWeight > 0).flatMap((c) => c.factors);
   const live = factors.filter((f) => f.available && f.score !== null);
   const expected = factors.length;
   const ageMonths = args.latestAnnual ? monthsBetween(args.asOf, args.latestAnnual.periodEnd) : null;
   const freshness = freshnessBand(ageMonths);
   const coverageRatio = expected ? live.length / expected : 0;
-  const level = coverageRatio >= 0.8 && ageMonths !== null && ageMonths < 18 ? "HIGH" : coverageRatio >= 0.5 && ageMonths !== null && ageMonths < 30 ? "MEDIUM" : "LOW";
+  const settings = (args.config ?? loadScoringConfig()).confidence;
+  const level = coverageRatio >= settings.high_coverage && ageMonths !== null && ageMonths < settings.high_max_age_months ? "HIGH" : coverageRatio >= settings.medium_coverage && ageMonths !== null && ageMonths < settings.medium_max_age_months ? "MEDIUM" : "LOW";
   const mix = { FRESH: 0, AGING: 0, STALE: 0, VERY_STALE: 0, UNKNOWN: 0 };
   for (const factor of live) {
     const date = factor.period?.match(/\d{4}-\d{2}-\d{2}/)?.[0];
@@ -28,6 +30,6 @@ export function assessDataQuality(args: { asOf: string; categories: CategoryScor
   return { dataCoverage, dataConfidence: { level, needsVerification: level === "LOW", reasons: [
     formatCoverageSummary(dataCoverage),
     `Accounts age: ${ageMonths === null ? "unknown" : `${ageMonths} months from fiscal period-end`}. Retrieval time does not make accounts fresher.`,
-    "High requires at least 80% coverage and accounts under 18 months; Medium requires 50% and under 30 months; otherwise Low.",
+    `High requires at least ${settings.high_coverage * 100}% coverage and accounts under ${settings.high_max_age_months} months; Medium requires ${settings.medium_coverage * 100}% and under ${settings.medium_max_age_months} months; otherwise Low.`,
   ] } };
 }

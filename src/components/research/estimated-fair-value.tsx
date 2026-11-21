@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { formatDateSafe } from "@/lib/display";
@@ -94,9 +93,8 @@ export function EstimatedFairValue({ result }: { result: FairValueResult }) {
               value={hasBase ? fairValueDifferenceText(result.differenceVsPrice) : "Unavailable"}
             />
             <div>
-              <dt className="text-muted-foreground">Confidence</dt>
+              <dt className="text-muted-foreground">Model support note</dt>
               <dd className="mt-1 flex flex-col gap-1">
-                <Badge variant="outline">{result.confidence}</Badge>
                 <span>{fairValueConfidenceText(result)}</span>
               </dd>
             </div>

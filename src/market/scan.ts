@@ -38,6 +38,7 @@ export type MarketScanRowPayload = {
 
 export type MarketScanSummary = {
   kind: "market-scan";
+  methodology: "cross-sectional-v2";
   asOf: string;
   universe: { fetched: number; upserted: number; inactivated: number; listed: number; watchlist: number };
   prices: { succeeded: number; failed: number; barsUpserted: number };
@@ -255,6 +256,7 @@ function publishListedScores(meta: {
 
   const summary: MarketScanSummary = {
     kind: "market-scan",
+    methodology: "cross-sectional-v2",
     asOf: meta.asOf,
     universe: {
       fetched: meta.universe.fetched,
@@ -315,6 +317,7 @@ export function loadLatestMarketScan(): {
   } catch {
     summary = null;
   }
+  if (summary?.methodology !== "cross-sectional-v2") return { summary: null, rows: [] };
   const rows = db
     .select()
     .from(marketScanRows)

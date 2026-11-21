@@ -458,7 +458,8 @@ describe("Fair Value page loader", () => {
     expect(presentation).not.toMatch(/calculateFairValue|persistFairValueRun|scoreTicker/);
     expect(page).toContain("loadFairValueForPage");
     expect(page).toContain("<EstimatedFairValue");
-    expect(page.indexOf("Absolute Valuation")).toBeLessThan(page.indexOf("<EstimatedFairValue"));
+    expect(page).toContain("Relative Value");
+    expect(page.indexOf("Relative Value")).toBeLessThan(page.indexOf("<EstimatedFairValue"));
     expect(page.indexOf("<EstimatedFairValue")).toBeLessThan(page.indexOf("Profile metrics"));
     expect(page).not.toMatch(/calculateFairValue|calculateGeneralFairValue|persistFairValueRun/);
     expect(readFileSync("src/fair-value/orchestrate.ts", "utf8")).toContain("export function calculateFairValue");

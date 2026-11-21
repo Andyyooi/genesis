@@ -4,7 +4,7 @@ import type { EventSnapshot, MetricValue } from "@/metrics/types";
 import type { CategoryScore, ScoreResult } from "@/scoring/types";
 
 export const RESEARCH_SCORE_BLURB =
-  "Research Score reflects currently available valuation, quality, health, growth, news and market evidence. Missing factors are excluded and remaining weights are renormalized. It is not a buy or sell recommendation.";
+  "Research Score is the stored, universe-wide blend of value, quality, momentum, low volatility, health and growth percentiles. Profile-wide and sector ranks are blended; banks and REITs rank within their own groups. Missing factors are excluded and remaining weights are renormalized. News is display-only. It is not a buy or sell recommendation.";
 
 export function researchScoreBlurb(result: ScoreResult): string {
   const omitted = result.categories
@@ -68,9 +68,9 @@ export function researchInterpretationBullets(args: {
 
   const val = result.categories.find((c) => c.id === "valuation");
   if (val?.inThisRun && val.score !== null) {
-    bullets.push(`Absolute Valuation category score is ${formatScore100(val.score)} in this run.`);
+    bullets.push(`Relative Value category score is ${formatScore100(val.score)} in this stored run.`);
   } else {
-    bullets.push("Absolute Valuation category is not in this run (insufficient valuation inputs).");
+    bullets.push("Relative Value category is not in this run (insufficient valuation inputs).");
   }
 
   for (const id of ["price_to_earnings", "price_to_book", "dividend_yield", "book_nav_premium"]) {
@@ -128,5 +128,5 @@ export function researchInterpretationBullets(args: {
 }
 
 export function absoluteValuationBlurb(): string {
-  return "Based on Genesis’s valuation factor model for this research profile. Historical and peer labels are separate and do not change this score.";
+  return "Relative value percentiles within the scored universe, not an absolute fair-value estimate. Historical and peer labels below are separate and do not change this stored score.";
 }

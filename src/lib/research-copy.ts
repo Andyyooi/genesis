@@ -5,9 +5,22 @@ export const CATEGORY_LABELS: Record<string, string> = {
   quality: "Business Quality",
   financial_health: "Financial Health",
   growth: "Growth",
-  news: "News / Catalysts",
-  technical: "Market / Technical",
+  momentum: "Momentum",
+  low_volatility: "Low Volatility",
 };
+
+export const CATEGORY_EXPLANATIONS: Record<string, string> = {
+  valuation: "What the company earns, owns or distributes relative to its market price. Higher percentiles mean more accounting value per ringgit paid, not an intrinsic-value guarantee.",
+  quality: "Profitability and financial-statement strength. Higher percentiles indicate stronger available profitability and accounting evidence than peers.",
+  financial_health: "Leverage and debt-servicing resilience. Lower leverage and stronger coverage rank better; REITs use gearing, banks omit industrial debt health.",
+  growth: "Annualised changes over the configured fixed fiscal-year window. Both annual endpoints must be present and usable; a shorter window is never substituted.",
+  momentum: "The preceding year's price performance with the latest trading month skipped. Captures persistent price trends, not a forecast.",
+  low_volatility: "How variable daily returns were over 252 sessions. Lower historical volatility ranks better, but does not guarantee lower future losses.",
+};
+
+export function dataConfidenceLabel(level: string | null | undefined): string {
+  return level === "HIGH" ? "High" : level === "MEDIUM" ? "Medium" : "Low";
+}
 
 export function formatScore100(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "Unavailable";

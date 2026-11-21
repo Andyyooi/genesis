@@ -39,8 +39,8 @@ function baseResult(over: Partial<ScoreResult> = {}): ScoreResult {
       category({ id: "quality", score: 60 }),
       category({ id: "financial_health", inThisRun: false, liveWeight: null, score: null }),
       category({ id: "growth", score: 50 }),
-      category({ id: "news", inThisRun: false, liveWeight: null, score: null }),
-      category({ id: "technical", inThisRun: false, liveWeight: null, score: null }),
+      category({ id: "momentum", inThisRun: false, liveWeight: null, score: null }),
+      category({ id: "low_volatility", inThisRun: false, liveWeight: null, score: null }),
     ],
     concerns: [],
     notes: [],
@@ -80,7 +80,7 @@ describe("research presentation helpers", () => {
     expect(liveWeightLabel(category({ id: "quality", liveWeight: 0.3, inThisRun: true }))).toBe(
       "30% of this run",
     );
-    expect(liveWeightLabel(category({ id: "news", liveWeight: null, inThisRun: false }))).toBe(
+    expect(liveWeightLabel(category({ id: "momentum", liveWeight: null, inThisRun: false }))).toBe(
       "Not in this run",
     );
   });

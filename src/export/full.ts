@@ -210,7 +210,7 @@ export function buildFullMarkdown(payload: ExportPayload): string {
   );
   if (payload.events.length === 0) {
     sections.push(
-      "Data unavailable — no stored announcements. News weight is omitted from the Research Score (not scored as 50).",
+      "Data unavailable — no stored announcements. News is display-only and never changes Research Score.",
       "",
     );
   } else {

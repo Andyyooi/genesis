@@ -8,16 +8,18 @@ import {
   type OpportunityRow,
 } from "@/opportunities/lists";
 import { scoreTicker } from "@/scoring/run-ticker";
+import { getSqlite } from "@/db/client";
 
 function metric(metrics: MetricValue[], id: string): MetricValue | undefined {
   return metrics.find((m) => m.id === id);
 }
 
 const SCAN_CACHE_MS = 15_000;
-let scanCache: { at: number; rows: OpportunityRow[] } | null = null;
+let scanCache: { at: number; version: number; rows: OpportunityRow[] } | null = null;
 
 export function scanWatchlist(): OpportunityRow[] {
-  if (scanCache && Date.now() - scanCache.at < SCAN_CACHE_MS) {
+  const version = (getSqlite().prepare("SELECT COALESCE(MAX(id), 0) AS version FROM score_runs").get() as { version: number }).version;
+  if (scanCache && scanCache.version === version && Date.now() - scanCache.at < SCAN_CACHE_MS) {
     return scanCache.rows;
   }
   const universe = loadWatchlist();
@@ -77,7 +79,7 @@ export function scanWatchlist(): OpportunityRow[] {
       result: scored.result,
     });
   }
-  scanCache = { at: Date.now(), rows };
+  scanCache = { at: Date.now(), version, rows };
   return rows;
 }
 

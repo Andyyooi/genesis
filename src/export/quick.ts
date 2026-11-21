@@ -43,7 +43,7 @@ export function buildQuickMarkdown(payload: ExportPayload): string {
       ? score.concerns.map((c) => `- ${c.label}: ${c.message}`).join("\n")
       : "No concern rules fired. This is not a clean bill of health.",
     "",
-    "News and technical categories are configured but not in this live run. Full evidence is in the Full Research Report.",
+    "News and generic technicals are excluded. Scores are stored universe-wide percentiles. Full evidence is in the Full Research Report.",
     "",
   ];
   return lines.join("\n");

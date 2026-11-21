@@ -21,6 +21,11 @@ eligibility:
   min_coverage: 0.5
 unavailable_until_data: []
 min_category_coverage: 0.5
+confidence:
+  high_coverage: 0.8
+  medium_coverage: 0.5
+  high_max_age_months: 18
+  medium_max_age_months: 30
 research_profile_rules:
   bank_industry_includes: [banks]
   other_financial_industry_includes: [insurance, takaful, asset management, capital markets, credit services, financial data, stock exchanges]

@@ -316,7 +316,7 @@ describe("Phase 16 mapping + upsert + fixture ingest", () => {
 
     const scored = scoreTicker("MAYBANK", false, { attachValuationContext: false });
     expect(scored?.events.length).toBeGreaterThan(0);
-    expect(scored?.result.categories.find((c) => c.id === "news")?.inThisRun).toBe(false);
+    expect(scored?.result.categories.find((c) => c.id === "news")).toBeUndefined();
   });
 
   it("stores unmapped rows with null instrument_id for review", () => {

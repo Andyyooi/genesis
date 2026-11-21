@@ -351,8 +351,6 @@ function runScores(
     }
     const close = scored.metrics.find((metric) => metric.id === "last_close");
     const trade = scored.metrics.find((metric) => metric.id === "last_trade_date");
-    // A null research score stays in score_runs. That table is append-only audit history.
-    // This report uses NO_DATA and does not treat the row as a successful score.
     const scoreReady = typeof scored.result.researchScore === "number" && Number.isFinite(scored.result.researchScore);
     const categoryReport = persistStage(runId, {
       dataset: "scores",

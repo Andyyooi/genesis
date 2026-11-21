@@ -33,8 +33,8 @@ export function ValuationContextCard({ block }: { block: ValuationContextBlock }
   const title = block.kind === "historical" ? "Historical Context" : "Peer Context";
   const blurb =
     block.kind === "historical"
-      ? "This name versus its own stored annuals. Separate from Absolute Valuation Score — not a buy signal."
-      : "This name versus a constructed peer set. Separate from Absolute Valuation Score — not a cheapness verdict.";
+      ? "This name versus its own stored annuals. Separate from Relative Value Score — not a buy signal."
+      : "This name versus a constructed peer set. Separate from Relative Value Score — not a cheapness verdict.";
   const quality = block.peerQuality;
 
   return (

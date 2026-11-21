@@ -30,7 +30,8 @@ function result(over: Partial<ScoreResult> = {}): ScoreResult {
       },
     ],
     concerns: [],
-    notes: ["News is in this live run."],
+    eligibility: { eligible: true, reasons: [], medianTradedValue: 200000, priceDays: 253 },
+    notes: ["News is display-only."],
     dataCoverage: {
       expected: 9,
       available: 7,

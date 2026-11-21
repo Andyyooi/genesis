@@ -2,7 +2,7 @@ import Link from "next/link";
 import { loadLatestFundamentalsQuality } from "@/market/fundamentals-quality";
 import { loadLatestMarketScan } from "@/market/scan";
 import { isSnapshotReadOnly } from "@/lib/data-mode";
-import { formatScore100 } from "@/lib/research-copy";
+import { dataConfidenceLabel, formatScore100 } from "@/lib/research-copy";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -155,7 +155,8 @@ export default function MarketPage() {
                     <TableHead>Type</TableHead>
                     <TableHead className="text-right">Research</TableHead>
                     <TableHead className="text-right">Valuation</TableHead>
-                    <TableHead>Confidence</TableHead>
+                    <TableHead>Data confidence</TableHead>
+                    <TableHead>Recommendation eligibility</TableHead>
                     <TableHead>Freshness</TableHead>
                     <TableHead className="text-right">Coverage</TableHead>
                   </TableRow>
@@ -188,12 +189,15 @@ export default function MarketPage() {
                         {formatScore100(typeof row.valuationScore === "number" ? row.valuationScore : null)}
                       </TableCell>
                       <TableCell>
-                        {String(row.confidence ?? "—")}
+                        {dataConfidenceLabel(String(row.confidence ?? "LOW"))}
                         {row.needsVerification ? (
                           <Badge className="ml-1" variant="outline">
                             Needs verification
                           </Badge>
                         ) : null}
+                      </TableCell>
+                      <TableCell className="max-w-80 text-sm">
+                        {row.eligible === true ? "Eligible" : `Excluded: ${Array.isArray(row.exclusionReasons) ? row.exclusionReasons.join(" ") : "not verified"}`}
                       </TableCell>
                       <TableCell>{String(row.freshness ?? "—").replaceAll("_", " ")}</TableCell>
                       <TableCell className="text-right">

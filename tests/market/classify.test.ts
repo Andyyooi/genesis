@@ -37,7 +37,7 @@ describe("bank overlay is not ingest-hardcoded", () => {
       ...profile.factor_sets.quality,
       ...profile.factor_sets.financial_health,
     ].map((f) => f.metric);
-    expect(metrics).toContain("price_to_book");
+    expect(metrics).toContain("book_to_price");
     expect(metrics).toContain("roe");
     expect(metrics).not.toContain("fcf");
   });
