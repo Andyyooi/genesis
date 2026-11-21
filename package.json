@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "tsx scripts/fetch-snapshot.ts --if-missing",
     "dev": "next dev --hostname 0.0.0.0 --port 43147",
     "dev:persist": "bash scripts/dev-persist.sh",
+    "prebuild": "npm run snapshot:fetch",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port 43147",
     "lint": "eslint",
@@ -25,6 +27,7 @@
     "test": "vitest run",
     "events:ingest": "tsx src/events/cli.ts",
     "refresh:daily": "tsx src/refresh/cli.ts",
+    "snapshot:fetch": "tsx scripts/fetch-snapshot.ts",
     "snapshot:pack": "tsx scripts/pack-snapshot.ts",
     "snapshot:report": "tsx scripts/snapshot-report.ts"
   },
