@@ -56,7 +56,7 @@ On failure, use **View run** and download the **refresh-log** artifact (retained
 
 ## Repository size
 
-The gzip is currently about **28 MB**. Main now tracks only `data/snapshot.json`: the immutable data commit SHA, SHA-256 checksum, byte count, publication timestamp and latest price date. The local `data/snapshots/research.db.gz` is ignored by Git. Existing binary revisions in main's history remain; this migration does not rewrite or shrink that history.
+The gzip is currently about **38 MB**. Main now tracks only `data/snapshot.json`: the immutable data commit SHA, SHA-256 checksum, byte count, publication timestamp and latest price date. The local `data/snapshots/research.db.gz` is ignored by Git. Existing binary revisions in main's history remain; this migration does not rewrite or shrink that history.
 
 There are two data-only branches. Each points to a **single orphan commit** whose only file is `research.db.gz`:
 
@@ -72,6 +72,6 @@ For each refresh, Actions fetches and verifies main's pinned snapshot first. Aft
 
 If the pointer push fails, main's old SHA remains reachable on `data-snapshot-previous`. A retry preserves the SHA **main actually references**, not the last attempted data tip. Do not hand-edit the pointer or independently update the data branches while a refresh is running; the serialized workflow owns publication.
 
-The two data branches retain at most **two reachable snapshot commits**, about **56 MB** at today's size, rather than another permanent 28 MB revision per refresh. Old unreachable objects may remain on GitHub until its garbage collection runs, so reported repository storage will not necessarily shrink immediately. Explicitly checking out main does not pull data-branch blobs; a normal all-branches clone can include both snapshots. Database growth can still make each individual snapshot larger.
+The two data branches retain at most **two reachable snapshot commits**, about **76 MB** if both snapshots are today's size, rather than another permanent 38 MB revision per refresh. Old unreachable objects may remain on GitHub until its garbage collection runs, so reported repository storage will not necessarily shrink immediately. Explicitly checking out main does not pull data-branch blobs; a normal all-branches clone can include both snapshots. Database growth can still make each individual snapshot larger.
 
 `npm run build` runs `prebuild`, which downloads from the public, commit-pinned URL `https://raw.githubusercontent.com/Andyyooi/genesis/<commit>/research.db.gz`. No token or new Vercel configuration is needed. An already matching local file skips the download. A network failure, wrong size or checksum fails the build; a download is renamed into place only after verification. The existing Next output tracing includes the downloaded gzip in the deployment. `npm run dev` fetches only when the local gzip is missing; use `npm run snapshot:fetch` to explicitly verify/update an existing local copy.
