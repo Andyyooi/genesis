@@ -490,8 +490,8 @@ export async function runDailyRefresh(
   const fundamentals = await refreshFundamentals(runId, marketDate, deps);
   const events = await refreshEvents(runId, marketDate, deps);
   const news = refreshNews(runId, marketDate, deps);
-  const scores = refreshScores(runId, marketDate, deps, [prices, fundamentals]);
   const fairValue = refreshFairValue(runId, marketDate, deps, [prices, fundamentals], startedAt);
+  const scores = refreshScores(runId, marketDate, deps, [prices, fundamentals]);
   if (fairValue.status === "PARTIAL" || fairValue.status === "SOURCE_FAILED") {
     notes.push(
       `Fair Value dataset ${fairValue.status}: ${fairValue.errorSummary ?? "see fair_value refresh metadata."}`,
