@@ -62,6 +62,9 @@ describe("published universe scores", () => {
     expect(picks.picks[0].ticker).toBe("CIMB");
     expect(picks.picks[0].result.researchScore).toBe(scoreTicker("CIMB")!.result.researchScore);
     expect(scoreTicker("MAYBANK")!.events).toEqual([]);
+    getSqlite().exec("UPDATE score_runs SET coverage_json = json_remove(coverage_json, '$.notApplicable'), evidence_json = json_remove(evidence_json, '$.storedResult.dataCoverage.notApplicable')");
+    expect(scoreTicker("MAYBANK")!.result.dataCoverage.notApplicable).toBe(0);
+    expect(loadTopPicks().picks[0].result.dataCoverage.notApplicable).toBe(0);
   });
   it("clears old-method alerts, establishes a real baseline and does not invent changes", () => {
     const db = getDb();

@@ -50,6 +50,7 @@ export type DataCoverage = {
   expected: number;
   available: number;
   unavailable: number;
+  notApplicable: number;
   coverageRatio: number;
   freshCount: number;
   agingCount: number;

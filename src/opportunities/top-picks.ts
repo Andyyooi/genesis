@@ -71,6 +71,7 @@ export function loadTopPicks(options: TopPicksOptions = {}) {
       const result = evidence.storedResult as ScoreResult | undefined;
       const market = published.get(row.ticker);
       if (!result || result.asOf !== summary.asOf || !market || market.researchScore !== result.researchScore || market.eligible !== true) continue;
+      result.dataCoverage.notApplicable ??= 0;
       const metrics: MetricValue[] = Array.isArray(evidence.scoredMetrics) ? evidence.scoredMetrics : [];
       const metric = (id: string) => {
         const item = metrics.find((value) => value.id === id);
