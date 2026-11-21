@@ -11,6 +11,7 @@ import { clearOpportunityScanCache, scanWatchlist } from "@/opportunities/scan";
 import { scoreTicker } from "@/scoring/run-ticker";
 import { storedSnapshotDates } from "@/lib/stored-snapshot-dates";
 import { loadTopPicks } from "@/opportunities/top-picks";
+import { loadRecentAlerts } from "@/alerts/refresh";
 
 const asOf = "2026-09-25T12:00:00.000Z";
 let directory: string;
@@ -39,6 +40,15 @@ beforeEach(() => {
 afterEach(() => { close(); vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); rmSync(directory, { recursive: true, force: true }); });
 
 describe("published universe scores", () => {
+  it("hides legacy event and demo alerts without hiding real research alerts", () => {
+    expect(loadRecentAlerts()).toEqual([]);
+    const db = getDb();
+    const instrument = db.select().from(instruments).get()!;
+    for (const [ruleId, evidenceJson] of [["research_score_up", '{"demo":true}'], ["earnings_announcement", '{}'], ["earnings_announcement", 'malformed'], ["new_concern", '{}']] as const) {
+      db.insert(alerts).values({ instrumentId: instrument.id, ticker: instrument.ticker, ruleId, title: "Alert", why: "Evidence", evidenceJson, href: `/stock/${instrument.ticker}`, fingerprint: ruleId + evidenceJson, triggeredAt: asOf, createdAt: asOf }).run();
+    }
+    expect(loadRecentAlerts().map((row) => row.ruleId)).toEqual(["new_concern"]);
+  });
   it("uses real publication / annual dates and reads ranked picks from that publication", () => {
     expect(storedSnapshotDates()).toBeNull();
     expect(loadTopPicks().picks).toEqual([]);

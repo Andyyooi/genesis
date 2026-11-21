@@ -18,6 +18,14 @@ function form(password: string, next = "/market", origin = "https://research.tes
 }
 
 describe("authentication routes", () => {
+  it("logs in through the public host when the server URL uses an internal bind address", async () => {
+    vi.stubEnv("SITE_PASSWORD", "test-password");
+    vi.stubEnv("NODE_ENV", "production");
+    const response = await login(new NextRequest("http://0.0.0.0:43147/login/submit", { method: "POST", headers: { host: "localhost:43147", origin: "http://localhost:43147", "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ password: "test-password", next: "/market" }) }));
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("http://localhost:43147/market");
+    expect(await verifySession(response.cookies.get(SESSION_COOKIE)?.value, process.env)).toBe(true);
+  });
   it("logs in and logs out with safe cookies and redirects", async () => {
     vi.stubEnv("SITE_PASSWORD", "test-password");
     vi.stubEnv("NODE_ENV", "production");

@@ -171,7 +171,7 @@ export function loadRecentAlerts(limit = 40) {
     .innerJoin(instruments, eq(instruments.id, alerts.instrumentId))
     .orderBy(desc(alerts.id))
     .limit(limit)
-    .all().filter((row) => !isDemoAlert(row.evidenceJson));
+    .all().filter((row) => !isDemoAlert(row.evidenceJson) && row.ruleId !== "earnings_announcement");
 }
 
 export function countAlerts() {

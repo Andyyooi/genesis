@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requestOrigin } from "@/auth/origin";
 import { gateDecision, sanitizeNextPath, SESSION_COOKIE } from "@/auth/session";
 
 export async function proxy(request: NextRequest) {
@@ -17,7 +18,7 @@ export async function proxy(request: NextRequest) {
     });
   }
   if (decision === "unauthorized") return NextResponse.json({ error: "Authentication required" }, { status: 401, headers: { "Cache-Control": "no-store" } });
-  const login = new URL("/login", request.url);
+  const login = new URL("/login", requestOrigin(request) ?? request.nextUrl.origin);
   login.searchParams.set("next", sanitizeNextPath(request.nextUrl.pathname + request.nextUrl.search));
   return NextResponse.redirect(login, 303);
 }

@@ -125,7 +125,7 @@ function MetricTable({ ids, metrics }: { ids: string[]; metrics: MetricValue[] }
           return (
             <TableRow key={id}>
               <TableCell>{metric?.label ?? id}</TableCell>
-              <TableCell className="text-right">{fmtRatio(metric)}</TableCell>
+              <TableCell className="whitespace-normal text-right">{fmtRatio(metric)}</TableCell>
               <TableCell className="hidden text-muted-foreground sm:table-cell">
                 {metric?.period ? formatDateSafe(metric.period) : "Unavailable"}
               </TableCell>

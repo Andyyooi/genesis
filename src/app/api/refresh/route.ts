@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isSameOrigin } from "@/auth/origin";
 import { deployedSnapshotState } from "@/refresh/deployed-snapshot";
 import { dispatchRefresh } from "@/refresh/github";
 
 export async function POST(request: NextRequest) {
-  if (request.headers.get("origin") !== request.nextUrl.origin) return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
+  if (!isSameOrigin(request)) return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
   try {
     const result = await dispatchRefresh(deployedSnapshotState());
     return NextResponse.json(result.body, { status: result.status, headers: { "Cache-Control": "no-store" } });
