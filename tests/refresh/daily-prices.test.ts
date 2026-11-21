@@ -13,7 +13,7 @@ const PREV_PATH = process.env.BURSA_SQLITE_PATH;
 let tempDir = "";
 
 vi.mock("@/ingest/providers/yahoo-prices", () => ({
-  fetchYahooDailyBars: vi.fn(async (_ticker: string, _range: string) => [
+  fetchYahooDailyBars: vi.fn(async () => [
     {
       barDate: "2026-09-25",
       open: 10.1,
