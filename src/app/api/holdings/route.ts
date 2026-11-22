@@ -13,7 +13,7 @@ export function GET(request: Request) {
   const alerts = tickers.length ? loadRecentAlerts(10000) : [];
   const quotes = tickers.map(ticker => {
     const data = scoreTicker(ticker);
-    if (!data) return { ticker, price: null, priceDate: null, score: null, warnings: ["Stock is no longer in the published universe."] };
+    if (!data || data.instrument.listingStatus === "inactive") return { ticker, price: null, priceDate: null, score: null, warnings: ["Stock is no longer in the published universe."] };
     const { result, instrument } = data;
     const bar = [...data.bars].filter(b => b.close !== null).sort((a, b) => b.barDate.localeCompare(a.barDate))[0];
     const warnings = [
