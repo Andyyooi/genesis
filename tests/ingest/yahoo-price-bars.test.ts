@@ -90,4 +90,19 @@ describe("Yahoo daily bar validation", () => {
       expect.objectContaining({ barDate: "2026-10-12", close: 10.25 }),
     ]);
   });
+
+  it("marks the first usable bar on or after a reported split", async () => {
+    const split = Date.parse("2026-10-13T01:00:00Z") / 1000;
+    vi.stubGlobal("fetch", chart({
+      chart: {
+        result: [{
+          timestamp: [split - 86400, split, split + 86400, split + 172800],
+          events: { splits: { [split]: { date: split, numerator: 2, denominator: 1 } } },
+          indicators: { quote: [{ close: [5, null, 5, 5] }] },
+        }],
+      },
+    }));
+    const bars = await fetchYahooDailyBars("MAYBANK.KL", "5d");
+    expect(bars.map(({ split }) => split)).toEqual([undefined, true, undefined]);
+  });
 });

@@ -8,6 +8,7 @@ import { seedUniverseFromYaml } from "@/db/seed";
 import { usableYahooDailyBar, yahooBarDateUtc } from "@/ingest/price-bar";
 import { fetchYahooDailyBars, type YahooBar } from "@/ingest/providers/yahoo-prices";
 import type { PriceBarConflict, PriceImportFailure, PricesImportReport } from "@/ingest/types";
+import { PRICE_DROP_WINDOW_BARS } from "@/lib/price-drop-flag";
 import { recordIngestFailure } from "@/market/refresh-universe";
 
 function sleep(ms: number) {
@@ -104,12 +105,21 @@ export async function importYahooPrices(
         .where(and(eq(priceBars.instrumentId, instrument.id), gt(priceBars.close, 0), lte(priceBars.barDate, retrievedAt.slice(0, 10)))).get()?.date ?? null : null;
       const startDate = savedDates.get(instrument.ticker);
       const fetched = await fetchYahooDailyBars(yahooTicker, startDate ? { startDate } : range === "auto" ? priceRangeSince(latest) : range);
-      const accepted = fetched.filter((bar) => usableYahooDailyBar(bar));
+      let accepted = fetched.filter((bar) => usableYahooDailyBar(bar));
+      const recentWindowStart = accepted.some((bar) => bar.split)
+        ? recentYahooWindowStart(instrument.id)
+        : undefined;
+      const splitWindowStart = recentWindowStart && accepted.some((bar) => bar.split && bar.barDate >= recentWindowStart)
+        ? recentWindowStart
+        : undefined;
+      if (splitWindowStart && !accepted.some((bar) => bar.barDate <= splitWindowStart)) {
+        accepted = (await fetchYahooDailyBars(yahooTicker, { startDate: splitWindowStart })).filter((bar) => usableYahooDailyBar(bar));
+      }
       if (accepted.length === 0) {
         throw new Error(`Yahoo missed ${yahooTicker}: no usable daily bars`);
       }
       const applied = getSqlite().transaction(() => {
-        const plan = planYahooPriceWrites(instrument.ticker, accepted, storedYahooBars(instrument.id), startDate !== undefined);
+        const plan = planYahooPriceWrites(instrument.ticker, accepted, storedYahooBars(instrument.id), startDate !== undefined, splitWindowStart);
         for (const bar of plan.write) writePriceBar(instrument.id, bar, retrievedAt);
         return plan;
       })();
@@ -168,6 +178,14 @@ type PriceWritePlan = {
   conflicts: PriceBarConflict[];
 };
 
+function recentYahooWindowStart(instrumentId: number): string | undefined {
+  return storedYahooBars(instrumentId)
+    .filter((bar) => bar.close != null && Number.isFinite(bar.close) && bar.close > 0)
+    .sort((a, b) => b.utc - a.utc)
+    .slice(0, PRICE_DROP_WINDOW_BARS)
+    .at(-1)?.barDate;
+}
+
 function storedYahooBars(instrumentId: number): StoredYahooBar[] {
   const rows = getDb()
     .select({ barDate: priceBars.barDate, close: priceBars.close, open: priceBars.open, high: priceBars.high, low: priceBars.low, volume: priceBars.volume, adjClose: priceBars.adjClose })
@@ -189,7 +207,7 @@ function storedYahooBars(instrumentId: number): StoredYahooBar[] {
  * An older session with a different close is kept and reported.
  * The latest stored session may still be revised when its close changes.
  */
-function planYahooPriceWrites(ticker: string, accepted: YahooBar[], stored: StoredYahooBar[], refreshAdjustments = false): PriceWritePlan {
+function planYahooPriceWrites(ticker: string, accepted: YahooBar[], stored: StoredYahooBar[], refreshAdjustments = false, splitWindowStart?: string): PriceWritePlan {
   const byUtc = new Map<number, StoredYahooBar>();
   let latestUtc: number | null = null;
   for (const row of stored) {
@@ -229,7 +247,8 @@ function planYahooPriceWrites(ticker: string, accepted: YahooBar[], stored: Stor
       continue;
     }
     if (latestUtc != null && utc < latestUtc) {
-      if (refreshAdjustments && bar.adjClose != null && bar.adjClose > 0 && bar.adjClose !== existing!.adjClose) {
+      const refreshAdjustedClose = refreshAdjustments || (splitWindowStart !== undefined && bar.barDate >= splitWindowStart);
+      if (refreshAdjustedClose && bar.adjClose != null && bar.adjClose > 0 && bar.adjClose !== existing!.adjClose) {
         write.push({ ...existing!, adjClose: bar.adjClose });
       }
       conflicts.push({

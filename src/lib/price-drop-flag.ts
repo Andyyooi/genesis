@@ -8,7 +8,7 @@ export const SHARP_DROP = 0.2;
 /** Category percentile that counts as strong. */
 export const STRONG_SCORE = 60;
 
-type Bar = { barDate: string; close: number | null; source?: string };
+type Bar = { barDate: string; close: number | null; adjClose?: number | null; source?: string };
 type Period = { periodEnd: string; statementType: string; lineItemsJson: string | null; actualOrEstimate?: string };
 
 export type PriceDrop = {
@@ -17,6 +17,7 @@ export type PriceDrop = {
   highDate: string;
   lastClose: number;
   lastDate: string;
+  adjusted: boolean;
 };
 
 export type StrongScore = { id: string; label: string; score: number };
@@ -32,22 +33,34 @@ export type GoodCompanyPriceDown = {
   results: ResultsComparison | null;
 };
 
-/** Latest close against the highest close in the recent window. Bars are newest first. */
+function positivePrice(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+/** Latest close against the highest comparable close. Bars are newest first. */
 export function recentPriceDrop(bars: Bar[], windowBars = PRICE_DROP_WINDOW_BARS): PriceDrop | null {
   const yahoo = bars.some((b) => b.source === "yahoo");
   const usable = bars
-    .filter((b) => (!yahoo || b.source === "yahoo") && b.close !== null && Number.isFinite(b.close) && b.close > 0)
+    .filter((b) => (!yahoo || b.source === "yahoo") && positivePrice(b.close))
     .slice(0, windowBars);
   if (usable.length < 20) return null;
-  const last = usable[0];
+  const adjusted = usable.some((bar) => positivePrice(bar.adjClose));
+  if (adjusted && !positivePrice(usable[0].adjClose)) return null;
+  const comparable = usable.flatMap((bar) => {
+    const close = adjusted ? bar.adjClose : bar.close;
+    return positivePrice(close) ? [{ barDate: bar.barDate, close }] : [];
+  });
+  if (comparable.length < 20) return null;
+  const last = comparable[0];
   let high = last;
-  for (const bar of usable) if ((bar.close as number) > (high.close as number)) high = bar;
+  for (const bar of comparable) if (bar.close > high.close) high = bar;
   return {
-    drop: 1 - (last.close as number) / (high.close as number),
-    highClose: high.close as number,
+    drop: 1 - last.close / high.close,
+    highClose: high.close,
     highDate: high.barDate,
-    lastClose: last.close as number,
+    lastClose: last.close,
     lastDate: last.barDate,
+    adjusted,
   };
 }
 
