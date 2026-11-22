@@ -14,6 +14,7 @@ import { clearOpportunityScanCache } from "@/opportunities/scan";
 import { purgeDemoAlerts } from "@/alerts/purge-demo";
 import { fairValueSafetyAt, loadAlertPublication, replacePublicationAlerts, type PublicationAlertSummary } from "@/alerts/publication";
 import { loadScoringConfig } from "@/config/load-scoring";
+import { recentWatchlistMove, selectOverviewWatchlist, type WatchlistCandidate, type WatchlistEntry } from "@/opportunities/watchlist-selection";
 import { recordTrackRecord } from "@/track-record/record";
 
 export type MarketScanRowPayload = {
@@ -44,6 +45,7 @@ export type MarketScanRowPayload = {
 
 export type MarketScanSummary = {
   alerts?: PublicationAlertSummary;
+  overviewWatchlist?: WatchlistEntry[];
   kind: "market-scan";
   methodology: "cross-sectional-v2";
   asOf: string;
@@ -188,6 +190,7 @@ function publishListedScores(meta: {
   const largeMoves: { ticker: string; distanceFrom52wHigh: number | null }[] = [];
   const pn17: string[] = [];
   const insufficientData: string[] = [];
+  const watchlistCandidates: WatchlistCandidate[] = [];
   let scored = 0;
 
   const runInsert = db
@@ -229,6 +232,18 @@ function publishListedScores(meta: {
       distanceFrom52wHigh: dist?.available ? dist.value : null,
       insufficient: coverage === null || coverage < 0.25 || scoredRow.result.researchScore === null,
     };
+    const bars = scoredRow.bars.filter((bar) => bar.source === "yahoo").slice(0, 6);
+    const marketCap = scoredRow.metrics.find((m) => m.id === "market_cap");
+    watchlistCandidates.push({
+      ticker: instrument.ticker,
+      eligible: payload.eligible && !payload.insufficient && !instrument.pn17 && !instrument.warningFlag,
+      lastTrade: bars[0]?.barDate ?? null,
+      close: bars[0]?.close ?? null,
+      score: payload.researchScore,
+      marketCap: marketCap?.available ? marketCap.value : null,
+      medianTradedValue: scoredRow.result.eligibility?.medianTradedValue ?? null,
+      move: recentWatchlistMove(bars),
+    });
     db.insert(marketScanRows)
       .values({
         runId,
@@ -275,7 +290,9 @@ function publishListedScores(meta: {
     .from(financialPeriods)
     .get();
 
+  const overviewWatchlist = selectOverviewWatchlist(watchlistCandidates, loadScoringConfig().top_picks);
   const summary: MarketScanSummary = {
+    overviewWatchlist,
     kind: "market-scan",
     methodology: "cross-sectional-v2",
     asOf: meta.asOf,
@@ -284,7 +301,7 @@ function publishListedScores(meta: {
       upserted: meta.universe.upserted,
       inactivated: meta.universe.inactivated,
       listed: listed.length,
-      watchlist: listed.filter((r) => r.watchlist).length,
+      watchlist: overviewWatchlist.length || listed.filter((r) => r.watchlist).length,
     },
     prices: meta.prices,
     fundamentalsCsv: meta.fundamentalsCsv,

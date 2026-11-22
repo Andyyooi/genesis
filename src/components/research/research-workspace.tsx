@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   ArrowDownUp,
   ArrowUpRight,
@@ -15,6 +15,7 @@ import { StatusLabel } from "./status-label";
 import { PriceSparkline } from "./price-sparkline";
 import { dataConfidenceLabel, formatScore100 } from "@/lib/research-copy";
 import { formatSharePrice } from "@/lib/format-myr";
+import type { WatchlistReason } from "@/opportunities/watchlist-selection";
 import {
   formatPriceChange,
   latestPriceChange,
@@ -35,6 +36,7 @@ export type WorkspaceRow = {
   coverage: string | null;
   priceDate: string | null;
   pn17: boolean;
+  watchlistReason: WatchlistReason | null;
   prices: PricePoint[];
 };
 
@@ -86,12 +88,14 @@ export function ResearchWorkspace({
   visibleTickers,
   label,
   emptyReason,
+  watchlistDescription,
   children,
 }: {
   rows: WorkspaceRow[];
   visibleTickers: string[];
   label: string;
   emptyReason: string;
+  watchlistDescription?: string;
   children?: React.ReactNode;
 }) {
   const saved = parseSaved(
@@ -103,23 +107,42 @@ export function ResearchWorkspace({
   const [sort, setSort] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [saveError, setSaveError] = useState(false);
-  const available = new Set(visibleTickers);
+  const [savedLookup, setSavedLookup] = useState<{ key: string; rows: WorkspaceRow[]; failed: boolean }>();
+  const watchlistByTicker = new Map(rows.map((row) => [row.ticker, row]));
+  const missingSaved = saved.filter((ticker) => !watchlistByTicker.has(ticker)).join(",");
+  const lookupKey = onlySaved ? missingSaved : "";
+  useEffect(() => {
+    if (!lookupKey) return;
+    const controller = new AbortController();
+    fetch(`/api/saved-companies?tickers=${encodeURIComponent(lookupKey)}`, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error("Saved companies unavailable");
+        return response.json() as Promise<WorkspaceRow[]>;
+      })
+      .then((rows) => setSavedLookup({ key: lookupKey, rows, failed: false }))
+      .catch(() => {
+        if (!controller.signal.aborted) setSavedLookup({ key: lookupKey, rows: [], failed: true });
+      });
+    return () => controller.abort();
+  }, [lookupKey]);
+  const lookingUpSaved = Boolean(lookupKey && savedLookup?.key !== lookupKey);
+  const byTicker = new Map(watchlistByTicker);
+  if (lookupKey && savedLookup?.key === lookupKey) {
+    for (const row of savedLookup.rows) byTicker.set(row.ticker, row);
+  }
+  const ordered = (onlySaved ? saved : visibleTickers)
+    .flatMap((ticker) => byTicker.get(ticker) ?? []);
   const sectors = [
     ...new Set(
-      rows
-        .filter((row) => available.has(row.ticker))
+      ordered
         .map((row) => row.sector)
         .filter((value): value is string => Boolean(value)),
     ),
   ].sort();
   const needle = query.trim().toLowerCase();
-  const ordered = visibleTickers
-    .map((ticker) => rows.find((row) => row.ticker === ticker))
-    .filter((row): row is WorkspaceRow => Boolean(row));
   const visible = ordered.filter(
     (row) =>
-      (!onlySaved || saved.includes(row.ticker)) &&
-      (!sector || row.sector === sector) &&
+      (!sector || !sectors.includes(sector) || row.sector === sector) &&
       (!needle ||
         `${row.ticker} ${row.name} ${row.sector ?? ""}`
           .toLowerCase()
@@ -148,8 +171,7 @@ export function ResearchWorkspace({
           : bv - av || a.ticker.localeCompare(b.ticker);
     });
   const compared = selected
-    .map((ticker) => rows.find((row) => row.ticker === ticker))
-    .filter((row): row is WorkspaceRow => Boolean(row));
+    .flatMap((ticker) => byTicker.get(ticker) ?? []);
 
   function toggleSaved(ticker: string) {
     const next = saved.includes(ticker)
@@ -168,6 +190,9 @@ export function ResearchWorkspace({
         <div>
           <p className="section-kicker">YOUR RESEARCH DESK</p>
           <h2 className="text-xl font-semibold tracking-tight">{label}</h2>
+          {watchlistDescription && !onlySaved ? (
+            <p className="mt-1 text-xs text-muted-foreground">{watchlistDescription}</p>
+          ) : null}
         </div>
         <Link
           href="/market"
@@ -184,7 +209,7 @@ export function ResearchWorkspace({
             aria-pressed={!onlySaved}
             onClick={() => setOnlySaved(false)}
           >
-            All companies <span>{ordered.length}</span>
+            All companies <span>{visibleTickers.length}</span>
           </button>
           <button
             type="button"
@@ -192,9 +217,7 @@ export function ResearchWorkspace({
             onClick={() => setOnlySaved(true)}
           >
             <Star className="size-3.5" aria-hidden="true" /> My saved{" "}
-            <span>
-              {rows.filter((row) => saved.includes(row.ticker)).length}
-            </span>
+            <span>{saved.length}</span>
           </button>
         </div>
         <label className="workspace-search">
@@ -239,7 +262,15 @@ export function ResearchWorkspace({
           {visible.length} shown · compare up to 3
         </span>
       </div>
-      {children}
+      {!onlySaved ? children : null}
+      {lookingUpSaved ? (
+        <p className="px-5 py-2 text-xs text-muted-foreground" role="status">Loading saved companies…</p>
+      ) : null}
+      {lookupKey && savedLookup?.key === lookupKey && savedLookup.failed ? (
+        <p className="px-5 py-2 text-xs text-muted-foreground" role="status">
+          Some saved companies could not be loaded. Your stars have not changed.
+        </p>
+      ) : null}
       {saveError ? (
         <p className="px-5 py-2 text-xs text-amber-800" role="status">
           Browser storage is blocked. Your saved list lasts only for this visit.
@@ -426,6 +457,11 @@ export function ResearchWorkspace({
                     >
                       {row.name}
                     </p>
+                    {!onlySaved && row.watchlistReason ? (
+                      <span className={`text-xs font-semibold ${row.watchlistReason === "Top pick" ? "text-primary" : "text-[var(--positive)]"}`}>
+                        {row.watchlistReason}
+                      </span>
+                    ) : null}
                     {row.pn17 ? (
                       <span className="text-xs font-semibold text-red-700">
                         PN17
@@ -513,27 +549,27 @@ export function ResearchWorkspace({
           </tbody>
         </table>
       </div>
-      {visible.length === 0 ? (
+      {visible.length === 0 && !lookingUpSaved ? (
         <div className="px-6 py-12 text-center">
           <Search
             className="mx-auto mb-3 size-6 text-muted-foreground"
             aria-hidden="true"
           />
           <h3 className="font-semibold">
-            {ordered.length === 0
-              ? "No companies in this view yet"
-              : onlySaved && saved.length === 0
+            {onlySaved && saved.length === 0
                 ? "Build your own shortlist"
+              : !onlySaved && ordered.length === 0
+                ? "No companies in this view yet"
                 : "No matching companies"}
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            {ordered.length === 0
-              ? emptyReason
-              : onlySaved && saved.length === 0
+            {onlySaved && saved.length === 0
                 ? "Use the star beside a company in All companies to save it here."
+              : !onlySaved && ordered.length === 0
+                ? emptyReason
                 : "Try another search, sector, or research list. Your saved companies are kept."}
           </p>
-          {ordered.length === 0 ? (
+          {!onlySaved && ordered.length === 0 ? (
             <Link
               href="/"
               className="mt-4 inline-block text-sm font-semibold text-primary"

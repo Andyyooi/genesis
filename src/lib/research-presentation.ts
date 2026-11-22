@@ -15,6 +15,24 @@ export function researchScoreBlurb(result: ScoreResult): string {
   return `${RESEARCH_SCORE_BLURB} Not in this run: ${omitted.join(", ")}.`;
 }
 
+export function researchVerdict(score: number | null, needsVerification: boolean) {
+  if (score === null || !Number.isFinite(score)) return {
+    label: "Not enough evidence", tone: "UNKNOWN", why: "The saved data did not support a research score.",
+  };
+  if (needsVerification) return {
+    label: "Check the evidence", tone: "LOW", why: "Some key figures are missing or old, so treat this score with caution.",
+  };
+  if (score >= 70) return {
+    label: "Strong research score", tone: "HIGH", why: "On balance, the saved financial and price checks compare well with other stocks.",
+  };
+  if (score >= 45) return {
+    label: "Mid-range research score", tone: "MEDIUM", why: "On balance, the saved checks put this stock near the middle of the comparison.",
+  };
+  return {
+    label: "Weaker research score", tone: "VERY_LOW", why: "On balance, other stocks compare better on the saved financial and price checks.",
+  };
+}
+
 export function liveWeightLabel(category: CategoryScore): string {
   if (!category.inThisRun || category.liveWeight === null) {
     return "Not in this run";

@@ -4,7 +4,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { PriceChart } from "@/components/research/price-chart";
 import { formatMyr, formatSharePrice } from "@/lib/format-myr";
 import {
+  calendarDateTicks,
   formatPriceChange,
+  movingAverage,
   summariseMarketPrices,
   latestPriceChange,
   priceChange,
@@ -16,6 +18,34 @@ import {
 const point = (date: string, close: number | null): PricePoint => ({
   date,
   close,
+});
+
+describe("stock chart overlays and calendar axis", () => {
+  it("draws averages only from complete trading windows, including closes outside the visible range", () => {
+    const prices = [
+      point("2026-08-10", 1),
+      point("2026-08-11", 2),
+      point("2026-08-12", 3),
+      point("2026-08-13", null),
+      point("2026-08-14", 5),
+      point("2026-08-17", 6),
+    ];
+    expect(movingAverage(prices, 2).map(({ close }) => close)).toEqual([null, 1.5, 2.5, null, null, 5.5]);
+    const average = movingAverage(prices, 2).slice(1, 3);
+    const plot = pricePlot(prices.slice(1, 3), 100, 50, 0, { overlays: [average] });
+    expect(plot?.overlayPaths[0]).toMatch(/M.*L/);
+    expect(plot?.min).toBeLessThan(1.5);
+  });
+
+  it("uses elapsed calendar time for positions, hover and intermediate All-range labels", () => {
+    const prices = [point("2024-01-01", 1), point("2024-01-02", 2), point("2026-01-01", 3)];
+    const plot = pricePlot(prices, 100, 50, 0, { calendar: true });
+    expect(plot?.x(1)).toBeLessThan(1);
+    expect(plot?.nearestIndex(15)).toBe(1);
+    expect(calendarDateTicks(prices)).toHaveLength(5);
+    expect(calendarDateTicks(prices)[2].date).toBe("2025-01-01");
+    expect(calendarDateTicks(prices).filter((tick) => tick.compact)).toHaveLength(3);
+  });
 });
 
 describe("share-price precision", () => {

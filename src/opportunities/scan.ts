@@ -1,4 +1,7 @@
-import { loadScoreHistory, loadWatchlist } from "@/db/queries";
+import { loadScoreHistory, loadWatchlistMembership } from "@/db/queries";
+import { loadSavedPrices } from "@/db/price-history";
+import type { WorkspaceRow } from "@/components/research/research-workspace";
+import type { WatchlistReason } from "@/opportunities/watchlist-selection";
 import { latestAnnualPeriod } from "@/lib/snapshot-dates";
 import type { MetricValue } from "@/metrics/types";
 import {
@@ -9,6 +12,7 @@ import {
 } from "@/opportunities/lists";
 import { scoreTicker } from "@/scoring/run-ticker";
 import { getSqlite } from "@/db/client";
+import { seedUniverseFromYaml } from "@/db/seed";
 
 function metric(metrics: MetricValue[], id: string): MetricValue | undefined {
   return metrics.find((m) => m.id === id);
@@ -22,17 +26,22 @@ export function scanWatchlist(): OpportunityRow[] {
   if (scanCache && scanCache.version === version && Date.now() - scanCache.at < SCAN_CACHE_MS) {
     return scanCache.rows;
   }
-  const universe = loadWatchlist();
-  const rows: OpportunityRow[] = [];
-  for (const item of universe) {
-    const scored = scoreTicker(item.ticker, false, { attachValuationContext: false });
-    if (!scored) continue;
+  seedUniverseFromYaml();
+  const rows = loadWatchlistMembership().flatMap((item) => loadOpportunity(item.ticker, item.reason) ?? []);
+  scanCache = { at: Date.now(), version, rows };
+  return rows;
+}
+
+export function loadOpportunity(ticker: string, watchlistReason: WatchlistReason | null = null): OpportunityRow | null {
+    const scored = scoreTicker(ticker, false, { attachValuationContext: false });
+    if (!scored) return null;
     const lastClose = metric(scored.metrics, "last_close");
     const lastTrade = metric(scored.metrics, "last_trade_date");
     const dist = metric(scored.metrics, "distance_from_52w_high");
     const history = loadScoreHistory(scored.instrument.id, 8);
-    rows.push({
+    return {
       ticker: scored.instrument.ticker,
+      watchlistReason,
       name: scored.instrument.name,
       instrumentType: scored.instrumentType === "REIT" ? "REIT" : "COMMON_STOCK",
       pn17: scored.instrument.pn17,
@@ -44,7 +53,7 @@ export function scanWatchlist(): OpportunityRow[] {
       sector: scored.instrument.sector ?? null,
       researchProfile: scored.result.researchProfile,
       price: lastClose?.available ? lastClose.value : null,
-      lastTradeDate: lastTrade?.period ?? item.lastTradeDate,
+      lastTradeDate: lastTrade?.period ?? scored.bars[0]?.barDate ?? null,
       fundamentalsPeriod: latestAnnualPeriod(scored.periods),
       researchScore: scored.result.researchScore,
       valuationScore: scored.result.valuationScore,
@@ -77,10 +86,27 @@ export function scanWatchlist(): OpportunityRow[] {
       hasEvents: scored.events.length > 0,
       eventCount: scored.events.length,
       result: scored.result,
-    });
-  }
-  scanCache = { at: Date.now(), version, rows };
-  return rows;
+    };
+}
+
+export function toWorkspaceRow(row: OpportunityRow): WorkspaceRow {
+  return {
+    ticker: row.ticker,
+    name: row.name,
+    sector: row.sector,
+    price: row.price,
+    researchScore: row.researchScore,
+    valuationScore: row.valuationScore,
+    qualityScore: row.qualityScore,
+    confidence: row.confidence,
+    needsVerification: row.needsVerification,
+    freshness: row.freshness,
+    coverage: row.coreCoverageLabel,
+    priceDate: row.lastTradeDate,
+    pn17: row.pn17,
+    watchlistReason: row.watchlistReason ?? null,
+    prices: loadSavedPrices(row.ticker, 30),
+  };
 }
 
 export function clearOpportunityScanCache() {

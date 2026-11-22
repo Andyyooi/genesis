@@ -5,6 +5,7 @@ import { plainConcern } from "@/lib/financial-terms";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CategoryDisclosure } from "@/components/research/category-disclosure";
+import { StatusLabel } from "@/components/research/status-label";
 import {
   DataQualitySection,
   ResearchScoreCard,
@@ -33,10 +34,13 @@ import { loadScoreHistory } from "@/db/queries";
 import type { LineItems } from "@/ingest/types";
 import { formatDateSafe } from "@/lib/display";
 import { formatMetricValue } from "@/lib/format-metric";
-import { formatMyr } from "@/lib/format-myr";
+import { formatMyr, formatSharePrice } from "@/lib/format-myr";
+import { movingAverage } from "@/lib/price-history";
+import { formatScore100 } from "@/lib/research-copy";
 import {
   absoluteValuationBlurb,
   researchInterpretationBullets,
+  researchVerdict,
 } from "@/lib/research-presentation";
 import { buildSnapshotDates, latestAnnualPeriod } from "@/lib/snapshot-dates";
 import type { MetricValue } from "@/metrics/types";
@@ -66,16 +70,30 @@ function metricById(metrics: MetricValue[], id: string): MetricValue | undefined
   return metrics.find((m) => m.id === id);
 }
 
-function sma(closesNewestFirst: number[], window: number): number | null {
-  if (closesNewestFirst.length < window) return null;
-  const slice = closesNewestFirst.slice(0, window);
-  return slice.reduce((sum, n) => sum + n, 0) / window;
-}
-
 function fmtRatio(metric: MetricValue | undefined): string {
   if (!metric) return "Unavailable";
+  if (metric.available && ["week52_high", "week52_low"].includes(metric.id)) return formatSharePrice(metric.value);
   return formatMetricValue(metric);
 }
+
+const annualFields = [
+  ["Revenue", "revenue"],
+  ["PAT", "pat"],
+  ["EPS", "eps"],
+  ["Equity", "equity"],
+  ["Total debt", "totalDebt"],
+  ["Cash", "cash"],
+  ["OCF", "ocf"],
+  ["Capex", "capex"],
+  ["Dividend / share", "dividendPerShare"],
+  ["NAV / unit (reported)", "navPerShare"],
+  ["Total assets", "totalAssets"],
+  ["Gross profit", "grossProfit"],
+  ["EBIT / operating income", "ebit"],
+  ["Current assets", "currentAssets"],
+  ["Current liabilities", "currentLiabilities"],
+  ["Long-term debt", "longTermDebt"],
+] as const;
 
 function profileMetricIds(profile: string, isReit: boolean): string[] {
   if (isReit || profile === "REIT") {
@@ -158,15 +176,35 @@ export default async function ResearchPage({
   const history = loadScoreHistory(instrument.id, 8);
   const lastClose = metricById(metrics, "last_close");
   const lastTrade = metricById(metrics, "last_trade_date");
+  const prices = loadSavedPrices(instrument.ticker, -1);
+  const latestPrice = prices.at(-1);
+  const close = latestPrice ? latestPrice.close : lastClose?.available ? lastClose.value : null;
+  const priceDate = latestPrice?.date ?? lastTrade?.period;
   const snapshotDates = buildSnapshotDates({
     scoreAsOf: result.asOf,
-    lastTradeDate: lastTrade?.period ?? null,
+    lastTradeDate: priceDate ?? null,
     fundamentalsPeriod: latestAnnualPeriod(periods),
   });
   const annuals = periods.filter((p) => p.statementType === "annual").slice(0, 6);
-  const closes = bars.map((b) => b.close).filter((n): n is number => n !== null);
-  const sma50 = sma(closes, 50);
-  const sma200 = sma(closes, 200);
+  const annualRows = annuals.map((row) => {
+    const items = parseLineItems(row.lineItemsJson);
+    return {
+      ...row,
+      fields: [
+        ["Fiscal period", row.fiscalPeriod ?? "Unavailable"],
+        ["Filing / report date", row.filingDate ?? "Unavailable"],
+        ["Available from", row.availableAt ?? "Unavailable"],
+        ...annualFields.map(([label, key]) => {
+          const value = items?.[key] ?? null;
+          return [label, value === null || !Number.isFinite(value) ? "Unavailable"
+            : key === "eps" || key === "dividendPerShare" || key === "navPerShare" ? value.toFixed(3)
+              : formatMyr(value)];
+        }),
+      ],
+    };
+  });
+  const sma50 = movingAverage(prices, 50).at(-1)?.close;
+  const sma200 = movingAverage(prices, 200).at(-1)?.close;
   const lastVolume = bars[0]?.volume ?? null;
   const isReit = scored.instrumentType === "REIT";
   const isBank = result.researchProfile === "BANK" || result.profile === "bank";
@@ -178,12 +216,20 @@ export default async function ResearchPage({
   });
   const profileIds = profileMetricIds(result.researchProfile, isReit);
   const fairValue = loadPersistedFairValueForPage(instrument.id);
-  const fairRange = fairRangeHeadline(fairValue, lastClose?.value ?? null);
+  const fairRange = fairRangeHeadline(fairValue, close);
   const priceDownFlag = goodCompanyPriceDown({ result, bars, periods, pn17: instrument.pn17, includeSales: !isBank });
   const latestResults = priceDownFlag ? null : latestResultsComparison(periods, { includeSales: !isBank });
+  const verdict = researchVerdict(result.researchScore, result.dataConfidence.needsVerification);
+  const size = metricById(metrics, "market_cap");
+  const dividendYield = metricById(metrics, "dividend_yield");
+  const riskFlag = instrument.pn17 ? "Financial distress (PN17)"
+    : instrument.warningFlag ? "Listing warning"
+      : result.dataConfidence.needsVerification ? "Check the evidence"
+        : result.concerns.length > 0 ? `${result.concerns.length} flagged ${result.concerns.length === 1 ? "check" : "checks"}`
+          : "No stored flags";
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-8 sm:px-6">
+    <main className="stock-research mx-auto flex w-full min-w-0 max-w-6xl flex-1 flex-col gap-4 px-4 py-5 sm:px-6">
       <p className="text-sm text-muted-foreground">
         <Link href="/" className="text-foreground underline underline-offset-4">
           Dashboard
@@ -191,7 +237,7 @@ export default async function ResearchPage({
       </p>
 
       {/* A. Header */}
-      <header className="flex flex-col gap-3 border-b pb-6">
+      <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-3xl font-semibold tracking-tight">{instrument.name}</h1>
           <Badge variant={isReit ? "secondary" : "outline"}>{instrumentLabel}</Badge>
@@ -215,21 +261,43 @@ export default async function ResearchPage({
           {instrument.sector ? ` · ${instrument.sector}` : ""}
           {instrument.industry ? ` · ${instrument.industry}` : ""}
         </p>
-        <dl className="grid gap-2 text-sm sm:grid-cols-3">
-          <div>
-            <dt className="text-muted-foreground">Last close (RM)</dt>
-            <dd className="text-lg font-medium tabular-nums">{fmtRatio(lastClose)}</dd>
+      </header>
+
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3" aria-label="Stock at a glance">
+        <section className="market-card min-w-0 p-4" aria-label="Price and research score">
+          <div className="mb-2 grid grid-cols-2 gap-3">
+            <div>
+              <h2 className="text-xs font-medium text-muted-foreground">Last close</h2>
+              <p className="text-xl font-semibold tabular-nums">{formatSharePrice(close)}</p>
+              <p className="text-xs text-muted-foreground">{formatDateSafe(priceDate)}</p>
+            </div>
+            <div>
+              <h2 className="text-xs font-medium text-muted-foreground">Research score</h2>
+              <p className="text-xl font-semibold tabular-nums">{formatScore100(result.researchScore)}</p>
+            </div>
           </div>
-          <div>
-            <dt className="text-muted-foreground">Price date</dt>
-            <dd className="font-medium">{formatDateSafe(lastTrade?.period)}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Last research run</dt>
-            <dd className="font-medium">{formatDateSafe(result.asOf)}</dd>
-          </div>
-        </dl>
-        <FairRangeLine range={fairRange} />
+          <StatusLabel level={verdict.tone}>{verdict.label}</StatusLabel>
+          <p className="mt-1.5 text-xs text-muted-foreground">{verdict.why} Not a buy or sell signal.</p>
+        </section>
+        <section className="market-card min-w-0 p-4">
+          <h2 className="mb-2 font-semibold">Fair price range</h2>
+          <FairRangeLine range={fairRange} compact />
+        </section>
+        <section className="market-card min-w-0 p-4 md:col-span-2 lg:col-span-1">
+          <h2 className="mb-2 font-semibold">Key numbers</h2>
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+            <div><dt className="text-xs text-muted-foreground">Valuation score</dt><dd className="font-medium">{formatScore100(result.valuationScore)}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">{isReit ? "Distribution yield" : "Dividend yield"}</dt><dd className="font-medium">{dividendYield?.available ? fmtRatio(dividendYield) : "Unavailable"}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Company size</dt><dd className="font-medium">{size?.available && size.value !== null && Number.isFinite(size.value) ? `RM ${size.value.toLocaleString("en-MY", { notation: "compact", maximumFractionDigits: 1 })}` : "Unavailable"}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Risk flags</dt><dd><StatusLabel level={instrument.pn17 ? "PN17" : riskFlag !== "No stored flags" ? "LOW" : "UNKNOWN"}>{riskFlag}</StatusLabel></dd></div>
+          </dl>
+        </section>
+      </div>
+
+      <PriceChart ticker={instrument.ticker} points={prices} />
+
+      <div className="stock-details-grid grid items-start gap-3 md:grid-cols-2">
+      <Disclosure title="Saved data & latest results" hint={`Research run: ${formatDateSafe(result.asOf)}`}>
         <LatestResultsLine results={latestResults} />
         {priceDownFlag ? <GoodCompanyPriceDownCard flag={priceDownFlag} /> : null}
         <DataLagBanner dates={snapshotDates} />
@@ -241,17 +309,11 @@ export default async function ResearchPage({
           <details className="text-sm text-muted-foreground"><summary className="cursor-pointer text-primary">About bank research</summary><p className="mt-2">Banks are compared using price versus net assets (P/B), profit on shareholders’ money (ROE), and bank health checks where data exists. Ordinary-company cash-flow and operating-earnings comparisons are not used.
           </p></details>
         ) : null}
-      </header>
-
-      <PriceChart ticker={instrument.ticker} points={loadSavedPrices(instrument.ticker, -1)} />
-
-      {/* B. Research Score Card */}
-      <ResearchScoreCard result={result} />
-
-      <StockNewsSection ticker={instrument.ticker} />
+      </Disclosure>
 
       {/* C. Score breakdown */}
       <Disclosure title="Score breakdown" hint="See the financial and price checks (factors) behind this score.">
+        <ResearchScoreCard result={result} />
         <div>
           <p className="text-sm text-muted-foreground">
             Each factor is one financial or price check. Higher scores mean a stronger comparison with other scored companies, not a guaranteed return. A live weight is how much a category counts in this result. Missing checks are left out, not scored as zero; the remaining categories share the weight.
@@ -302,7 +364,10 @@ export default async function ResearchPage({
         </div>
       </Disclosure>
 
-      <PersistedFairValue stored={fairValue} />
+      <Disclosure title="Fair value" hint="See the price estimates and the checks behind them.">
+        <FairRangeLine range={fairRange} />
+        <PersistedFairValue stored={fairValue} />
+      </Disclosure>
 
       {/* Profile metrics */}
       <Disclosure title={isReit ? "REIT metrics" : isBank ? "Bank metrics" : "Company metrics"} hint="Explore the profile-specific numbers.">
@@ -314,10 +379,9 @@ export default async function ResearchPage({
         <MetricTable ids={profileIds} metrics={metrics} />
       </Disclosure>
 
-      {result.concerns.length > 0 || instrument.pn17 ? (
-        <section className="flex flex-col gap-3">
+      {result.concerns.length > 0 || instrument.pn17 || instrument.warningFlag ? (
+        <Disclosure title="Flagged observations" hint="See which saved checks raised a concern.">
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">Flagged observations</h2>
             <p className="text-sm text-muted-foreground">
               Rule-based notices from stored data. They do not change Research Score unless scoring
               config enables a penalty (currently off).
@@ -338,11 +402,18 @@ export default async function ResearchPage({
                 PN17 listing status is stored on this name (status warning, not a score deduction).
               </li>
             ) : null}
+            {instrument.warningFlag && !instrument.pn17 ? <li>A listing warning is stored for this company.</li> : null}
           </ul>
-        </section>
+        </Disclosure>
       ) : null}
 
-      <DividendHistory key={instrument.ticker} ticker={instrument.ticker} />
+      <Disclosure title="Dividend history" hint="Five years of reported cash payments.">
+        <DividendHistory key={instrument.ticker} ticker={instrument.ticker} />
+      </Disclosure>
+
+      <Disclosure title="Company news" hint="Read recent headlines about this company.">
+        <StockNewsSection ticker={instrument.ticker} />
+      </Disclosure>
 
       <Disclosure title="Financials" hint="Annual accounts and reported line items.">
 
@@ -350,7 +421,22 @@ export default async function ResearchPage({
           <p className="text-sm text-muted-foreground">
             Unavailable — no annual periods stored for this name.
           </p>
-        ) : (
+        ) : (<>
+          <div className="grid gap-2 lg:hidden">
+            {annualRows.map((row) => (
+              <Disclosure key={row.id} title={row.periodEnd}>
+                <dl className="space-y-2 text-sm">
+                  {row.fields.map(([label, value]) => (
+                    <div key={label} className="grid grid-cols-2 gap-2">
+                      <dt className="text-muted-foreground">{label}</dt>
+                      <dd className="min-w-0 text-right tabular-nums [overflow-wrap:anywhere]">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </Disclosure>
+            ))}
+          </div>
+          <div className="hidden lg:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -363,70 +449,18 @@ export default async function ResearchPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow>
-                <TableCell>Fiscal period</TableCell>
-                {annuals.map((row) => (
-                  <TableCell key={`${row.id}-fy`} className="text-right font-mono text-sm">
-                    {row.fiscalPeriod ?? "Unavailable"}
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell>Filing / report date</TableCell>
-                {annuals.map((row) => (
-                  <TableCell key={`${row.id}-filing`} className="text-right font-mono text-sm">
-                    {row.filingDate ?? "Unavailable"}
-                  </TableCell>
-                ))}
-              </TableRow>
-              <TableRow>
-                <TableCell>available_at</TableCell>
-                {annuals.map((row) => (
-                  <TableCell key={`${row.id}-avail`} className="text-right font-mono text-sm">
-                    {row.availableAt ?? "Unavailable"}
-                  </TableCell>
-                ))}
-              </TableRow>
-              {(
-                [
-                  ["Revenue", "revenue"],
-                  ["PAT", "pat"],
-                  ["EPS", "eps"],
-                  ["Equity", "equity"],
-                  ["Total debt", "totalDebt"],
-                  ["Cash", "cash"],
-                  ["OCF", "ocf"],
-                  ["Capex", "capex"],
-                  ["Dividend / share", "dividendPerShare"],
-                  ["NAV / unit (reported)", "navPerShare"],
-                  ["Total assets", "totalAssets"],
-                  ["Gross profit", "grossProfit"],
-                  ["EBIT / operating income", "ebit"],
-                  ["Current assets", "currentAssets"],
-                  ["Current liabilities", "currentLiabilities"],
-                  ["Long-term debt", "longTermDebt"],
-                ] as const
-              ).map(([label, key]) => (
-                <TableRow key={key}>
+              {annualRows[0].fields.map(([label], index) => (
+                <TableRow key={label}>
                   <TableCell>{label}</TableCell>
-                  {annuals.map((row) => {
-                    const items = parseLineItems(row.lineItemsJson);
-                    const value = items?.[key] ?? null;
-                    return (
-                      <TableCell key={row.id} className="text-right tabular-nums">
-                        {value === null || !Number.isFinite(value)
-                          ? "Unavailable"
-                          : key === "eps" || key === "dividendPerShare" || key === "navPerShare"
-                            ? value.toFixed(3)
-                            : formatMyr(value)}
-                      </TableCell>
-                    );
-                  })}
+                  {annualRows.map((row) => (
+                    <TableCell key={row.id} className="text-right tabular-nums">{row.fields[index][1]}</TableCell>
+                  ))}
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        )}
+          </div>
+        </>)}
       </Disclosure>
 
       <Disclosure title="Price" hint="Trading range and moving averages.">
@@ -456,13 +490,13 @@ export default async function ResearchPage({
             <TableRow>
               <TableCell>50-day average (stored bars)</TableCell>
               <TableCell className="text-right">
-                {sma50 === null || !Number.isFinite(sma50) ? "Unavailable" : formatMyr(sma50)}
+                {formatSharePrice(sma50)}
               </TableCell>
             </TableRow>
             <TableRow>
               <TableCell>200-day average (stored bars)</TableCell>
               <TableCell className="text-right">
-                {sma200 === null || !Number.isFinite(sma200) ? "Unavailable" : formatMyr(sma200)}
+                {formatSharePrice(sma200)}
               </TableCell>
             </TableRow>
             <TableRow>
@@ -502,6 +536,7 @@ export default async function ResearchPage({
       </Disclosure>
 
       <Disclosure title="Export research" hint="Download or copy a report for further research."><ExportActions ticker={instrument.ticker} /></Disclosure>
+      </div>
     </main>
   );
 }
