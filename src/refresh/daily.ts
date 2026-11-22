@@ -204,6 +204,7 @@ async function refreshFundamentals(
         skippedOtherSource: report.skippedOtherSource,
         instrumentsSkippedFresh: report.instrumentsSkippedFresh,
         instrumentsFetched: report.instrumentsFetched,
+        neverAvailableNoData: report.neverAvailableNoData ?? 0,
         recheckAfterDays: DAILY_FUNDAMENTALS_RECHECK_DAYS,
       },
     });

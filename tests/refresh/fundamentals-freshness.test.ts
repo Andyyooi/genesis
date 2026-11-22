@@ -293,6 +293,22 @@ describe("importYahooFundamentals freshness gate", () => {
     expect(after.retrievedAt).toBe(before.retrievedAt);
   });
 
+  it("counts Yahoo having no accounts as never available only when none were ever stored", async () => {
+    const empty = countingProvider({ "*": [] });
+    const gate = { freshnessGate: { asOf: new Date("2026-09-26T00:00:00.000Z") } };
+    const first = await importYahooFundamentals(empty, gate);
+    expect(first.failed.map((f) => f.code)).toEqual(["NO_DATA"]);
+    expect(first.neverAvailableNoData).toBe(1);
+    seedYahooAnnual("MAYBANK", {
+      periodEnd: "2024-12-31",
+      retrievedAt: "2026-09-01T10:00:00.000Z",
+      lineItems: { revenue: 1e9, pat: 1e8, equity: 5e9 },
+    });
+    const second = await importYahooFundamentals(countingProvider({ "*": [] }), gate);
+    expect(second.failed).toHaveLength(1);
+    expect(second.neverAvailableNoData).toBe(0);
+  });
+
   it("persists a new annual period when Yahoo returns one", async () => {
     seedYahooAnnual("MAYBANK", {
       periodEnd: "2023-12-31",

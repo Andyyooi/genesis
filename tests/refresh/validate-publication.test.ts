@@ -18,6 +18,15 @@ describe("Actions publication validation", () => {
       expect(() => validateRefreshStages(rows.map((r) => ({ ...r, requested_succeeded_count: count })), start)).toThrow();
     }
   });
+  it("leaves stocks Yahoo has never had accounts for out of the fundamentals failure tolerance", () => {
+    const stages = (failed_count: number, never_available_count: unknown) => rows.map((r) => r.dataset === "fundamentals" ? { ...r, status: "PARTIAL", failed_count, requested_succeeded_count: 16, never_available_count: never_available_count as number } : r);
+    expect(() => validateRefreshStages(stages(2, 2), start)).not.toThrow();
+    expect(() => validateRefreshStages(stages(2, 0), start)).toThrow(/fundamentals/);
+    expect(() => validateRefreshStages(stages(2, null), start)).toThrow(/fundamentals/);
+    expect(() => validateRefreshStages(stages(2, 3), start)).toThrow(/fundamentals/);
+    expect(() => validateRefreshStages(stages(2, 1.5), start)).toThrow(/fundamentals/);
+    expect(() => validateRefreshStages(rows.map((r) => r.dataset === "prices" ? { ...r, status: "PARTIAL", failed_count: 2, requested_succeeded_count: 16, never_available_count: 2 } : r), start)).toThrow(/prices/);
+  });
   it("accepts completed refreshes including unavailable fair values, but not absent stages", () => {
     expect(() => validateRefreshStages(rows, start)).not.toThrow();
     expect(() => validateRefreshStages(rows.map((r) => r.dataset === "prices" ? r : { ...r, status: "NO_DATA" }), start)).not.toThrow();
