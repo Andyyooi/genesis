@@ -10,6 +10,7 @@ import {
 import { Disclosure } from "@/components/research/disclosure";
 import { DashboardFilters } from "@/components/research/dashboard-filters";
 import { TopPicks } from "@/components/research/top-picks";
+import { PriceCheckCard } from "@/components/research/price-check-card";
 import {
   ResearchWorkspace,
   type WorkspaceRow,
@@ -32,6 +33,7 @@ import {
 } from "@/opportunities/lists";
 import { scanWatchlist } from "@/opportunities/scan";
 import { parseTopPicksOptions } from "@/opportunities/top-picks";
+import { loadPriceCheck } from "@/refresh/price-check";
 
 export const dynamic = "force-dynamic";
 
@@ -78,11 +80,13 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   let rows: ReturnType<typeof scanWatchlist>;
   let reports: ReturnType<typeof loadLatestIngestReports>;
   let recentAlerts: ReturnType<typeof loadRecentAlerts>;
+  let priceCheck: ReturnType<typeof loadPriceCheck>;
   try {
     loadScoringConfig();
     rows = scanWatchlist();
     reports = loadLatestIngestReports();
     recentAlerts = loadRecentAlerts(6);
+    priceCheck = loadPriceCheck();
   } catch {
     return (
       <main className="mx-auto w-full max-w-6xl px-6 py-12">
@@ -337,6 +341,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
           className="flex min-w-0 flex-col gap-5"
           aria-label="Research context"
         >
+          <PriceCheckCard report={priceCheck.report} fromRefresh={priceCheck.fromRefresh} />
           <TopPicks key={JSON.stringify(topPicksOptions)} options={topPicksOptions} preservedParams={topPicksPreservedParams} />
           <section className="market-card p-5">
             <div className="mb-4 flex items-center gap-2">

@@ -170,6 +170,11 @@ describe("Phase 18B daily refresh", () => {
     });
     expect(first.datasets.find((d) => d.dataset === "prices")?.status).toBe("SUCCESS");
     expect(first.datasets.find((d) => d.dataset === "prices")?.metadata).toMatchObject({ requestsSucceeded: 1 });
+    expect(first.datasets.find((d) => d.dataset === "price_check")).toMatchObject({
+      status: "SUCCESS",
+      attemptedCount: 1,
+      metadata: { kind: "price-check", newestDate: "2026-09-23", listed: 1 },
+    });
     expect(loadLastSuccessfulAt("prices", "yahoo")).toBeTruthy();
 
     await runDailyRefresh({

@@ -264,7 +264,7 @@ export const REFRESH_STATUSES = [
 ] as const;
 export type RefreshStatus = (typeof REFRESH_STATUSES)[number];
 
-export const REFRESH_DATASETS = ["prices", "fundamentals", "events", "news", "scores", "fair_value", "calendar"] as const;
+export const REFRESH_DATASETS = ["prices", "fundamentals", "events", "news", "scores", "fair_value", "calendar", "price_check"] as const;
 export type RefreshDataset = (typeof REFRESH_DATASETS)[number];
 
 /**
