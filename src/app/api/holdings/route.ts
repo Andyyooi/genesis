@@ -4,6 +4,7 @@ import { companyCalendar, instruments } from "@/db/schema";
 import { scoreTicker } from "@/scoring/run-ticker";
 import { loadRecentAlerts } from "@/alerts/refresh";
 import { plainConcern } from "@/lib/financial-terms";
+import { loadListFairRanges } from "@/fair-value/load-list-ranges";
 import { annualDividend } from "@/lib/holding-dividends";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,7 @@ export function GET(request: Request) {
   const db = getDb();
   const universe = db.select({ ticker: instruments.ticker, name: instruments.name }).from(instruments).all();
   const alerts = tickers.length ? loadRecentAlerts(10000) : [];
+  const fairRanges = loadListFairRanges(tickers);
   const quotes = tickers.map(ticker => {
     const data = scoreTicker(ticker);
     if (!data) return { ticker, price: null, priceDate: null, score: null, annualDividend: null, warnings: ["Stock is no longer in the published universe."] };
@@ -33,7 +35,7 @@ export function GET(request: Request) {
       ...(!bar ? ["Price unavailable"] : Date.now() - Date.parse(bar.barDate) > 7 * 86400000 ? [`Stored price is over 7 days old (${bar.barDate}).`] : []),
       ...alerts.filter(a => a.ticker === ticker).map(a => `${a.title}: ${a.why}`),
     ];
-    return { ticker, price, priceDate: bar?.barDate ?? null, score: inactive ? null : result.researchScore, annualDividend: annualDividend(instrument.currency, data.periods, price, calendar), warnings: [...new Set(warnings)] };
+    return { ticker, fairRange: fairRanges[ticker], price, priceDate: bar?.barDate ?? null, score: inactive ? null : result.researchScore, annualDividend: annualDividend(instrument.currency, data.periods, price, calendar), warnings: [...new Set(warnings)] };
   });
   return Response.json({ universe, quotes }, { headers: { "Cache-Control": "no-store" } });
 }

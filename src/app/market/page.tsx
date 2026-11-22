@@ -12,6 +12,7 @@ import { loadLatestFundamentalsQuality } from "@/market/fundamentals-quality";
 import { loadLatestMarketScan } from "@/market/scan";
 import { filterMarketRows } from "@/market/filters";
 import { formatScore100 } from "@/lib/research-copy";
+import { loadListFairRanges } from "@/fair-value/load-list-ranges";
 
 export const dynamic = "force-dynamic";
 
@@ -204,6 +205,7 @@ export default async function MarketPage({
             </Disclosure>
           </div>
           <MarketResults
+            fairRanges={loadListFairRanges(visible.map(row => String(row.ticker)))}
             rows={visible}
             total={rows.length}
             query={q}

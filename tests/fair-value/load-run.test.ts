@@ -6,6 +6,7 @@ import {
   loadFairValueRunById,
   loadFairValueRunHistory,
   loadLatestFairValueRun,
+  loadLatestFairValueRunsForInstruments,
 } from "@/fair-value/load-run";
 import { FAIR_VALUE_QUALITY_VERSION, insertFairValueRun } from "@/fair-value/persist";
 import type { FairValueQuality } from "@/fair-value/quality";
@@ -136,6 +137,19 @@ const query = {
 };
 
 describe("loadFairValueRun", () => {
+  it("batch reads the newest rows without hiding unreadable runs", () => {
+    const { sqlite, instrumentId } = memoryDb();
+    expect(loadLatestFairValueRunsForInstruments(sqlite, [])).toEqual(new Map());
+    expect(loadLatestFairValueRunsForInstruments(sqlite, [instrumentId])).toEqual(new Map());
+    const first = insertFairValueRun(sqlite, { instrumentId, result: bookResult(4), quality: quality(), calculatedAt: CALCULATED_AT });
+    expect(loadLatestFairValueRunsForInstruments(sqlite, [instrumentId]).get(instrumentId)).toEqual(loadFairValueRunById(sqlite, first.id));
+    const newer = insertFairValueRun(sqlite, { instrumentId, result: bookResult(5), quality: quality(), calculatedAt: "2026-10-09T00:00:00.000Z" });
+    sqlite.prepare("UPDATE fair_value_runs SET methods_json = ? WHERE id = ?").run("{", newer.id);
+    const batch = loadLatestFairValueRunsForInstruments(sqlite, [instrumentId, 999999]);
+    expect(batch.size).toBe(1);
+    expect(batch.get(instrumentId)).toMatchObject({ ok: false, id: newer.id, code: "MALFORMED_JSON" });
+    sqlite.close();
+  });
   it("round-trips stored columns and JSON payloads", () => {
     const { sqlite, instrumentId } = memoryDb();
     const built = result({

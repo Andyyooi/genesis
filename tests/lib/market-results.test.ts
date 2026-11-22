@@ -27,6 +27,7 @@ function render(
       query: "bank & trust",
       eligibility: "eligible",
       requestedPage,
+      fairRanges: {},
     }),
   );
 }

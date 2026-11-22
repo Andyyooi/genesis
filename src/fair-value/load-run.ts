@@ -111,6 +111,16 @@ export function loadFairValueRunById(sqlite: Database.Database, id: number): Fai
   return parseStoredRow(row);
 }
 
+export function loadLatestFairValueRunsForInstruments(sqlite: Database.Database, instrumentIds: number[]): Map<number, FairValueRunRead> {
+  if (!instrumentIds.length) return new Map();
+  const rows = sqlite.prepare(`${SELECT_ROW} WHERE id IN (
+    SELECT MAX(id) FROM fair_value_runs
+    WHERE instrument_id IN (${instrumentIds.map(() => "?").join(",")})
+    GROUP BY instrument_id
+  )`).all(...instrumentIds) as SqlRow[];
+  return new Map(rows.map(row => [row.instrumentId, parseStoredRow(row)]));
+}
+
 /**
  * Newest stored observation for one instrument and one model/quality generation.
  * Newest means the greatest row id. An unreadable newest row is returned as-is.
