@@ -69,6 +69,8 @@ export async function verifySession(token: string | undefined, env: AuthEnvironm
 export type GateDecision = "allow" | "unconfigured" | "unauthorized" | "redirect";
 
 export async function gateDecision(path: string, method: string, token: string | undefined, env: AuthEnvironment): Promise<GateDecision> {
+  // Only app identity assets are public. Research and all APIs stay behind the password.
+  if ((method === "GET" || method === "HEAD") && ["/manifest.webmanifest", "/app-icon-192.png", "/app-icon-512.png", "/apple-touch-icon.png"].includes(path)) return "allow";
   if (path.startsWith("/_next/static/") || path === "/favicon.ico" ||
       (path === "/login" && (method === "GET" || method === "HEAD")) ||
       (path === "/login/submit" && method === "POST")) return "allow";

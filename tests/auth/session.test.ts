@@ -87,6 +87,16 @@ describe("gate decisions", () => {
     expect(await gateDecision("/_next/static-secret", "GET", undefined, env)).toBe("redirect");
     expect(await gateDecision("/favicon.ico/private", "GET", undefined, env)).toBe("redirect");
   });
+  it("exposes only the exact install identity assets, not app data or lookalike paths", async () => {
+    for (const path of ["/manifest.webmanifest", "/app-icon-192.png", "/app-icon-512.png", "/apple-touch-icon.png"]) {
+      expect(await gateDecision(path, "GET", undefined, env)).toBe("allow");
+      expect(await gateDecision(path, "HEAD", undefined, env)).toBe("allow");
+      expect(await gateDecision(path, "POST", undefined, env)).toBe("redirect");
+      expect(await gateDecision(`${path}/private`, "GET", undefined, env)).toBe("redirect");
+    }
+    expect(await gateDecision("/api/dividends?ticker=MAYBANK", "GET", undefined, env)).toBe("unauthorized");
+    expect(await gateDecision("/api/holdings", "GET", undefined, env)).toBe("unauthorized");
+  });
   it("allows valid sessions and dev requests, never missing production credentials", async () => {
     const token = await signSession(env);
     expect(await gateDecision("/export/MAYBANK/full", "GET", token, env)).toBe("allow");

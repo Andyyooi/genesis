@@ -1,4 +1,5 @@
 import { Disclosure } from "@/components/research/disclosure";
+import { DividendHistory } from "@/components/research/dividend-history";
 import { FinancialTerm } from "@/components/research/financial-term";
 import { plainConcern } from "@/lib/financial-terms";
 import Link from "next/link";
@@ -340,6 +341,8 @@ export default async function ResearchPage({
           </ul>
         </section>
       ) : null}
+
+      <DividendHistory key={instrument.ticker} ticker={instrument.ticker} />
 
       <Disclosure title="Financials" hint="Annual accounts and reported line items.">
 

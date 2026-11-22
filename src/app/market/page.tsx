@@ -26,7 +26,9 @@ export default async function MarketPage({
       ? params.eligibility
       : "";
   const { summary, rows } = loadLatestMarketScan();
-  const visible = filterMarketRows(rows, q, eligibility);
+  const belowFairRange = params.fair === "below";
+  const fairRanges = loadListFairRanges(rows.map(row => String(row.ticker)));
+  const visible = filterMarketRows(rows, q, eligibility, { belowFairRange, fairRanges });
   const quality = loadLatestFundamentalsQuality();
   const dq = summary?.dataQuality;
 
@@ -205,7 +207,8 @@ export default async function MarketPage({
             </Disclosure>
           </div>
           <MarketResults
-            fairRanges={loadListFairRanges(visible.map(row => String(row.ticker)))}
+            fairRanges={fairRanges}
+            belowFairRange={belowFairRange}
             rows={visible}
             total={rows.length}
             query={q}

@@ -7,6 +7,7 @@ import { StatusLabel } from "./status-label";
 import { dataConfidenceLabel, formatScore100 } from "@/lib/research-copy";
 import { FairRangePill } from "./fair-range-pill";
 import type { ListFairRange } from "@/lib/fair-range-summary";
+import { STRONG_RESEARCH_SCORE } from "@/market/filters";
 
 const PAGE_SIZE = 25;
 
@@ -17,6 +18,7 @@ export function MarketResults({
   eligibility,
   requestedPage,
   fairRanges,
+  belowFairRange,
 }: {
   rows: Record<string, unknown>[];
   total: number;
@@ -24,6 +26,7 @@ export function MarketResults({
   eligibility: string;
   requestedPage: string;
   fairRanges: Record<string, ListFairRange>;
+  belowFairRange: boolean;
 }) {
   const held = useHeldTickers();
   rows = [...rows].sort((a, b) => Number(held.has(String(b.ticker))) - Number(held.has(String(a.ticker))));
@@ -39,9 +42,19 @@ export function MarketResults({
     const params = new URLSearchParams();
     if (query) params.set("q", query);
     if (eligibility) params.set("eligibility", eligibility);
+    if (belowFairRange) params.set("fair", "below");
     params.set("page", String(next));
     return `/market?${params}#companies`;
   }
+  const toggleParams = new URLSearchParams();
+  if (query) toggleParams.set("q", query);
+  if (belowFairRange) {
+    if (eligibility) toggleParams.set("eligibility", eligibility);
+  } else {
+    // The preset is eligible-only, so discard a previous "excluded" filter.
+    toggleParams.set("fair", "below");
+  }
+  const toggleHref = `/market${toggleParams.size ? `?${toggleParams}` : ""}#companies`;
 
   return (
     <section
@@ -64,12 +77,21 @@ export function MarketResults({
           {total.toLocaleString("en-MY")} names
         </span>
       </div>
+      <div className="px-4 pt-4 sm:px-5">
+        <Link href={toggleHref}
+          aria-current={belowFairRange ? "true" : undefined}
+          className={`inline-flex rounded-lg border px-3 py-2 text-sm font-medium ${belowFairRange ? "border-primary bg-accent text-primary" : "hover:bg-muted"}`}>
+          {belowFairRange ? "Below fair range · On" : "Below fair range"}
+        </Link>
+        <p className="mt-2 text-xs text-muted-foreground">One tap: eligible companies scoring {STRONG_RESEARCH_SCORE}/100 or more, with a saved price below their fair range. Stocks without a usable range are left out.</p>
+      </div>
       {/* Remount uncontrolled fields when submitted filters change via a Link. */}
       <form
-        key={JSON.stringify([query, eligibility])}
+        key={JSON.stringify([query, eligibility, belowFairRange])}
         className="scan-filters"
         action="/market"
       >
+        {belowFairRange && <input type="hidden" name="fair" value="below" />}
         <label className="scan-search">
           <span className="sr-only">Search ticker, company or sector</span>
           <Search size={17} aria-hidden="true" />
@@ -94,7 +116,7 @@ export function MarketResults({
         <button type="submit" className="scan-apply">
           Apply filters
         </button>
-        {query || eligibility ? (
+        {query || eligibility || belowFairRange ? (
           <Link className="scan-reset" href="/market#companies">
             Clear filters
           </Link>
