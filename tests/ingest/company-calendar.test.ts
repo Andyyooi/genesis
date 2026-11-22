@@ -78,6 +78,25 @@ describe("company calendar", () => {
     expect(db.select().from(dividendAnnouncements).get()).toMatchObject({ paymentDate, checkedAt: earlier });
   });
 
+  it("fills gaps in a matching dividend announcement without duplicating it or replacing known amounts", () => {
+    const futureEx = "2026-11-25";
+    const announcement = { sourceId: "123_456", instrumentId: 1, exDate: futureEx, paymentDate: null, amountMyr: 0.01, checkedAt: now };
+    const stock: CalendarStock = {
+      ticker: "MAYBANK", name: "Maybank", watchlist: true, announcedDividends: [announcement],
+      dates: {
+        instrumentId: 1, yahooSymbol: "1155.KL", checkedAt: now,
+        resultsFrom: null, resultsThrough: null, resultsEstimated: false, annualYieldPercent: null,
+        exDate: futureEx, paymentDate, dividendAmount: 0.02, dividendCurrency: "MYR",
+      },
+    };
+    const agenda = (row: CalendarStock) => calendarAgenda([row], "all", new Set(), today).dividends;
+    expect(agenda(stock)).toMatchObject([{ sourceId: "123_456", paymentDate, dividendAmount: 0.01 }]);
+    expect(agenda({ ...stock, announcedDividends: [{ ...announcement, amountMyr: null }] }))
+      .toMatchObject([{ sourceId: "123_456", paymentDate, dividendAmount: 0.02, dividendCurrency: "MYR" }]);
+    expect(agenda({ ...stock, announcedDividends: [announcement, { ...announcement, sourceId: "123_457" }] }))
+      .toMatchObject([{ paymentDate: null }, { paymentDate: null }]);
+  });
+
   it("stores both sources, preserves saved dates on failure, and limits the agenda to the selected stocks and upcoming dates", async () => {
     vi.stubEnv("BURSA_SQLITE_PATH", ":memory:");
     vi.stubEnv("VERCEL", "0");

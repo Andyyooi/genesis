@@ -24,10 +24,21 @@ export function calendarAgenda(stocks: CalendarStock[], scope: CalendarScope, he
     }[] = announcedDividends.map(({ sourceId, exDate, paymentDate, amountMyr }) => ({
       sourceId, exDate, paymentDate, dividendAmount: amountMyr, dividendCurrency: "MYR",
     }));
-    if (dates && !entries.some((event) => event.exDate === dates.exDate ||
-      (!dates.exDate && dates.paymentDate && dates.paymentDate === event.paymentDate))) {
+    if (dates) {
       const { exDate, paymentDate, dividendAmount, dividendCurrency } = dates;
-      entries.push({ sourceId: null, exDate, paymentDate, dividendAmount, dividendCurrency });
+      const matches = entries.filter((event) => exDate
+        ? event.exDate === exDate
+        : paymentDate && event.paymentDate === paymentDate);
+      if (!matches.length) {
+        entries.push({ sourceId: null, exDate, paymentDate, dividendAmount, dividendCurrency });
+      } else if (matches.length === 1 && exDate) {
+        const [event] = matches;
+        event.paymentDate ??= paymentDate;
+        if (event.dividendAmount === null && dividendAmount !== null) {
+          event.dividendAmount = dividendAmount;
+          event.dividendCurrency = dividendCurrency;
+        }
+      }
     }
     return entries.flatMap((event) => {
       const sortDate = nextDividendDate(event.exDate, event.paymentDate, today);
