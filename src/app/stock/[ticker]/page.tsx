@@ -44,6 +44,8 @@ import { loadPersistedFairValueForPage } from "@/fair-value/load-persisted-page"
 import { scoreTicker } from "@/scoring/run-ticker";
 import { PriceChart } from "@/components/research/price-chart";
 import { loadSavedPrices } from "@/db/price-history";
+import { GoodCompanyPriceDownCard, LatestResultsLine } from "@/components/research/price-drop-flag";
+import { goodCompanyPriceDown, latestResultsComparison } from "@/lib/price-drop-flag";
 
 export const dynamic = "force-dynamic";
 
@@ -172,6 +174,8 @@ export default async function ResearchPage({
   });
   const profileIds = profileMetricIds(result.researchProfile, isReit);
   const fairValue = loadPersistedFairValueForPage(instrument.id);
+  const priceDownFlag = goodCompanyPriceDown({ result, bars, periods, pn17: instrument.pn17, includeSales: !isBank });
+  const latestResults = priceDownFlag ? null : latestResultsComparison(periods, { includeSales: !isBank });
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-8 sm:px-6">
@@ -187,6 +191,11 @@ export default async function ResearchPage({
           <h1 className="text-3xl font-semibold tracking-tight">{instrument.name}</h1>
           <Badge variant={isReit ? "secondary" : "outline"}>{instrumentLabel}</Badge>
           <Badge variant="outline">{result.researchProfile}</Badge>
+          {priceDownFlag ? (
+            <Badge variant="outline" className="border-amber-400 text-amber-800 dark:text-amber-300">
+              Strong company, price down
+            </Badge>
+          ) : null}
           {instrument.pn17 ? <Badge variant="destructive">Financial distress warning (PN17)</Badge> : null}
           {instrument.shariahCompliant === true ? (
             <Badge variant="secondary">Shariah</Badge>
@@ -215,6 +224,8 @@ export default async function ResearchPage({
             <dd className="font-medium">{formatDateSafe(result.asOf)}</dd>
           </div>
         </dl>
+        <LatestResultsLine results={latestResults} />
+        {priceDownFlag ? <GoodCompanyPriceDownCard flag={priceDownFlag} /> : null}
         <DataLagBanner dates={snapshotDates} />
         {isReit ? (
           <details className="text-sm text-muted-foreground"><summary className="cursor-pointer text-primary">About property-fund (REIT) research</summary><p className="mt-2">Property funds are compared using cash payments to investors, net property assets, growth in payments and borrowing. Ordinary-company cash-flow and operating-earnings comparisons are not used.
