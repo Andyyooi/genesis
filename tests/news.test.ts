@@ -29,6 +29,8 @@ describe("news headlines", () => {
     const items = parseRss(rss);
     expect(pickHeadlines(items, ["Maybank"], 5).map(h => h.link)).toEqual(["https://news.google.com/a"]);
     expect(pickHeadlines(items, ["MISC"], 5)).toEqual([]);
+    expect(pickHeadlines(items, [searchTerms("CIMB", "CIMB GROUP HOLDINGS BERHAD")[0]], 5)).toHaveLength(1);
+    expect(pickHeadlines([{ title: "Maxis adds 5G users", source: null, link: "https://x.test/m", publishedAt: null }], [searchTerms("MAXIS", "MAXIS BERHAD")[0]], 5)).toHaveLength(1);
     expect(pickHeadlines(items, null, 2).map(h => h.link)).toEqual(["https://news.google.com/c", "https://news.google.com/a"]);
   });
   it("reports an unavailable source without failing other stocks", async () => {

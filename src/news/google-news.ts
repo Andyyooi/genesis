@@ -25,6 +25,8 @@ const ALIASES: Record<string, string[]> = {
   MAYBANK: ["Maybank"], TENAGA: ["Tenaga Nasional", "TNB"], PMETAL: ["Press Metal"], KLK: ["Kuala Lumpur Kepong", "KLK"],
   PCHEM: ["Petronas Chemicals", "PetChem"], MRDIY: ["Mr D.I.Y.", "Mr DIY"], IOICORP: ["IOI Corp"], CDB: ["CelcomDigi"],
 };
+/** Press acronyms matched case-sensitively so "TNB" does not match ordinary words. */
+const ACRONYMS = new Set(Object.values(ALIASES).flat().filter(t => /^[A-Z]{2,5}$/.test(t)));
 
 /** Words used to find a company in headlines, from its listed name (or known press names). */
 export function searchTerms(ticker: string, name: string): string[] {
@@ -56,7 +58,7 @@ export function parseRss(xml: string): Headline[] {
 
 /** Keeps headlines that name the company, newest first, one per title. */
 export function pickHeadlines(items: Headline[], terms: string[] | null, limit: number): Headline[] {
-  const patterns = terms?.map(t => new RegExp(`(^|[^\\p{L}\\p{N}])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\p{L}\\p{N}])`, /^[A-Z]{2,5}$/.test(t) ? "u" : "iu"));
+  const patterns = terms?.map(t => new RegExp(`(^|[^\\p{L}\\p{N}])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\p{L}\\p{N}])`, ACRONYMS.has(t) ? "u" : "iu"));
   const seen = new Set<string>();
   return items
     .filter(h => !patterns || patterns.some(p => p.test(h.title)))
