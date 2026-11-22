@@ -4,11 +4,22 @@ import {
   isFixtureEvent,
   liveWeightLabel,
   researchInterpretationBullets,
+  researchVerdict,
   RESEARCH_SCORE_BLURB,
 } from "@/lib/research-presentation";
 import type { EventSnapshot, MetricValue } from "@/metrics/types";
 import type { CategoryScore, ScoreResult } from "@/scoring/types";
 import { emptyValuationContext } from "@/scoring/valuation-context";
+
+describe("stock page verdict", () => {
+  it("labels the score in plain words without overstating thin evidence", () => {
+    expect(researchVerdict(72, false)).toMatchObject({ label: "Strong research score", tone: "HIGH" });
+    expect(researchVerdict(58, false).label).toBe("Mid-range research score");
+    expect(researchVerdict(42, false).tone).toBe("VERY_LOW");
+    expect(researchVerdict(72, true).label).toBe("Check the evidence");
+    expect(researchVerdict(null, false).label).toBe("Not enough evidence");
+  });
+});
 
 function category(partial: Partial<CategoryScore> & { id: string }): CategoryScore {
   return {

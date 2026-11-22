@@ -1,8 +1,9 @@
-import { and, asc, count, desc, eq, max } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, max, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { events, financialPeriods, ingestReports, instruments, priceBars, scoreRuns } from "@/db/schema";
+import { events, financialPeriods, ingestReports, instruments, marketScanRuns, priceBars, scoreRuns } from "@/db/schema";
 import { seedUniverseFromYaml } from "@/db/seed";
 import type { EventSnapshot } from "@/metrics/types";
+import { readPublishedWatchlist, type WatchlistReason } from "@/opportunities/watchlist-selection";
 
 export type WatchlistRow = {
   id: number;
@@ -13,21 +14,37 @@ export type WatchlistRow = {
   sector: string | null;
   instrumentType: string;
   pn17: boolean;
+  reason: WatchlistReason | null;
   lastClose: number | null;
   lastTradeDate: string | null;
   barCount: number;
   periodCount: number;
 };
 
-export function loadWatchlist(): WatchlistRow[] {
-  seedUniverseFromYaml();
+export function loadWatchlistMembership() {
   const db = getDb();
+  const publication = db.select({ summary: marketScanRuns.summaryJson })
+    .from(marketScanRuns).orderBy(desc(marketScanRuns.id)).get();
+  const selection = readPublishedWatchlist(publication?.summary);
+  const reasons = new Map(selection.map(({ ticker, reason }) => [ticker, reason]));
   const list = db
     .select()
     .from(instruments)
-    .where(eq(instruments.watchlist, true))
+    .where(and(
+      ne(instruments.listingStatus, "inactive"),
+      selection.length ? inArray(instruments.ticker, [...reasons.keys()]) : eq(instruments.watchlist, true),
+    ))
     .orderBy(asc(instruments.ticker))
     .all();
+  return list.map((row) => ({ ...row, reason: reasons.get(row.ticker) ?? null }));
+}
+
+export function loadWatchlist(): WatchlistRow[] {
+  seedUniverseFromYaml();
+  const db = getDb();
+  const list = loadWatchlistMembership();
+  if (!list.length) return [];
+  const ids = list.map((row) => row.id);
 
   const lastDates = db
     .select({
@@ -36,6 +53,7 @@ export function loadWatchlist(): WatchlistRow[] {
       barCount: count(),
     })
     .from(priceBars)
+    .where(inArray(priceBars.instrumentId, ids))
     .groupBy(priceBars.instrumentId)
     .all();
 
@@ -45,6 +63,7 @@ export function loadWatchlist(): WatchlistRow[] {
       periodCount: count(),
     })
     .from(financialPeriods)
+    .where(inArray(financialPeriods.instrumentId, ids))
     .groupBy(financialPeriods.instrumentId)
     .all();
 
@@ -77,6 +96,7 @@ export function loadWatchlist(): WatchlistRow[] {
       sector: row.sector,
       instrumentType: row.instrumentType,
       pn17: row.pn17,
+      reason: row.reason,
       lastClose,
       lastTradeDate: last?.lastTradeDate ?? null,
       barCount: last?.barCount ?? 0,

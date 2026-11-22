@@ -21,6 +21,7 @@ import { createGzip, gunzipSync } from "node:zlib";
 import Database from "better-sqlite3";
 import { migrateSqliteSchema } from "@/db/client";
 import { snapshotGzPath } from "@/db/snapshot-file";
+import { readPublishedWatchlist } from "@/opportunities/watchlist-selection";
 
 const REQUIRED_TABLES = [
   "instruments",
@@ -99,6 +100,7 @@ type Census = {
   instrumentSet: string;
   watchlistSet: string;
   effectiveWatchlistSet: string;
+  overviewWatchlistFingerprint: string;
   financialPeriodCount: number;
   priceBarCount: number;
   latestPriceDate: string | null;
@@ -144,8 +146,8 @@ export function formatSnapshotReport(report: SnapshotReport) {
     line("Loader-compatible", report.loaderCompatible == null ? null : report.loaderCompatible ? "yes" : "no"),
     line("Integrity", report.integrity),
     line("Instruments", report.instrumentCount),
-    line("Watchlist (stored)", report.watchlistCount),
-    line("Watchlist (after schema open)", report.effectiveWatchlistCount),
+    line("Fallback watchlist (stored)", report.watchlistCount),
+    line("Fallback watchlist (after schema open)", report.effectiveWatchlistCount),
     line("Financial periods", report.financialPeriodCount),
     line("Price bars", report.priceBarCount),
     line("Latest stored price date", report.latestPriceDate),
@@ -518,6 +520,9 @@ function readCensus(filePath: string): Census {
       (sqlite.pragma("table_info(instruments)") as { name: string }[]).map((column) => column.name),
     );
     const effectiveWatchlistRows = predictedEffectiveWatchlist(sqlite, instrumentColumns.has("universe_source"));
+    const selection = sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'market_scan_runs'").get()
+      ? sqlite.prepare("SELECT summary_json AS summary FROM market_scan_runs ORDER BY id DESC LIMIT 1").get() as { summary: string } | undefined
+      : undefined;
     if (effectiveWatchlistRows.length !== watchlistRows.length) {
       warnings.push(
         `${effectiveWatchlistRows.length - watchlistRows.length} additional name(s) become watched when the application opens this snapshot. Stored watchlist ${watchlistRows.length}; after schema open ${effectiveWatchlistRows.length}.`,
@@ -584,6 +589,7 @@ function readCensus(filePath: string): Census {
       instrumentSet: digest(instrumentRows.map((row) => row.ticker)),
       watchlistSet: digest(watchlistRows.map((row) => row.ticker)),
       effectiveWatchlistSet: digest(effectiveWatchlistRows),
+      overviewWatchlistFingerprint: digest(readPublishedWatchlist(selection?.summary).map(({ ticker, reason }) => `${ticker}:${reason}`)),
       financialPeriodCount: financialRows.length,
       priceBarCount: priceRows.length,
       latestPriceDate: latestUsablePriceDate(sqlite),
@@ -669,6 +675,9 @@ function censusDrift(label: string, source: Census, copy: Census) {
   }
   if (copy.watchlistCount !== source.watchlistCount || copy.watchlistSet !== source.watchlistSet) {
     problems.push(`${label} does not contain the same watchlist as the source`);
+  }
+  if (copy.overviewWatchlistFingerprint !== source.overviewWatchlistFingerprint) {
+    problems.push(`${label} does not contain the same published Overview selections as the source`);
   }
   if (copy.financialPeriodCount !== source.financialPeriodCount || copy.financialFingerprint !== source.financialFingerprint) {
     problems.push(`${label} financial-period fingerprint differs from the source`);
@@ -783,6 +792,7 @@ function failedCensus(blockers: string[]): Census {
     instrumentSet: "",
     watchlistSet: "",
     effectiveWatchlistSet: "",
+    overviewWatchlistFingerprint: "",
     financialPeriodCount: 0,
     priceBarCount: 0,
     latestPriceDate: null,

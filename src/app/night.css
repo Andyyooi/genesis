@@ -86,7 +86,7 @@ main > header h1, main > section > h2, main > section > div > h2, .company-symbo
 .price-plot .chart-svg { min-height: 9rem; }
 .price-axis { position: relative; color: var(--muted-foreground); font-size: .75rem; font-variant-numeric: tabular-nums; }
 .price-axis > span { position: absolute; left: 0; transform: translateY(-50%); white-space: nowrap; }
-.price-date-axis { display: flex; justify-content: space-between; gap: .5rem; margin: .25rem 4rem 0 0; }
+.price-date-axis { margin: .25rem 4rem 0 0; }
 .save-company { color: #a8aaba; }
 .save-company[aria-pressed='true'], .save-company:hover { color: var(--primary); background: var(--brand-soft); }
 .compare-check input { border-color: #62667a; }

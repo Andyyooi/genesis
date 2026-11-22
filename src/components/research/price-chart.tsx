@@ -1,10 +1,12 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useMemo, useState, type PointerEvent } from "react";
 import { ChartNoAxesCombined } from "lucide-react";
 import { formatSharePrice } from "@/lib/format-myr";
 import {
+  calendarDateTicks,
   formatPriceChange,
+  movingAverage,
   priceChange,
   pricePlot,
   selectPriceRange,
@@ -14,6 +16,13 @@ import {
 } from "@/lib/price-history";
 
 const ranges: PriceRange[] = ["1M", "3M", "6M", "1Y", "ALL"];
+const indicators = [
+  { window: 50, colour: "#29b6e3" },
+  { window: 200, colour: "#fbac51" },
+] as const;
+const plotWidth = 730;
+const plotHeight = 210;
+const plotPadding = 12;
 
 export function PriceChart({
   ticker,
@@ -24,13 +33,24 @@ export function PriceChart({
 }) {
   const [range, setRange] = useState<PriceRange>("3M");
   const [inspection, setInspection] = useState<number | null>(null);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const [enabled, setEnabled] = useState<number[]>([]);
   const chartId = useId();
   const selected = selectPriceRange(points, range);
-  const plot = pricePlot(selected, 730, 210, 12);
+  const averages = useMemo(() => indicators.map(({ window }) => movingAverage(points, window)), [points]);
+  const active = indicators.flatMap((indicator, index) => {
+    const values = selectPriceRange(averages[index], range);
+    return enabled.includes(indicator.window) ? [{ ...indicator, values }] : [];
+  });
+  const plot = pricePlot(selected, plotWidth, plotHeight, plotPadding, {
+    calendar: true,
+    overlays: active.map((series) => series.values),
+  });
+  const dateTicks = calendarDateTicks(selected);
   const change = priceChange(selected);
   const index = Math.max(
     0,
-    Math.min(selected.length - 1, inspection ?? selected.length - 1),
+    Math.min(selected.length - 1, hovered ?? inspection ?? selected.length - 1),
   );
   const inspected = selected[index];
   const last = selected.at(-1);
@@ -41,6 +61,13 @@ export function PriceChart({
         ? "var(--positive)"
         : "var(--negative)";
   const values = selected.map((point) => point.close).filter(validClose);
+  function inspectPointer(event: PointerEvent<SVGSVGElement>) {
+    if (!plot) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    const nearest = plot.nearestIndex((event.clientX - box.left) / box.width * plotWidth);
+    if (event.pointerType === "touch") setInspection(nearest);
+    else setHovered(nearest);
+  }
   return (
     <section
       className="market-card price-chart"
@@ -64,6 +91,7 @@ export function PriceChart({
               onClick={() => {
                 setRange(item);
                 setInspection(null);
+                setHovered(null);
               }}
             >
               {item === "ALL" ? "All" : item}
@@ -87,26 +115,40 @@ export function PriceChart({
       </div>
       {plot ? (
         <>
+          <div className="mb-3 flex flex-wrap items-center gap-2" aria-label="Moving averages">
+            {indicators.map(({ window, colour }, i) => {
+              const available = averages[i].some((point) => validClose(point.close));
+              return (
+                <button
+                  key={window}
+                  type="button"
+                  aria-pressed={enabled.includes(window)}
+                  disabled={!available}
+                  className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs aria-pressed:bg-muted disabled:opacity-50"
+                  onClick={() => setEnabled((current) => current.includes(window)
+                    ? current.filter((item) => item !== window) : [...current, window])}
+                >
+                  <span className="h-0.5 w-3" style={{ backgroundColor: colour }} aria-hidden="true" />
+                  {window}-day average
+                </button>
+              );
+            })}
+            <details className="text-xs text-muted-foreground">
+              <summary className="cursor-pointer">What do these lines show?</summary>
+              <p className="mt-1">Each line averages the last 50 or 200 trading closes to smooth daily swings. A line starts only when enough saved prices are available.</p>
+            </details>
+          </div>
           <div className="price-plot">
+          <div className="relative min-w-0">
           <svg
             className="chart-svg"
             viewBox="0 0 730 210"
             preserveAspectRatio="none"
             role="img"
             aria-labelledby={`${chartId}-title ${chartId}-desc`}
-            onPointerMove={(event) => {
-              const box = event.currentTarget.getBoundingClientRect();
-              const x = ((event.clientX - box.left) / box.width) * 730;
-              setInspection(
-                Math.max(
-                  0,
-                  Math.min(
-                    selected.length - 1,
-                    Math.round(((x - 12) / 706) * (selected.length - 1)),
-                  ),
-                ),
-              );
-            }}
+            onPointerMove={inspectPointer}
+            onPointerDown={inspectPointer}
+            onPointerLeave={() => setHovered(null)}
           >
             <title id={`${chartId}-title`}>{`${ticker} saved closing prices in MYR`}</title>
             <desc id={`${chartId}-desc`}>
@@ -138,6 +180,9 @@ export function PriceChart({
               strokeLinejoin="round"
               strokeLinecap="round"
             />
+            {active.map(({ window, colour }, i) => (
+              <path key={window} d={plot.overlayPaths[i]} fill="none" stroke={colour} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+            ))}
             {inspected && validClose(inspected.close) ? (
               <g>
                 <line
@@ -159,6 +204,18 @@ export function PriceChart({
               </g>
             ) : null}
           </svg>
+          {(hovered !== null || inspection !== null) && inspected && validClose(inspected.close) ? (
+            <div
+              className="pointer-events-none absolute top-1 z-10 -translate-x-1/2 whitespace-nowrap rounded-md border bg-card px-2 py-1 text-center text-xs shadow-sm"
+              data-price-tooltip
+              style={{ left: `clamp(3.5rem, ${plot.x(index) / plotWidth * 100}%, calc(100% - 3.5rem))` }}
+              aria-hidden="true"
+            >
+              <time dateTime={inspected.date} className="block text-muted-foreground">{inspected.date}</time>
+              <strong className="tabular-nums">{formatSharePrice(inspected.close)}</strong>
+            </div>
+          ) : null}
+          </div>
           {/* HTML labels stay readable instead of shrinking with the SVG on phones. */}
           <div className="price-axis" aria-label="Price axis in MYR">
             {[0, 0.5, 1].map(fraction => {
@@ -167,7 +224,19 @@ export function PriceChart({
             })}
           </div>
           </div>
-          <div className="price-date-axis text-xs text-muted-foreground"><span>{selected[0]?.date}</span><span>{last?.date}</span></div>
+          <div className="price-date-axis relative h-5 whitespace-nowrap text-[10px] text-muted-foreground sm:text-xs" aria-label="Date axis">
+            {dateTicks.map((tick, i) => (
+              <time
+                key={tick.date}
+                dateTime={tick.date}
+                className={`absolute ${tick.compact ? "" : "hidden sm:block"} ${i === 0 ? "" : i === dateTicks.length - 1 ? "-translate-x-full" : "-translate-x-1/2"}`}
+                style={{ left: `${plot.xAtFraction(tick.fraction) / plotWidth * 100}%` }}
+              >{tick.label}</time>
+            ))}
+          </div>
+          {active.some(({ values }) => values.filter((point) => validClose(point.close)).length < 2) ? (
+            <p className="mt-1 text-xs text-muted-foreground">An enabled average has too few saved prices to draw in this range.</p>
+          ) : null}
           <label className="chart-inspector">
             <span>Inspect a saved close</span>
             <input
@@ -221,7 +290,7 @@ export function PriceChart({
         </summary>
         <p className="mt-3">
           Source: saved Yahoo daily closes, in MYR. Ranges end on the latest
-          saved date, not today. Trading observations are equally spaced;
+          saved date, not today. Dates are spaced by calendar time;
           missing closes break the line. Unadjusted prices do not include
           dividends or adjust for corporate actions, so changes are not total
           returns.

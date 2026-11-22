@@ -11,14 +11,11 @@ import { Disclosure } from "@/components/research/disclosure";
 import { DashboardFilters } from "@/components/research/dashboard-filters";
 import { TopPicks } from "@/components/research/top-picks";
 import { PriceCheckCard } from "@/components/research/price-check-card";
-import {
-  ResearchWorkspace,
-  type WorkspaceRow,
-} from "@/components/research/research-workspace";
+import { ResearchWorkspace } from "@/components/research/research-workspace";
 import { loadRecentAlerts } from "@/alerts/refresh";
 import { loadScoringConfig } from "@/config/load-scoring";
 import { loadLatestIngestReports } from "@/db/queries";
-import { loadMarketPricePulse, loadSavedPrices } from "@/db/price-history";
+import { loadMarketPricePulse } from "@/db/price-history";
 import { AlertsList } from "@/components/alerts/alerts-list";
 import type { PricesImportReport } from "@/ingest/types";
 import {
@@ -31,7 +28,7 @@ import {
   sortOpportunityRows,
   type ListId,
 } from "@/opportunities/lists";
-import { scanWatchlist } from "@/opportunities/scan";
+import { scanWatchlist, toWorkspaceRow } from "@/opportunities/scan";
 import { parseTopPicksOptions } from "@/opportunities/top-picks";
 import { loadPriceCheck } from "@/refresh/price-check";
 
@@ -116,22 +113,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     listed.filter((row) => rowMatchesFilters(row, flagFilters)),
     sortId,
   );
-  const workspaceRows: WorkspaceRow[] = rows.map((row) => ({
-    ticker: row.ticker,
-    name: row.name,
-    sector: row.sector,
-    price: row.price,
-    researchScore: row.researchScore,
-    valuationScore: row.valuationScore,
-    qualityScore: row.qualityScore,
-    confidence: row.confidence,
-    needsVerification: row.needsVerification,
-    freshness: row.freshness,
-    coverage: row.coreCoverageLabel,
-    priceDate: row.lastTradeDate,
-    pn17: row.pn17,
-    prices: loadSavedPrices(row.ticker, 30),
-  }));
+  const workspaceRows = rows.map(toWorkspaceRow);
   const marketPulse = loadMarketPricePulse();
   const latestDate = marketPulse.date;
   const { higher, lower, unchanged: flat } = marketPulse;
@@ -297,6 +279,10 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
             rows={workspaceRows}
             visibleTickers={visible.map((row) => row.ticker)}
             label={activeList.label}
+            watchlistDescription={listId === "watchlist" ? rows.some((row) => row.watchlistReason)
+              ? "Updated with each data refresh. Top picks have the strongest research scores; big movers had the largest price swings over five trading sessions."
+              : "Showing the original list until a market watchlist is available from a data refresh."
+              : undefined}
             emptyReason={
               listed.length > 0
                 ? "No companies meet your selected filters. Open Filters & sort to change or clear them."

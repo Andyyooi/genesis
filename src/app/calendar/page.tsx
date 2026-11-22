@@ -1,6 +1,7 @@
 import { eq, ne } from "drizzle-orm";
 import { CalendarAgenda } from "@/components/calendar-agenda";
 import { getDb } from "@/db/client";
+import { loadWatchlistMembership } from "@/db/queries";
 import { companyCalendar, instruments } from "@/db/schema";
 import { loadLatestDatasetRefresh } from "@/refresh/persist";
 import { malaysiaMarketDate } from "@/refresh/types";
@@ -9,15 +10,15 @@ export const dynamic = "force-dynamic";
 
 export default function CalendarPage() {
   const today = malaysiaMarketDate();
+  const watched = new Set(loadWatchlistMembership().map((row) => row.ticker));
   const stocks = getDb().select({
     ticker: instruments.ticker,
     name: instruments.name,
-    watchlist: instruments.watchlist,
     dates: companyCalendar,
   }).from(instruments)
     .leftJoin(companyCalendar, eq(companyCalendar.instrumentId, instruments.id))
     .where(ne(instruments.listingStatus, "inactive"))
-    .all();
+    .all().map((row) => ({ ...row, watchlist: watched.has(row.ticker) }));
   const checkedAt = stocks.flatMap(({ dates }) => dates ? [dates.checkedAt] : []).sort().at(-1);
   const refresh = loadLatestDatasetRefresh("calendar");
 

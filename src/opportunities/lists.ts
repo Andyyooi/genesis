@@ -1,4 +1,5 @@
 import type { ScoreResult } from "@/scoring/types";
+import type { WatchlistReason } from "@/opportunities/watchlist-selection";
 
 export const LIST_IDS = [
   "watchlist",
@@ -24,7 +25,7 @@ export const OPPORTUNITY_LISTS: OpportunityList[] = [
   {
     id: "watchlist",
     label: "Watchlist",
-    description: "Every company on the tracked research list. Use stars to make your own shortlist. These are research lists, not buy orders.",
+    description: "A market shortlist updated with each data refresh. Use stars to make your own shortlist. These are research lists, not buy orders.",
     disabled: false,
   },
   {
@@ -63,6 +64,7 @@ export const OPPORTUNITY_LISTS: OpportunityList[] = [
 
 export type OpportunityRow = {
   ticker: string;
+  watchlistReason?: WatchlistReason | null;
   name: string;
   instrumentType: "COMMON_STOCK" | "REIT";
   pn17: boolean;

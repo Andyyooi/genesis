@@ -214,12 +214,28 @@ summary:focus-visible, a:focus-visible, button:focus-visible { outline: 2px soli
 .chart-svg { width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
 .chart-inspector { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; padding-top: .75rem; font-size: .6875rem; color: #63717d; }
 .chart-inspector input { accent-color: #0f766e; max-width: 260px; flex: 1; min-width: 120px; }
+.stock-details-grid > details[open] { grid-column: 1 / -1; }
+.stock-research [data-slot="table-cell"] { white-space: normal; }
+@media (max-width: 920px) {
+  .workspace-table, .workspace-table tbody { display: block; white-space: normal; }
+  .workspace-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .workspace-table tr { display: grid; grid-template-columns: 2rem minmax(0, 1fr) minmax(0, .7fr); gap: .45rem .6rem; padding: .8rem; border-bottom: 1px solid var(--border); }
+  .workspace-table td, .workspace-table td:first-child, .workspace-table td:last-child { min-width: 0; padding: 0; border: 0; }
+  .workspace-table td:nth-child(4) { grid-column: 3; grid-row: 2; }
+  .workspace-table td:nth-child(5) { grid-column: 2; grid-row: 2; }
+  .workspace-table td:nth-child(6) { grid-column: 2; grid-row: 3; }
+  .workspace-table td:nth-child(7) { grid-column: 3; grid-row: 3; text-align: right; }
+  .workspace-table td:last-child { grid-column: 1; grid-row: 3; }
+  .comparison-table { table-layout: fixed; }
+  .comparison-table th, .comparison-table td { min-width: 0; padding-inline: .25rem; overflow-wrap: anywhere; }
+}
 @media (max-width: 1279px) {
   .research-grid { grid-template-columns: minmax(0, 1fr); }
   .research-grid > aside { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
 }
 @media (max-width: 640px) {
   .site-header > div:last-child { font-size: .625rem; }
+  body:has(.stock-research, .research-home) .site-nav { flex-wrap: wrap; justify-content: flex-start; overflow: visible; }
   .pulse-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
   .pulse-card { padding: .8rem; }
   .pulse-label { font-size: .6875rem; }

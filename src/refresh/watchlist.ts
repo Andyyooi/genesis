@@ -1,6 +1,4 @@
-import { and, asc, eq, ne } from "drizzle-orm";
-import { getDb } from "@/db/client";
-import { instruments } from "@/db/schema";
+import { loadWatchlistMembership } from "@/db/queries";
 import { refuseSnapshotWrites } from "@/lib/data-mode";
 import { clearOpportunityScanCache } from "@/opportunities/scan";
 import {
@@ -80,13 +78,7 @@ export function cancelWatchlistRefresh() {
 }
 
 export function listWatchlistTickers(): string[] {
-  return getDb()
-    .select({ ticker: instruments.ticker })
-    .from(instruments)
-    .where(and(eq(instruments.watchlist, true), ne(instruments.listingStatus, "inactive")))
-    .orderBy(asc(instruments.ticker))
-    .all()
-    .map((row) => row.ticker);
+  return loadWatchlistMembership().map((row) => row.ticker);
 }
 
 export async function runWatchlistRefreshAndResearch(
