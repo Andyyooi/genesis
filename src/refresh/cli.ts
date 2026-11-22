@@ -1,4 +1,5 @@
 import { isCliEntrypoint } from "@/cli/entrypoint";
+import { importCompanyCalendar } from "@/ingest/import-calendar";
 import { refuseSnapshotWrites } from "@/lib/data-mode";
 import { formatDailyRefreshSummary, runDailyRefresh, type DailyRefreshDeps } from "@/refresh/daily";
 
@@ -12,7 +13,7 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  const summary = await runDailyRefresh(dailyRefreshOptionsFromArgv(process.argv));
+  const summary = await runDailyRefresh({ ...dailyRefreshOptionsFromArgv(process.argv), importCalendar: importCompanyCalendar });
   console.log(formatDailyRefreshSummary(summary));
   console.log(JSON.stringify(summary, null, 2));
   if (summary.overallStatus === "SOURCE_FAILED") process.exitCode = 1;

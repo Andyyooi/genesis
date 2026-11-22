@@ -3,6 +3,7 @@ import { instruments } from "@/db/schema";
 import { UnavailableLiveBursaEventProvider } from "@/events/fixture-provider";
 import type { EventSourceProvider } from "@/events/types";
 import { importYahooPrices, type PriceIngestOptions } from "@/ingest/import-prices";
+import { importCompanyCalendar } from "@/ingest/import-calendar";
 import type { PricesImportReport } from "@/ingest/types";
 import { refuseSnapshotWrites } from "@/lib/data-mode";
 import {
@@ -37,6 +38,7 @@ export type DailyRefreshDeps = {
   eventsProvider?: EventSourceProvider | null;
   /** null / undefined → NO_SOURCE for news (no production news table yet). */
   newsAvailable?: boolean;
+  importCalendar?: typeof importCompanyCalendar;
   rescore?: () => unknown;
   /** Set by `npm run refresh:daily -- --skip-rescore`. Does not call rescoreListedMarket. */
   skipRescore?: boolean;
@@ -51,6 +53,35 @@ function countListed(): number {
     .from(instruments)
     .all()
     .filter((row) => row.listingStatus !== "inactive").length;
+}
+
+async function refreshCalendar(
+  runId: string,
+  marketDate: string,
+  now: () => Date,
+  load: typeof importCompanyCalendar,
+): Promise<DatasetRefreshResult> {
+  const startedAt = now().toISOString();
+  const report = await load(marketDate, startedAt).catch((error: unknown) => ({
+    attempted: 0, updated: 0, failed: 0, unavailable: 0,
+    error: error instanceof Error ? error.message : String(error),
+  }));
+  return persistDatasetRefresh(runId, {
+    dataset: "calendar",
+    source: "yahoo",
+    status: report.error ? (report.updated ? "PARTIAL" : "SOURCE_FAILED")
+      : report.updated ? (report.unavailable ? "PARTIAL" : "SUCCESS") : "NO_DATA",
+    startedAt,
+    completedAt: now().toISOString(),
+    marketDate,
+    attemptedCount: report.attempted,
+    updatedCount: report.updated,
+    unchangedCount: 0,
+    failedCount: report.failed,
+    unavailableCount: report.unavailable,
+    lastSuccessfulAt: null,
+    errorSummary: report.error,
+  });
 }
 
 function pricesStatus(report: PricesImportReport): RefreshStatus {
@@ -504,6 +535,7 @@ export async function runDailyRefresh(
   }
 
   const datasets = [prices, fundamentals, events, news, scores, fairValue];
+  if (deps.importCalendar) datasets.push(await refreshCalendar(runId, marketDate, nowFn, deps.importCalendar));
   const completedAt = nowFn().toISOString();
   return {
     kind: "daily-refresh",
