@@ -44,6 +44,7 @@ import { loadPersistedFairValueForPage } from "@/fair-value/load-persisted-page"
 import { scoreTicker } from "@/scoring/run-ticker";
 import { PriceChart } from "@/components/research/price-chart";
 import { loadSavedPrices } from "@/db/price-history";
+import { StockNewsSection } from "@/components/news-headlines";
 import { GoodCompanyPriceDownCard, LatestResultsLine } from "@/components/research/price-drop-flag";
 import { goodCompanyPriceDown, latestResultsComparison } from "@/lib/price-drop-flag";
 
@@ -241,6 +242,8 @@ export default async function ResearchPage({
 
       {/* B. Research Score Card */}
       <ResearchScoreCard result={result} />
+
+      <StockNewsSection ticker={instrument.ticker} />
 
       {/* C. Score breakdown */}
       <Disclosure title="Score breakdown" hint="See the financial and price checks (factors) behind this score.">
