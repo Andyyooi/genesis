@@ -14,6 +14,7 @@ import { clearOpportunityScanCache } from "@/opportunities/scan";
 import { purgeDemoAlerts } from "@/alerts/purge-demo";
 import { fairValueSafetyAt, loadAlertPublication, replacePublicationAlerts, type PublicationAlertSummary } from "@/alerts/publication";
 import { loadScoringConfig } from "@/config/load-scoring";
+import { recordTrackRecord } from "@/track-record/record";
 
 export type MarketScanRowPayload = {
   fairValueSafety: string | null;
@@ -154,6 +155,11 @@ function persistListedScores(meta: {
     return published;
   })();
   clearOpportunityScanCache();
+  try {
+    recordTrackRecord();
+  } catch (error) {
+    console.error("Track record could not be saved; market rescore completed:", error);
+  }
   return summary;
 }
 

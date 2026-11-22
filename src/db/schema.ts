@@ -304,6 +304,17 @@ export const fairValueRuns = sqliteTable(
   ],
 );
 
+export const trackRecordEntries = sqliteTable("track_record_entries", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  pickDate: text("pick_date").notNull(),
+  basket: text("basket", { enum: ["top-picks", "big-companies"] }).notNull(),
+  ticker: text("ticker").notNull(),
+  rank: integer("rank").notNull(),
+  score: real("score"),
+  entryClose: real("entry_close").notNull(),
+  recordedAt: text("recorded_at").notNull(),
+}, (table) => [uniqueIndex("track_record_date_basket_ticker").on(table.pickDate, table.basket, table.ticker)]);
+
 export const refreshRuns = sqliteTable("refresh_runs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   runId: text("run_id").notNull(),

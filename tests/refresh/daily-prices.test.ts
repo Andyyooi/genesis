@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { loadScoringConfig } from "@/config/load-scoring";
 import { getDb } from "@/db/client";
-import { instruments, priceBars } from "@/db/schema";
+import { instruments, priceBars, refreshRuns, trackRecordEntries } from "@/db/schema";
 import { importYahooPrices } from "@/ingest/import-prices";
 import { runDailyRefresh } from "@/refresh/daily";
 
@@ -152,7 +152,53 @@ describe("daily price range and throttle", () => {
       skipAlerts: true,
       range: "auto",
       rateLimitMs: 100,
+      refreshTrackRecordHistory: true,
     });
+  });
+
+  it("requests each saved ticker once from its earliest pick date, including inactive names", async () => {
+    const now = new Date().toISOString();
+    for (const ticker of ["SAVED", "UNSAVED"]) getDb().insert(instruments).values({ ticker, name: ticker, yahooTicker: `${ticker}.KL`, instrumentType: "COMMON_STOCK", listingStatus: ticker === "SAVED" ? "inactive" : "listed", createdAt: now, updatedAt: now }).run();
+    for (const [ticker, pickDate] of [["MAYBANK", "2025-06-02"], ["MAYBANK", "2026-09-25"], ["SAVED", "2024-01-02"]]) {
+      for (const basket of ["top-picks", "big-companies"] as const) getDb().insert(trackRecordEntries).values({ ticker, pickDate, basket, rank: 1, entryClose: 10, recordedAt: now }).run();
+    }
+    seedBar("2026-09-25", 20);
+    seedBar("2026-09-26", 21);
+    await importYahooPrices({ listedOnly: true, skipUniverseSeed: true, skipAlerts: true, range: "auto", refreshTrackRecordHistory: true, rateLimitMs: 0 });
+    expect(vi.mocked(fetchYahooDailyBars).mock.calls).toEqual([
+      ["MAYBANK.KL", { startDate: "2025-06-02" }],
+      ["SAVED.KL", { startDate: "2024-01-02" }],
+      ["UNSAVED.KL", "2y"],
+    ]);
+    const historical = getDb().select().from(priceBars).all().find((bar) => bar.barDate === "2026-09-25");
+    expect(historical?.close).toBe(20);
+    expect(historical?.adjClose).toBe(10.15);
+  });
+
+  it("uses ordinary ranges without saved entries", async () => {
+    await importYahooPrices({ listedOnly: true, skipUniverseSeed: true, skipAlerts: true, range: "auto", refreshTrackRecordHistory: true, rateLimitMs: 0 });
+    expect(vi.mocked(fetchYahooDailyBars).mock.calls).toEqual([["MAYBANK.KL", "2y"]]);
+  });
+
+  it("logs a saved-history failure, records provenance, and continues through rescore", async () => {
+    getDb().insert(trackRecordEntries).values({ ticker: "MAYBANK", pickDate: "2025-06-02", basket: "top-picks", rank: 1, entryClose: 10, recordedAt: "2026-09-25" }).run();
+    vi.mocked(fetchYahooDailyBars).mockRejectedValueOnce(new Error("history unavailable"));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const rescore = vi.fn();
+    try {
+      const result = await runDailyRefresh({
+        importPrices: (options) => importYahooPrices({ ...options, skipUniverseSeed: true, rateLimitMs: 0 }),
+        importFundamentals: async () => ({ kind: "fundamentals-yahoo", startedAt: "a", finishedAt: "b", attempted: 1, upserted: 0, inserted: 0, filled: 0, unchanged: 1, skippedHadFilings: 0, skippedOtherSource: 0, instrumentsUpdated: 0, instrumentsUnchanged: 1, instrumentsSkippedFresh: 1, instrumentsFetched: 0, failed: [] }),
+        rescore,
+      });
+      expect(result.datasets.find((dataset) => dataset.dataset === "prices")?.failedCount).toBe(1);
+      expect(rescore).toHaveBeenCalledOnce();
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("history unavailable"));
+      const provenance = getDb().select().from(refreshRuns).all().find((run) => run.dataset === "prices");
+      expect(provenance?.metadataJson).toContain("history unavailable");
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it("manual/backfill default range remains 5y; market scan keeps 2y", async () => {

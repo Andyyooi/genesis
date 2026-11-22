@@ -9,6 +9,7 @@ const links = [
   { href: "/holdings", label: "My holdings", icon: Wallet },
   { href: "/market", label: "Market scan", icon: Radar },
   { href: "/alerts", label: "Alerts", icon: Bell },
+  { href: "/track-record", label: "Track record", icon: LayoutDashboard },
 ];
 
 export function SiteNav() {
