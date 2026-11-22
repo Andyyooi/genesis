@@ -29,7 +29,8 @@ function quantile(sorted: number[], q: number): number {
 /**
  * Headline fair range from a stored fair-value run: the middle half of the
  * method values (all of them when only two), so one outlying method does not
- * stretch the range. Uses only stored method values; no new valuation.
+ * stretch the range. Methods the quality checks flagged are left out. Uses
+ * only stored method values; no new valuation.
  */
 export function fairRangeHeadline(
   stored: FairValueRunRead | null,
@@ -40,7 +41,9 @@ export function fairRangeHeadline(
   if (quality.baseUse === "POINT_WITHHELD" || quality.baseUse === "NO_POINT") {
     return { available: false, reason: "The valuation checks did not pass, so no fair range is shown." };
   }
+  const flagged = new Set(quality.methods.filter((method) => method.state === "FLAGGED").map((method) => method.id));
   const values = result.methods
+    .filter((method) => !flagged.has(method.id))
     .filter((method) => method.available && isFiniteNumber(method.methodValue) && method.methodValue > 0)
     .map((method) => method.methodValue as number)
     .sort((a, b) => a - b);

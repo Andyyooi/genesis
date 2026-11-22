@@ -5,7 +5,12 @@ import { FairRangeLine } from "@/components/research/fair-range-line";
 import type { FairValueRunRead } from "@/fair-value/load-run";
 import { fairRangeHeadline } from "@/lib/fair-range";
 
-function stored(values: (number | null)[], baseUse = "POINT_OK", base: number | null = null): FairValueRunRead {
+function stored(
+  values: (number | null)[],
+  baseUse = "POINT_OK",
+  base: number | null = null,
+  flaggedIndexes: number[] = [],
+): FairValueRunRead {
   return {
     ok: true,
     run: {
@@ -14,11 +19,14 @@ function stored(values: (number | null)[], baseUse = "POINT_OK", base: number | 
       calculatedAt: "2026-11-20",
       observationKey: "k",
       qualityVersion: "fair-value-quality-v1",
-      quality: { baseUse } as never,
+      quality: {
+        baseUse,
+        methods: values.map((_, index) => ({ id: `m${index}`, state: flaggedIndexes.includes(index) ? "FLAGGED" : "CLEAR" })),
+      } as never,
       result: {
         currentPrice: 0.99,
         fairValueBase: base,
-        methods: values.map((methodValue) => ({ available: methodValue != null, methodValue })),
+        methods: values.map((methodValue, index) => ({ id: `m${index}`, available: methodValue != null, methodValue })),
       } as never,
     },
   };
@@ -43,6 +51,12 @@ describe("fairRangeHeadline", () => {
     expect(below.available && below.position).toBe("below");
     expect(above.available && above.position).toBe("above");
     expect(below.available && below.wideSpread).toBe(false);
+  });
+
+  it("leaves out methods the quality checks flagged", () => {
+    const range = fairRangeHeadline(stored([1, 1.2, 623.03], "POINT_WITH_CAUTION", 1.2, [2]), 1.1);
+    expect(range.available && range.high).toBe(1.2);
+    expect(range.available && range.caution).toBe(true);
   });
 
   it("is unavailable when checks fail or only one method worked", () => {
