@@ -87,14 +87,16 @@ export function PriceChart({
       </div>
       {plot ? (
         <>
+          <div className="price-plot">
           <svg
             className="chart-svg"
-            viewBox="0 0 800 245"
+            viewBox="0 0 730 210"
+            preserveAspectRatio="none"
             role="img"
             aria-labelledby={`${chartId}-title ${chartId}-desc`}
             onPointerMove={(event) => {
               const box = event.currentTarget.getBoundingClientRect();
-              const x = ((event.clientX - box.left) / box.width) * 800;
+              const x = ((event.clientX - box.left) / box.width) * 730;
               setInspection(
                 Math.max(
                   0,
@@ -119,15 +121,12 @@ export function PriceChart({
                 <g key={fraction}>
                   <line
                     x1="12"
-                    x2="730"
+                    x2="718"
                     y1={y}
                     y2={y}
                     stroke="var(--border)"
                     strokeDasharray="3 5"
                   />
-                  <text x="745" y={y + 3} fill="var(--muted-foreground)" fontSize="10">
-                    {value.toFixed(3)}
-                  </text>
                 </g>
               );
             })}
@@ -159,13 +158,16 @@ export function PriceChart({
                 />
               </g>
             ) : null}
-            <text x="12" y="238" fill="var(--muted-foreground)" fontSize="10">
-              {selected[0]?.date}
-            </text>
-            <text x="718" y="238" textAnchor="end" fill="var(--muted-foreground)" fontSize="10">
-              {last?.date}
-            </text>
           </svg>
+          {/* HTML labels stay readable instead of shrinking with the SVG on phones. */}
+          <div className="price-axis" aria-label="Price axis in MYR">
+            {[0, 0.5, 1].map(fraction => {
+              const value = plot.min + (plot.max - plot.min) * fraction;
+              return <span key={fraction} style={{ top: `${plot.y(value) / 210 * 100}%` }}>{value.toFixed(3)}</span>;
+            })}
+          </div>
+          </div>
+          <div className="price-date-axis text-xs text-muted-foreground"><span>{selected[0]?.date}</span><span>{last?.date}</span></div>
           <label className="chart-inspector">
             <span>Inspect a saved close</span>
             <input
