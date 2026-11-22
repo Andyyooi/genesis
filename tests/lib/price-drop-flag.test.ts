@@ -85,6 +85,10 @@ describe("goodCompanyPriceDown", () => {
     expect(flag?.results?.tone).toBe("weaker");
   });
 
+  it("flags a fall of exactly 20%", () => {
+    expect(goodCompanyPriceDown({ result: result({ quality: 80 }), bars: bars([0.8, ...Array(40).fill(1.0)]), periods })).not.toBeNull();
+  });
+
   it("does not flag weak scores, small falls or PN17 names", () => {
     expect(goodCompanyPriceDown({ result: result({ quality: 50 }), bars: fallen, periods })).toBeNull();
     expect(goodCompanyPriceDown({ result: result({ quality: 80 }), bars: bars([0.9, ...Array(40).fill(1.0)]), periods })).toBeNull();

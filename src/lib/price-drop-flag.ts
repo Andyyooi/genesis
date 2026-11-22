@@ -144,7 +144,7 @@ export function goodCompanyPriceDown(args: {
 }): GoodCompanyPriceDown | null {
   if (args.pn17) return null;
   const priceDrop = recentPriceDrop(args.bars);
-  if (!priceDrop || priceDrop.drop < SHARP_DROP) return null;
+  if (!priceDrop || priceDrop.drop < SHARP_DROP - 1e-9) return null;
   const scores = strongAccountScores(args.result);
   if (!scores) return null;
   return { priceDrop, scores, results: latestResultsComparison(args.periods, { includeSales: args.includeSales }) };
