@@ -35,3 +35,19 @@ export function holdingValue(h: Holding, price: number | null) {
   const gain = value === null ? null : value - cost;
   return { cost, value, gain, gainPercent: gain === null ? null : gain / cost * 100 };
 }
+
+export function yearlyHoldingDividends(shares: number, annualCashPerShare: number | null) {
+  if (annualCashPerShare === null) return null;
+  const income = shares * annualCashPerShare;
+  return Number.isFinite(income) ? income : null;
+}
+
+export function totalYearlyDividends(estimates: readonly (number | null)[]) {
+  let total: number | null = null;
+  let missing = 0;
+  for (const estimate of estimates) {
+    if (estimate === null) missing++;
+    else total = (total ?? 0) + estimate;
+  }
+  return { total, missing };
+}
