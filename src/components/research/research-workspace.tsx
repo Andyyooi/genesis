@@ -27,6 +27,7 @@ export type WorkspaceRow = {
   name: string;
   sector: string | null;
   price: number | null;
+  buyScore: number | null;
   researchScore: number | null;
   valuationScore: number | null;
   qualityScore: number | null;
@@ -155,13 +156,17 @@ export function ResearchWorkspace({
           ? latestPriceChange(a.prices)
           : sort === "valuation"
             ? a.valuationScore
-            : a.researchScore;
+            : sort === "research"
+              ? a.researchScore
+              : a.buyScore;
       const bv =
         sort === "move"
           ? latestPriceChange(b.prices)
           : sort === "valuation"
             ? b.valuationScore
-            : b.researchScore;
+            : sort === "research"
+              ? b.researchScore
+              : b.buyScore;
       return av === null
         ? bv === null
           ? a.ticker.localeCompare(b.ticker)
@@ -253,6 +258,7 @@ export function ResearchWorkspace({
             onChange={(event) => setSort(event.target.value)}
           >
             <option value="">List order</option>
+            <option value="buy">Buy score</option>
             <option value="research">Research score</option>
             <option value="valuation">Valuation score</option>
             <option value="move">Latest price change</option>
@@ -341,6 +347,10 @@ export function ResearchWorkspace({
                       (row: WorkspaceRow) => row.priceDate ?? "Unavailable",
                     ],
                     [
+                      "Buy score / 100",
+                      (row: WorkspaceRow) => formatScore100(row.buyScore),
+                    ],
+                    [
                       "Research / 100",
                       (row: WorkspaceRow) => formatScore100(row.researchScore),
                     ],
@@ -413,7 +423,7 @@ export function ResearchWorkspace({
                 Change %
               </th>
               <th scope="col">30 observations</th>
-              <th scope="col">Research</th>
+              <th scope="col">Buy score</th>
               <th scope="col">Confidence</th>
               <th scope="col">
                 <span className="sr-only">Compare company</span>
@@ -494,19 +504,19 @@ export function ResearchWorkspace({
                       className={`score-cell ${row.needsVerification ? "score-muted" : ""}`}
                     >
                       <span>
-                        {row.researchScore === null
+                        {row.buyScore === null
                           ? "—"
-                          : row.researchScore.toFixed(0)}
+                          : row.buyScore.toFixed(0)}
                         <span className="text-[10px] font-normal text-muted-foreground">
                           {" "}
                           /100
                         </span>
                       </span>
-                      {row.researchScore !== null ? (
+                      {row.buyScore !== null ? (
                         <span className="score-track">
                           <span
                             style={{
-                              width: `${Math.max(0, Math.min(100, row.researchScore))}%`,
+                              width: `${Math.max(0, Math.min(100, row.buyScore))}%`,
                             }}
                           />
                         </span>

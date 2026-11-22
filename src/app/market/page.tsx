@@ -13,6 +13,8 @@ import { loadLatestMarketScan } from "@/market/scan";
 import { filterMarketRows } from "@/market/filters";
 import { formatScore100 } from "@/lib/research-copy";
 import { loadListFairRanges } from "@/fair-value/load-list-ranges";
+import { buyScoreValue } from "@/lib/buy-score";
+import { publishedBuyScore } from "@/scoring/published-research-scores";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +30,14 @@ export default async function MarketPage({
   const { summary, rows } = loadLatestMarketScan();
   const belowFairRange = params.fair === "below";
   const fairRanges = loadListFairRanges(rows.map(row => String(row.ticker)));
-  const visible = filterMarketRows(rows, q, eligibility, { belowFairRange, fairRanges });
+  const visible = filterMarketRows(rows, q, eligibility, { belowFairRange, fairRanges }).map((row) => ({
+    ...row,
+    buyScore: buyScoreValue(publishedBuyScore({
+      researchScore: typeof row.researchScore === "number" ? row.researchScore : null,
+      eligible: row.eligible === true,
+      needsVerification: row.needsVerification === true,
+    })),
+  }));
   const quality = loadLatestFundamentalsQuality();
   const dq = summary?.dataQuality;
 

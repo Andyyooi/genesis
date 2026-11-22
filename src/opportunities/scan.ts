@@ -1,3 +1,5 @@
+import { buyScoreValue } from "@/lib/buy-score";
+import { publishedBuyScore } from "@/scoring/published-research-scores";
 import { loadScoreHistory, loadWatchlistMembership } from "@/db/queries";
 import { loadSavedPrices } from "@/db/price-history";
 import type { WorkspaceRow } from "@/components/research/research-workspace";
@@ -95,6 +97,7 @@ export function toWorkspaceRow(row: OpportunityRow): WorkspaceRow {
     name: row.name,
     sector: row.sector,
     price: row.price,
+    buyScore: buyScoreValue(publishedBuyScore({ researchScore: row.researchScore, eligible: row.result.eligibility?.eligible === true, needsVerification: row.needsVerification })),
     researchScore: row.researchScore,
     valuationScore: row.valuationScore,
     qualityScore: row.qualityScore,
