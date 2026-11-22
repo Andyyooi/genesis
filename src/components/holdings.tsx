@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import { backupJson, HOLDINGS_KEY, holdingValue, mergeHolding, parseBackup, validateHolding, type Holding } from "@/lib/holdings";
 import { formatMyr } from "@/lib/format-myr";
 import { formatScore100 } from "@/lib/research-copy";
+import { FairRangePill } from "@/components/research/fair-range-pill";
+import type { FairRangeHeadline } from "@/lib/fair-range";
 
-type Quote = { ticker: string; price: number | null; priceDate: string | null; score: number | null; warnings: string[] };
+type Quote = { ticker: string; fairRange?: FairRangeHeadline; price: number | null; priceDate: string | null; score: number | null; warnings: string[] };
 type Data = { universe: { ticker: string; name: string }[]; quotes: Quote[] };
 const priceText = (n: number | null) => n === null ? "Unavailable" : `RM ${n.toLocaleString("en-MY", { minimumFractionDigits: 3, maximumFractionDigits: 5 })}`;
 const button = "rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted";
@@ -105,6 +107,7 @@ export function Holdings() {
               <div className="min-w-0 flex-1"><Link className="font-semibold underline" href={`/stock/${encodeURIComponent(h.ticker)}`}>{h.ticker}</Link><p className="mt-1 text-muted-foreground">{data?.universe.find(s => s.ticker === h.ticker)?.name}</p></div>
               <div className="flex flex-wrap gap-2"><button className={button} aria-label={`Edit ${h.ticker}`} onClick={() => { setEditing(h.ticker); setStock(h.ticker); setShares(String(h.shares)); setAverage(String(h.averagePrice)); }}>Edit</button><button className={button} aria-label={`Remove ${h.ticker}`} onClick={() => { if (window.confirm(`Remove ${h.ticker}?`)) { if (save(rows.filter(r => r.ticker !== h.ticker))) reset(); } }}>Remove</button></div>
             </div>
+            {q ? <FairRangePill range={q.fairRange} /> : <p className="mt-2 text-xs text-muted-foreground">Loading fair range…</p>}
             <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 lg:grid-cols-7">
               <div className="min-w-0"><dt className="text-xs text-muted-foreground">Shares</dt><dd className="mt-1 font-medium">{h.shares.toLocaleString("en-MY", { maximumFractionDigits: 8 })}</dd></div>
               <div className="min-w-0"><dt className="text-xs text-muted-foreground">Avg cost / share</dt><dd className="mt-1 font-medium">{priceText(h.averagePrice)}</dd></div>

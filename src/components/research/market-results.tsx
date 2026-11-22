@@ -5,6 +5,8 @@ import { useHeldTickers } from "@/components/holdings-store";
 import { ArrowUpRight, ChevronDown, Search } from "lucide-react";
 import { StatusLabel } from "./status-label";
 import { dataConfidenceLabel, formatScore100 } from "@/lib/research-copy";
+import { FairRangePill } from "./fair-range-pill";
+import type { FairRangeHeadline } from "@/lib/fair-range";
 
 const PAGE_SIZE = 25;
 
@@ -14,12 +16,14 @@ export function MarketResults({
   query,
   eligibility,
   requestedPage,
+  fairRanges,
 }: {
   rows: Record<string, unknown>[];
   total: number;
   query: string;
   eligibility: string;
   requestedPage: string;
+  fairRanges: Record<string, FairRangeHeadline>;
 }) {
   const held = useHeldTickers();
   rows = [...rows].sort((a, b) => Number(held.has(String(b.ticker))) - Number(held.has(String(a.ticker))));
@@ -150,6 +154,7 @@ export function MarketResults({
                     <span className="scan-company-name">
                       {String(row.name ?? ticker)}
                     </span>
+                    <FairRangePill range={fairRanges[ticker]} />
                   </td>
                   <td role="cell">
                     <span className="scan-mobile-label" aria-hidden="true">
