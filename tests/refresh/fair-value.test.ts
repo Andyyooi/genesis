@@ -442,6 +442,7 @@ describe("fair value daily refresh", () => {
     expect(summary.notes.some((note) => note.includes("Fair Value dataset SOURCE_FAILED"))).toBe(true);
     expect(summary.datasets.map((row) => row.dataset)).toEqual([
       "prices",
+      "price_check",
       "fundamentals",
       "events",
       "news",

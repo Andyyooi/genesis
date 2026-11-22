@@ -21,6 +21,7 @@ import {
   type FairValueRefreshReport,
 } from "@/refresh/fair-value";
 import { persistDatasetRefresh } from "@/refresh/persist";
+import { runPriceCheck } from "@/refresh/price-check";
 import {
   combineOverallStatus,
   malaysiaMarketDate,
@@ -140,6 +141,7 @@ async function refreshPrices(
         requestsSucceeded: report.succeeded.length,
         barsUpserted: report.barsUpserted,
         failedSample: report.failed.slice(0, 10),
+        failedTickers: report.failed.map((item) => item.ticker),
       },
     });
   } catch (error) {
@@ -520,6 +522,12 @@ export async function runDailyRefresh(
   ];
 
   const prices = await refreshPrices(runId, marketDate, deps);
+  const failedTickers = prices.metadata?.failedTickers;
+  const priceCheck = runPriceCheck(runId, marketDate, {
+    now: nowFn,
+    failedThisRun: Array.isArray(failedTickers) ? failedTickers.filter((t): t is string => typeof t === "string") : [],
+  });
+  if (priceCheck.errorSummary) notes.push(priceCheck.errorSummary);
   const fundamentals = await refreshFundamentals(runId, marketDate, deps);
   const events = await refreshEvents(runId, marketDate, deps);
   const news = refreshNews(runId, marketDate, deps);
@@ -534,7 +542,7 @@ export async function runDailyRefresh(
     );
   }
 
-  const datasets = [prices, fundamentals, events, news, scores, fairValue];
+  const datasets = [prices, priceCheck, fundamentals, events, news, scores, fairValue];
   if (deps.importCalendar) datasets.push(await refreshCalendar(runId, marketDate, nowFn, deps.importCalendar));
   const completedAt = nowFn().toISOString();
   return {
