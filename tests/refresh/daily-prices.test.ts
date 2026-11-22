@@ -7,6 +7,7 @@ import { loadScoringConfig } from "@/config/load-scoring";
 import { getDb } from "@/db/client";
 import { instruments, priceBars, refreshRuns, trackRecordEntries } from "@/db/schema";
 import { importYahooPrices } from "@/ingest/import-prices";
+import { recentPriceDrop } from "@/lib/price-drop-flag";
 import { runDailyRefresh } from "@/refresh/daily";
 
 const PREV_PATH = process.env.BURSA_SQLITE_PATH;
@@ -178,6 +179,28 @@ describe("daily price range and throttle", () => {
   it("uses ordinary ranges without saved entries", async () => {
     await importYahooPrices({ listedOnly: true, skipUniverseSeed: true, skipAlerts: true, range: "auto", refreshTrackRecordHistory: true, rateLimitMs: 0 });
     expect(vi.mocked(fetchYahooDailyBars).mock.calls).toEqual([["MAYBANK.KL", "2y"]]);
+  });
+
+  it("refreshes the comparison window's adjusted closes after a split without rewriting older closes", async () => {
+    const history = Array.from({ length: 21 }, (_, i) => ({
+      barDate: `2026-09-${String(i + 1).padStart(2, "0")}`,
+      open: 5, high: 5, low: 5, close: 5, adjClose: 5, volume: 1000,
+    }));
+    for (const bar of history) seedBar(bar.barDate, 10);
+    const split = { ...history[0], barDate: "2026-09-22", split: true } as const;
+    vi.mocked(fetchYahooDailyBars)
+      .mockResolvedValueOnce([history[20], split])
+      .mockResolvedValueOnce([...history, split]);
+
+    const report = await importYahooPrices({ onlyTicker: "MAYBANK", skipUniverseSeed: true, skipAlerts: true, range: "5d" });
+
+    expect(report.succeeded).toEqual(["MAYBANK"]);
+    expect(vi.mocked(fetchYahooDailyBars).mock.calls).toEqual([
+      ["MAYBANK.KL", "5d"], ["MAYBANK.KL", { startDate: history[0].barDate }],
+    ]);
+    const bars = getDb().select().from(priceBars).all().sort((a, b) => b.barDate.localeCompare(a.barDate));
+    expect(bars.at(-1)).toMatchObject({ close: 10, adjClose: 5 });
+    expect(recentPriceDrop(bars)).toMatchObject({ drop: 0, highClose: 5, lastClose: 5 });
   });
 
   it("logs a saved-history failure, records provenance, and continues through rescore", async () => {

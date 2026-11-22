@@ -85,6 +85,20 @@ describe("goodCompanyPriceDown", () => {
     expect(flag?.results?.tone).toBe("weaker");
   });
 
+  it("ignores a two-for-one split but flags a real fall after it", () => {
+    const split = bars([5, 5, ...Array(23).fill(10)]).map((bar, i) => ({
+      ...bar,
+      adjClose: i === 4 ? null : 5,
+    }));
+    const company = { result: result({ quality: 80 }), periods };
+    expect(goodCompanyPriceDown({ ...company, bars: split })).toBeNull();
+
+    split[0] = { ...split[0], close: 3.5, adjClose: 3.5 };
+    const flag = goodCompanyPriceDown({ ...company, bars: split });
+    expect(flag?.priceDrop.drop).toBeCloseTo(0.3);
+    expect(flag?.priceDrop).toMatchObject({ adjusted: true, highClose: 5, lastClose: 3.5 });
+  });
+
   it("flags a fall of exactly 20%", () => {
     expect(goodCompanyPriceDown({ result: result({ quality: 80 }), bars: bars([0.8, ...Array(40).fill(1.0)]), periods })).not.toBeNull();
   });

@@ -8,12 +8,14 @@ export type YahooBar = {
   close: number | null;
   volume: number | null;
   adjClose: number | null;
+  split?: true;
 };
 
 type ChartResponse = {
   chart?: {
     result?: Array<{
       timestamp?: number[];
+      events?: { splits?: Record<string, { date?: number }> };
       indicators?: {
         quote?: Array<{
           open?: Array<number | null>;
@@ -89,6 +91,10 @@ export async function fetchYahooDailyBars(yahooTicker: string, range: string | {
   }
 
   const bars: YahooBar[] = [];
+  const splits = Object.values(result?.events?.splits ?? {})
+    .flatMap(({ date }) => typeof date === "number" && Number.isFinite(date) ? [utcDate(date)] : [])
+    .sort();
+  let nextSplit = 0;
   const now = new Date();
   for (let i = 0; i < timestamps.length; i++) {
     const epoch = timestamps[i];
@@ -104,6 +110,10 @@ export async function fetchYahooDailyBars(yahooTicker: string, range: string | {
       adjClose: adjSeries?.[i] ?? null,
     };
     if (!usableYahooDailyBar(bar, now)) continue;
+    while (nextSplit < splits.length && splits[nextSplit] <= bar.barDate) {
+      bar.split = true;
+      nextSplit++;
+    }
     bars.push(bar);
   }
 

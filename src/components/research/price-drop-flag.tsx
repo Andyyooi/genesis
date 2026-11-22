@@ -18,10 +18,11 @@ export function GoodCompanyPriceDownCard({ flag }: { flag: GoodCompanyPriceDown 
     <section className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm dark:border-amber-700 dark:bg-amber-950/40">
       <h2 className="font-semibold">Strong company, price down sharply</h2>
       <p className="mt-1">
-        The price is {Math.round(priceDrop.drop * 100)}% below its highest close in the last 3 months (
+        The price is {Math.round(priceDrop.drop * 100)}% below its highest {priceDrop.adjusted ? "adjusted " : ""}close in the last 3 months (
         {formatSharePrice(priceDrop.highClose)} on {formatDateSafe(priceDrop.highDate)}, now{" "}
         {formatSharePrice(priceDrop.lastClose)}), while the scores from its accounts still rank strongly: {scoreText}.
       </p>
+      {priceDrop.adjusted ? <p className="mt-1 text-muted-foreground">The comparison accounts for share splits and dividends.</p> : null}
       {results ? <div className="mt-2"><LatestResultsLine results={results} /></div> : null}
       <p className="mt-2 text-muted-foreground">
         A prompt to look closer, not a buy signal. A price that drops on bad results can keep dropping, so check the
