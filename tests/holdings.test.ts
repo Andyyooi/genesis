@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { backupJson, holdingValue, mergeHolding, parseBackup } from "../src/lib/holdings";
+import { backupJson, holdingValue, mergeHolding, parseBackup, totalYearlyDividends, yearlyHoldingDividends } from "../src/lib/holdings";
+import { annualDividend } from "../src/lib/holding-dividends";
 
 const h = { ticker: "MAYBANK", shares: 100, averagePrice: 0.245 };
 describe("holdings", () => {
@@ -23,5 +24,42 @@ describe("holdings", () => {
   });
   it("rejects malformed and unsafe backups", () => {
     for (const value of ["oops", "null", "{}", '{"version":2,"holdings":[]}', backupJson([{ ...h, averagePrice: 0 }]), backupJson([{ ...h, shares: Infinity }])]) expect(() => parseBackup(value)).toThrow();
+  });
+});
+
+describe("yearly holding dividends", () => {
+  const annual = (periodEnd: string, amount: number | null) => ({
+    periodEnd, statementType: "annual", actualOrEstimate: "actual", source: "annual report",
+    lineItemsJson: JSON.stringify({ dividendPerShare: amount }),
+  });
+
+  it("uses the annual calendar yield with the stored price, not a one-off payout", () => {
+    const calendar = { annualYieldPercent: 5, dividendAmount: 0.1, checkedAt: "2026-11-20T14:00:00Z" };
+    const estimate = annualDividend("MYR", [annual("2025-12-31", 0.3)], 8, calendar);
+    expect(estimate).toEqual({ perShare: 0.4, date: "2026-11-20", basis: "calendar-yield" });
+    expect(yearlyHoldingDividends(500, estimate?.perShare ?? null)).toBe(200);
+    expect(annualDividend("USD", [], 8, calendar)).toBeNull();
+  });
+
+  it("falls back to the latest usable annual accounts without treating single payments as annual", () => {
+    const earlier = annual("2024-12-31", 0.61);
+    const excluded = [
+      annual("2025-12-31", null),
+      { ...annual("2025-12-31", 2), source: "yahoo-quote-summary" },
+      { ...annual("2026-03-31", 3), statementType: "quarterly" },
+      { ...annual("2026-12-31", 4), actualOrEstimate: "estimate" },
+    ];
+    expect(annualDividend("MYR", excluded, 10)).toBeNull();
+    expect(annualDividend("MYR", [earlier, ...excluded, annual("2023-12-31", 0.58)], null, {
+      annualYieldPercent: 6, checkedAt: "2026-11-20",
+    })).toEqual({ perShare: 0.61, date: "2024-12-31", basis: "annual-accounts" });
+  });
+
+  it("sums only available estimates and distinguishes a known zero from missing data", () => {
+    const zero = annualDividend("MYR", [annual("2025-12-31", 0)], null);
+    expect(yearlyHoldingDividends(100, null)).toBeNull();
+    expect(totalYearlyDividends([yearlyHoldingDividends(100, 0.61), yearlyHoldingDividends(100, zero?.perShare ?? null), null]))
+      .toEqual({ total: 61, missing: 1 });
+    expect(totalYearlyDividends([null, null])).toEqual({ total: null, missing: 2 });
   });
 });
