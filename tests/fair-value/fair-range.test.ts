@@ -53,6 +53,12 @@ describe("fairRangeHeadline", () => {
     expect(below.available && below.wideSpread).toBe(false);
   });
 
+  it("keeps both estimates when only two methods worked", () => {
+    const range = fairRangeHeadline(stored([1, 2]), 1.1);
+    expect(range.available && [range.low, range.high]).toEqual([1, 2]);
+    expect(range.available && range.position).toBe("inside");
+  });
+
   it("leaves out methods the quality checks flagged", () => {
     const range = fairRangeHeadline(stored([1, 1.2, 623.03], "POINT_WITH_CAUTION", 1.2, [2]), 1.1);
     expect(range.available && range.high).toBe(1.2);

@@ -50,8 +50,8 @@ export function fairRangeHeadline(
   if (values.length < 2) {
     return { available: false, reason: "Only one valuation method worked for this stock, so there is no range." };
   }
-  const low = quantile(values, 0.25);
-  const high = quantile(values, 0.75);
+  const low = values.length === 2 ? values[0] : quantile(values, 0.25);
+  const high = values.length === 2 ? values[1] : quantile(values, 0.75);
   const middle = isFiniteNumber(result.fairValueBase) ? result.fairValueBase : quantile(values, 0.5);
   const price = isFiniteNumber(currentPrice) && currentPrice > 0 ? currentPrice : result.currentPrice;
   const position: FairRangePosition | null = !isFiniteNumber(price)
