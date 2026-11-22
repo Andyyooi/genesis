@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useHeldTickers } from "@/components/holdings-store";
 import { Disclosure } from "@/components/research/disclosure";
 
 export type AlertRow = {
@@ -13,6 +16,8 @@ export type AlertRow = {
 };
 
 export function AlertsList({ rows, empty }: { rows: AlertRow[]; empty: string }) {
+  const held = useHeldTickers();
+  rows = [...rows].sort((a, b) => Number(held.has(b.ticker)) - Number(held.has(a.ticker)));
   if (rows.length === 0) {
     return <p className="text-sm text-muted-foreground">{empty}</p>;
   }
@@ -22,6 +27,7 @@ export function AlertsList({ rows, empty }: { rows: AlertRow[]; empty: string })
         <li key={row.id} className="rounded-xl border border-l-4 border-l-sky-400 bg-card px-4 py-4">
           <p className="text-xs text-muted-foreground">
             {row.triggeredAt.slice(0, 10)} · {row.ticker}
+            {held.has(row.ticker) ? " · My holding" : ""}
           </p>
           <p className="font-medium">
             <Link href={row.href} className="underline underline-offset-4">

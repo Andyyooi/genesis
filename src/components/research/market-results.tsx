@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useHeldTickers } from "@/components/holdings-store";
 import { ArrowUpRight, ChevronDown, Search } from "lucide-react";
 import { StatusLabel } from "./status-label";
 import { dataConfidenceLabel, formatScore100 } from "@/lib/research-copy";
@@ -18,6 +21,8 @@ export function MarketResults({
   eligibility: string;
   requestedPage: string;
 }) {
+  const held = useHeldTickers();
+  rows = [...rows].sort((a, b) => Number(held.has(String(b.ticker))) - Number(held.has(String(a.ticker))));
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const parsed = /^\d+$/.test(requestedPage) ? Number(requestedPage) : 1;
   const page = Math.min(
@@ -92,6 +97,7 @@ export function MarketResults({
         ) : null}
       </form>
       <p className="scan-list-note">
+        Your held stocks appear first within the current filters. {" "}
         Scores are out of 100, not buy signals. Open a company for research;
         expand its review for coverage and exclusions.
       </p>
@@ -128,6 +134,7 @@ export function MarketResults({
               return (
                 <tr key={ticker} role="row">
                   <td className="scan-company" role="cell">
+                    {held.has(ticker) && <span className="text-xs font-semibold text-primary">My holding · </span>}
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
                         href={`/stock/${ticker}`}

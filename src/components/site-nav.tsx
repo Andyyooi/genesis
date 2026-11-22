@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Radar, Bell } from "lucide-react";
+import { LayoutDashboard, Radar, Bell, Wallet } from "lucide-react";
 
 const links = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/holdings", label: "My holdings", icon: Wallet },
   { href: "/market", label: "Market scan", icon: Radar },
   { href: "/alerts", label: "Alerts", icon: Bell },
 ];
