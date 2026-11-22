@@ -9,7 +9,7 @@ export const SHARP_DROP = 0.2;
 export const STRONG_SCORE = 60;
 
 type Bar = { barDate: string; close: number | null; source?: string };
-type Period = { periodEnd: string; statementType: string; lineItemsJson: string | null };
+type Period = { periodEnd: string; statementType: string; lineItemsJson: string | null; actualOrEstimate?: string };
 
 export type PriceDrop = {
   drop: number;
@@ -89,7 +89,7 @@ function yearEnd(periodEnd: string): string {
 export function latestResultsComparison(periods: Period[], opts: { includeSales?: boolean } = {}): ResultsComparison | null {
   const byEnd = new Map<string, Period>();
   for (const p of periods) {
-    if (p.statementType !== "annual") continue;
+    if (p.statementType !== "annual" || p.actualOrEstimate === "estimate") continue;
     const existing = byEnd.get(p.periodEnd);
     if (!existing || (lineItem(existing, "pat") === null && lineItem(p, "pat") !== null)) byEnd.set(p.periodEnd, p);
   }

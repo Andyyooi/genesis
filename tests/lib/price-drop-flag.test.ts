@@ -68,6 +68,11 @@ describe("latestResultsComparison", () => {
     expect(latestResultsComparison([annual("2026-06-30", 5e6), annual("2024-06-30", 4e6)])).toBeNull();
     expect(latestResultsComparison([annual("2026-06-30", null), annual("2025-06-30", 4e6)])).toBeNull();
   });
+
+  it("ignores forecasts", () => {
+    const forecast = { ...annual("2027-06-30", 1e6), actualOrEstimate: "estimate" };
+    expect(latestResultsComparison([forecast, annual("2026-06-30", 12e6), annual("2025-06-30", 10e6)])?.text).toContain("year to Jun 2026");
+  });
 });
 
 describe("goodCompanyPriceDown", () => {
