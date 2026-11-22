@@ -39,6 +39,7 @@ export function findPriceIssues(
   const newestDate = stocks.flatMap((s) => (s.latestDate ? [s.latestDate] : [])).sort().at(-1) ?? null;
   const recentDates = [...new Set(stocks.flatMap((s) => s.bars.map((b) => b.date)))].sort().slice(-RECENT_MARKET_DAYS);
   const windowStart = recentDates[0] ?? null;
+  const listedTickers = new Set(stocks.map((s) => s.ticker));
   const report: PriceCheckReport = {
     kind: "price-check",
     checkedAt: options.checkedAt,
@@ -49,7 +50,7 @@ export function findPriceIssues(
     noPrice: [],
     stale: [],
     jumps: [],
-    failedThisRun: [...new Set(options.failedThisRun ?? [])].sort(),
+    failedThisRun: [...new Set(options.failedThisRun ?? [])].filter((t) => listedTickers.has(t)).sort(),
   };
   for (const stock of stocks) {
     const who = { ticker: stock.ticker, name: stock.name };
@@ -65,7 +66,7 @@ export function findPriceIssues(
       if (!windowStart || current.date < windowStart) break;
       if (!usable(current.close) || !usable(previous.close)) continue;
       const change = current.close / previous.close - 1;
-      if (Math.abs(change) * 100 >= PRICE_JUMP_PERCENT && Math.abs(current.close - previous.close) >= PRICE_JUMP_MIN_RM) {
+      if (Math.abs(change) * 100 >= PRICE_JUMP_PERCENT && roundPrice(Math.abs(current.close - previous.close)) >= PRICE_JUMP_MIN_RM) {
         report.jumps.push({ ...who, date: current.date, from: roundPrice(previous.close), to: roundPrice(current.close), changePercent: Math.round(change * 1000) / 10 });
         break;
       }
@@ -159,13 +160,18 @@ export function runPriceCheck(
   });
 }
 
-/** The check stored by the latest refresh; re-checked read-only when it does not match the published prices. */
+/** Re-checks the published prices, keeping the latest refresh's date and download failures when it matches them. */
 export function loadPriceCheck(): { report: PriceCheckReport; fromRefresh: boolean } {
   const inputs = loadPriceCheckInputs();
   const stored = loadLatestDatasetRefresh("price_check")?.metadata as PriceCheckReport | undefined;
   const live = findPriceIssues(inputs, { checkedAt: new Date().toISOString() });
-  if (stored?.kind === "price-check" && stored.newestDate === live.newestDate && stored.listed === live.listed) {
-    return { report: stored, fromRefresh: true };
+  if (stored?.kind === "price-check" && stored.newestDate === live.newestDate) {
+    const report = findPriceIssues(inputs, {
+      checkedAt: stored.checkedAt,
+      marketDate: stored.marketDate,
+      failedThisRun: stored.failedThisRun,
+    });
+    return { report, fromRefresh: true };
   }
   return { report: live, fromRefresh: false };
 }

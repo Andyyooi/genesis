@@ -28,15 +28,20 @@ describe("findPriceIssues", () => {
         stock("OLD", [2, 2], ["2026-10-26", "2026-10-27"]),
         { ticker: "NONE", name: "None Bhd", latestDate: null, bars: [] },
       ],
-      { checkedAt: "2026-11-21T10:00:00Z", marketDate: "2026-11-21", failedThisRun: ["OLD", "MISSED"] },
+      { checkedAt: "2026-11-21T10:00:00Z", marketDate: "2026-11-21", failedThisRun: ["OLD", "MAYBANK", "DELISTED"] },
     );
     expect(report.newestDate).toBe("2026-11-20");
     expect(report.jumps).toEqual([{ ticker: "JUMPY", name: "JUMPY Bhd", date: "2026-11-20", from: 1, to: 1.5, changePercent: 50 }]);
     expect(report.stale).toEqual([{ ticker: "OLD", name: "OLD Bhd", lastDate: "2026-10-27" }]);
     expect(report.noPrice.map((s) => s.ticker)).toEqual(["NONE"]);
-    expect(report.failedThisRun).toEqual(["MISSED", "OLD"]);
+    expect(report.failedThisRun).toEqual(["MAYBANK", "OLD"]);
     expect(priceCheckIssueCount(report)).toBe(4);
     expect(priceCheckSummary(report)).toMatch(/2 not downloaded.*1 with no saved price.*1 with an older last price.*1 with a jump/);
+  });
+
+  it("counts a RM0.05 move as a jump despite rounding", () => {
+    const report = findPriceIssues([stock("GIIB", [0.13, 0.13, 0.13, 0.13, 0.13, 0.18])], { checkedAt: "2026-11-21T10:00:00Z" });
+    expect(report.jumps.map((j) => j.ticker)).toEqual(["GIIB"]);
   });
 
   it("only looks for jumps in the recent trading days", () => {
