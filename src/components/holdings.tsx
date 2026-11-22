@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { backupJson, HOLDINGS_KEY, holdingValue, mergeHolding, parseBackup, validateHolding, type Holding } from "@/lib/holdings";
+import { backupJson, HOLDINGS_KEY, holdingValue, mergeHolding, parseBackup, totalYearlyDividends, validateHolding, yearlyHoldingDividends, type Holding } from "@/lib/holdings";
+import type { AnnualDividend } from "@/lib/holding-dividends";
 import { formatMyr } from "@/lib/format-myr";
 import { formatScore100 } from "@/lib/research-copy";
 
-type Quote = { ticker: string; price: number | null; priceDate: string | null; score: number | null; warnings: string[] };
+type Quote = { ticker: string; price: number | null; priceDate: string | null; score: number | null; annualDividend: AnnualDividend | null; warnings: string[] };
 type Data = { universe: { ticker: string; name: string }[]; quotes: Quote[] };
 const priceText = (n: number | null) => n === null ? "Unavailable" : `RM ${n.toLocaleString("en-MY", { minimumFractionDigits: 3, maximumFractionDigits: 5 })}`;
 const button = "rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted";
@@ -50,10 +51,19 @@ export function Holdings() {
     } catch { setError("Could not save. Browser storage may be disabled or full. Your previous holdings are unchanged."); return false; }
   }
   function reset() { setEditing(null); setStock(""); setShares(""); setAverage(""); }
-  const totals = (rows ?? []).reduce((sum, h) => {
-    const v = holdingValue(h, data?.quotes.find(q => q.ticker === h.ticker)?.price ?? null);
+  const holdings = (rows ?? []).map(h => {
+    const quote = data?.quotes.find(q => q.ticker === h.ticker);
+    return {
+      h, quote,
+      value: holdingValue(h, quote?.price ?? null),
+      dividend: yearlyHoldingDividends(h.shares, quote?.annualDividend?.perShare ?? null),
+    };
+  });
+  const totals = holdings.reduce((sum, { value: v }) => {
     return { cost: sum.cost + v.cost, value: sum.value + (v.value ?? 0), missing: sum.missing || v.value === null };
   }, { cost: 0, value: 0, missing: false });
+  const dividends = totalYearlyDividends(holdings.map(h => h.dividend));
+  const dividendsLoaded = holdings.every(h => h.quote);
   return <>
     <section className="market-card p-5 flex flex-wrap items-center justify-between gap-4">
       <p className="max-w-2xl text-sm text-muted-foreground">Holdings stay in this browser, not on the server. Clearing browser data removes them. Download a backup to move devices or keep a safe copy.</p>
@@ -96,16 +106,37 @@ export function Holdings() {
       {editing && <button type="button" className={button} onClick={reset}>Cancel</button>}
     </form>
     {rows?.length === 0 ? <section className="market-card p-8"><h2 className="text-xl font-semibold">Start with a stock you own</h2><p className="mt-2 text-muted-foreground">Enter your shares and average price above. Your holdings stay in this browser. No account or server changes needed.</p></section> : rows === null ? <p>Waiting for browser storage. If it cannot be read, restore a backup above.</p> : <section aria-label="Your holdings" className="min-w-0 space-y-4">
+      <div className="market-card border-emerald-300 p-5 [overflow-wrap:anywhere] dark:border-emerald-800">
+        <h2 className="font-semibold">Estimated yearly dividends — total</h2>
+        <p className="mt-1 text-2xl font-semibold text-emerald-700 dark:text-emerald-300">{dividends.total === null
+          ? dividendsLoaded ? "No dividend data" : "Dividend data not loaded"
+          : formatMyr(dividends.total)}</p>
+        {dividends.total !== null && dividends.missing > 0 && <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+          Partial total: {dividends.missing} {dividends.missing === 1 ? "holding" : "holdings"} not included.
+        </p>}
+        <details className="mt-3 text-sm text-muted-foreground">
+          <summary className="cursor-pointer font-medium">How this is estimated</summary>
+          <p className="mt-2">We multiply your shares by the estimated yearly cash per share, using the stored price and annual dividend yield or the latest annual accounts with dividend data. We leave out stocks without usable data. Payments can change; this is not a promise of what you’ll receive.</p>
+        </details>
+      </div>
       <p className="text-sm text-muted-foreground">Stored prices, not live quotes. Gains exclude fees and dividends. Genesis scores are research scores out of 100, not buy signals.</p>
-      <ul className="space-y-4">{rows.map(h => {
-          const q = data?.quotes.find(q => q.ticker === h.ticker);
-          const v = holdingValue(h, q?.price ?? null);
+      <ul className="space-y-4">{holdings.map(({ h, quote: q, value: v, dividend }) => {
           return <li key={h.ticker} className="market-card min-w-0 p-5 text-sm [overflow-wrap:anywhere]">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0 flex-1"><Link className="font-semibold underline" href={`/stock/${encodeURIComponent(h.ticker)}`}>{h.ticker}</Link><p className="mt-1 text-muted-foreground">{data?.universe.find(s => s.ticker === h.ticker)?.name}</p></div>
               <div className="flex flex-wrap gap-2"><button className={button} aria-label={`Edit ${h.ticker}`} onClick={() => { setEditing(h.ticker); setStock(h.ticker); setShares(String(h.shares)); setAverage(String(h.averagePrice)); }}>Edit</button><button className={button} aria-label={`Remove ${h.ticker}`} onClick={() => { if (window.confirm(`Remove ${h.ticker}?`)) { if (save(rows.filter(r => r.ticker !== h.ticker))) reset(); } }}>Remove</button></div>
             </div>
-            <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 lg:grid-cols-7">
+            <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4 xl:grid-cols-8">
+              <div className="min-w-0"><dt className="text-xs text-muted-foreground">Estimated yearly dividends</dt>
+                <dd className="mt-1 font-medium">
+                  {dividend !== null && q?.annualDividend ? <details>
+                    <summary className="cursor-pointer text-emerald-700 dark:text-emerald-300">{formatMyr(dividend)}</summary>
+                    <p className="mt-1 text-xs font-normal text-muted-foreground">{priceText(q.annualDividend.perShare)} per share. {q.annualDividend.basis === "annual-accounts"
+                      ? `From accounts for the year ended ${q.annualDividend.date}.`
+                      : `From the stored price and Yahoo Finance’s annual dividend yield, checked ${q.annualDividend.date}.`}</p>
+                  </details> : q ? "No dividend data" : "Dividend data not loaded"}
+                </dd>
+              </div>
               <div className="min-w-0"><dt className="text-xs text-muted-foreground">Shares</dt><dd className="mt-1 font-medium">{h.shares.toLocaleString("en-MY", { maximumFractionDigits: 8 })}</dd></div>
               <div className="min-w-0"><dt className="text-xs text-muted-foreground">Avg cost / share</dt><dd className="mt-1 font-medium">{priceText(h.averagePrice)}</dd></div>
               <div className="min-w-0"><dt className="text-xs text-muted-foreground">Latest price / share</dt><dd className="mt-1 font-medium">{priceText(q?.price ?? null)}<span className="mt-1 block text-xs font-normal text-muted-foreground">{q?.priceDate ?? "No price date"}</span></dd></div>
