@@ -63,11 +63,11 @@ function main() {
   for (const list of barsBy.values()) list.sort((a, b) => b.barDate.localeCompare(a.barDate));
   const lastBarDay = [...barsBy.values()].reduce((max, list) => (list[0] && list[0].barDate > max ? list[0].barDate : max), "");
 
-  /** Last close on or before a day; adjusted for dividends/splits when stored. */
-  const closeOn = (id: number, day: string, adjusted: boolean) => {
+  /** Last close on or before a day, with its dividend/split-adjusted close when stored. */
+  const closeOn = (id: number, day: string) => {
     const bar = (barsBy.get(id) ?? []).find((b) => b.barDate <= day && b.close != null && b.close > 0);
     if (!bar) return null;
-    return { day: bar.barDate, price: adjusted ? bar.adjClose ?? bar.close! : bar.close! };
+    return { day: bar.barDate, price: bar.close!, adjusted: bar.adjClose != null && bar.adjClose > 0 ? bar.adjClose : null };
   };
 
   const samples: Record<string, unknown>[] = [];
@@ -102,7 +102,7 @@ function main() {
     for (const { instrument, profile, bars, snapshots } of prepared) {
       const result = results.get(instrument.ticker);
       if (!result || result.researchScore === null) continue;
-      const entry = closeOn(instrument.id, day, false);
+      const entry = closeOn(instrument.id, day);
       if (!entry || entry.day < addMonths(day, -1)) continue;
       const fv = calculateFairValue({ ticker: instrument.ticker, researchProfile: profile, industry: instrument.industry, sector: instrument.sector, periods: snapshots, bars: bars.map((b) => ({ barDate: b.barDate, close: b.close, high: b.high, low: b.low })), peers, asOf });
       const quality = assessFairValueQuality(fv, snapshots.filter((s) => s.statementType === "annual").map((s) => ({ periodEnd: s.periodEnd, eps: s.eps, pat: s.pat, shares: s.shares, dividendPerShare: s.dividendPerShare })));
@@ -114,12 +114,16 @@ function main() {
         eligible: result.eligibility?.eligible === true,
         needsVerification: result.dataConfidence.needsVerification,
       });
-      const adjEntry = closeOn(instrument.id, day, true);
       const returns: Record<string, number | null> = {};
       for (const months of HORIZONS) {
         const exitDay = addMonths(day, months);
-        const exit = exitDay <= lastBarDay ? closeOn(instrument.id, exitDay, true) : null;
-        returns[`r${months}`] = exit && adjEntry && exit.day > adjEntry.day ? exit.price / adjEntry.price - 1 : null;
+        const exit = exitDay <= lastBarDay ? closeOn(instrument.id, exitDay) : null;
+        // A stock that stopped trading has no result for this horizon rather than an older close.
+        const fresh = exit && exit.day > addMonths(day, months - 1);
+        const bothAdjusted = exit?.adjusted != null && entry.adjusted != null;
+        returns[`r${months}`] = exit && fresh
+          ? bothAdjusted ? exit.adjusted! / entry.adjusted! - 1 : exit.price / entry.price - 1
+          : null;
       }
       samples.push({
         day, ticker: instrument.ticker, research: result.researchScore, eligible: result.eligibility?.eligible === true, caution,
