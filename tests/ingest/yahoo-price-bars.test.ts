@@ -58,6 +58,17 @@ describe("Yahoo daily bar validation", () => {
     await expect(fetchYahooDailyBars("MAYBANK.KL", "5d")).rejects.toThrow(/no closes/);
   });
 
+  it("requests an exact start date through now without a fixed range", async () => {
+    const request = chart({ chart: { result: [{ timestamp: [], indicators: { quote: [{}] } }] } });
+    vi.stubGlobal("fetch", request);
+    const before = Math.floor(Date.now() / 1000);
+    await expect(fetchYahooDailyBars("MAYBANK.KL", { startDate: "2024-01-02" })).rejects.toThrow("no daily bars");
+    const url = new URL(String((request.mock.calls as unknown[][])[0][0]));
+    expect(url.searchParams.get("period1")).toBe(String(Date.parse("2024-01-02T00:00:00Z") / 1000));
+    expect(Number(url.searchParams.get("period2"))).toBeGreaterThanOrEqual(before);
+    expect(url.searchParams.has("range")).toBe(false);
+  });
+
   it("keeps a valid bar and drops an invalid one from the same response", async () => {
     const good = Date.parse("2026-10-12T00:00:00.000Z") / 1000;
     const future = Date.parse("2099-01-01T00:00:00.000Z") / 1000;

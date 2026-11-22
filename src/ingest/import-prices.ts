@@ -23,6 +23,7 @@ export type PriceIngestOptions = {
   checkpointPath?: string;
   /** On-demand refresh sets this so one ticker does not rewrite every YAML instrument. */
   skipUniverseSeed?: boolean;
+  refreshTrackRecordHistory?: boolean;
 };
 
 type Checkpoint = { done: string[] };
@@ -65,8 +66,11 @@ export async function importYahooPrices(
   const startedAt = new Date().toISOString();
   if (!options.skipUniverseSeed) seedUniverseFromYaml();
   const db = getDb();
+  const savedDates = new Map(options.refreshTrackRecordHistory
+    ? (getSqlite().prepare("SELECT ticker, MIN(pick_date) startDate FROM track_record_entries GROUP BY ticker").all() as { ticker: string; startDate: string }[]).map((row) => [row.ticker, row.startDate])
+    : []);
   let rows = db.select().from(instruments).all();
-  if (options.listedOnly) rows = rows.filter((row) => row.listingStatus !== "inactive");
+  if (options.listedOnly) rows = rows.filter((row) => row.listingStatus !== "inactive" || savedDates.has(row.ticker));
   const tickerFilter = options.onlyTicker;
   const targets = tickerFilter
     ? rows.filter((row) => row.ticker.toUpperCase() === tickerFilter.toUpperCase())
@@ -98,13 +102,14 @@ export async function importYahooPrices(
     try {
       const latest = range === "auto" ? db.select({ date: max(priceBars.barDate) }).from(priceBars)
         .where(and(eq(priceBars.instrumentId, instrument.id), gt(priceBars.close, 0), lte(priceBars.barDate, retrievedAt.slice(0, 10)))).get()?.date ?? null : null;
-      const fetched = await fetchYahooDailyBars(yahooTicker, range === "auto" ? priceRangeSince(latest) : range);
+      const startDate = savedDates.get(instrument.ticker);
+      const fetched = await fetchYahooDailyBars(yahooTicker, startDate ? { startDate } : range === "auto" ? priceRangeSince(latest) : range);
       const accepted = fetched.filter((bar) => usableYahooDailyBar(bar));
       if (accepted.length === 0) {
         throw new Error(`Yahoo missed ${yahooTicker}: no usable daily bars`);
       }
       const applied = getSqlite().transaction(() => {
-        const plan = planYahooPriceWrites(instrument.ticker, accepted, storedYahooBars(instrument.id));
+        const plan = planYahooPriceWrites(instrument.ticker, accepted, storedYahooBars(instrument.id), startDate !== undefined);
         for (const bar of plan.write) writePriceBar(instrument.id, bar, retrievedAt);
         return plan;
       })();
@@ -118,6 +123,7 @@ export async function importYahooPrices(
       if (applied.write.length > 0 && !options.skipAlerts) refreshAlertsForTicker(instrument.ticker);
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Yahoo request failed";
+      if (savedDates.has(instrument.ticker)) console.error(`Track record price history refresh failed for ${instrument.ticker}: ${reason}`);
       failed.push({ ticker: instrument.ticker, yahooTicker, reason });
       recordIngestFailure("prices", instrument.ticker, yahooTicker, reason);
     }
@@ -183,7 +189,7 @@ function storedYahooBars(instrumentId: number): StoredYahooBar[] {
  * An older session with a different close is kept and reported.
  * The latest stored session may still be revised when its close changes.
  */
-function planYahooPriceWrites(ticker: string, accepted: YahooBar[], stored: StoredYahooBar[]): PriceWritePlan {
+function planYahooPriceWrites(ticker: string, accepted: YahooBar[], stored: StoredYahooBar[], refreshAdjustments = false): PriceWritePlan {
   const byUtc = new Map<number, StoredYahooBar>();
   let latestUtc: number | null = null;
   for (const row of stored) {
@@ -223,6 +229,9 @@ function planYahooPriceWrites(ticker: string, accepted: YahooBar[], stored: Stor
       continue;
     }
     if (latestUtc != null && utc < latestUtc) {
+      if (refreshAdjustments && bar.adjClose != null && bar.adjClose > 0 && bar.adjClose !== existing!.adjClose) {
+        write.push({ ...existing!, adjClose: bar.adjClose });
+      }
       conflicts.push({
         ticker,
         barDate: bar.barDate,

@@ -40,10 +40,15 @@ function utcDate(epochSec: number): string {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 }
 
-export async function fetchYahooDailyBars(yahooTicker: string, range = "5y"): Promise<YahooBar[]> {
+export async function fetchYahooDailyBars(yahooTicker: string, range: string | { startDate: string } = "5y"): Promise<YahooBar[]> {
   const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}`);
   url.searchParams.set("interval", "1d");
-  url.searchParams.set("range", range);
+  if (typeof range === "string") {
+    url.searchParams.set("range", range);
+  } else {
+    url.searchParams.set("period1", String(Date.parse(`${range.startDate}T00:00:00Z`) / 1000));
+    url.searchParams.set("period2", String(Math.ceil(Date.now() / 1000)));
+  }
   url.searchParams.set("events", "div,splits");
 
   const response = await fetch(url, {
