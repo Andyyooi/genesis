@@ -103,7 +103,13 @@ async function importDividendAnnouncements(
         let paymentDate = matchesOld ? old.paymentDate : null;
         let fetchedAt = checkedAt;
         try {
-          paymentDate = await source.payment(id, exDate);
+          const payment = await source.payment(id, exDate);
+          if (payment === null && paymentDate !== null) {
+            detailFailed = true;
+            fetchedAt = old!.checkedAt;
+          } else {
+            paymentDate = payment;
+          }
         } catch {
           detailFailed = true;
           if (matchesOld) fetchedAt = old.checkedAt;

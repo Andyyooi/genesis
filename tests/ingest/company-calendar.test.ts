@@ -57,6 +57,27 @@ describe("company calendar", () => {
     expect(parseDividendPayment(detail, today)).toBeNull();
   });
 
+  it("keeps the prior payment date and check time when a detail recheck returns no date", async () => {
+    vi.stubEnv("BURSA_SQLITE_PATH", ":memory:");
+    vi.stubEnv("VERCEL", "0");
+    vi.stubEnv("BURSA_SNAPSHOT_READONLY", "0");
+    const db = getDb();
+    db.insert(instruments).values({
+      ticker: "MAYBANK", bursaCode: "1155", name: "Maybank", instrumentType: "COMMON_STOCK", createdAt: now, updatedAt: now,
+    }).run();
+    const quote = { quotes: async () => [{ symbol: "1155.KL" }], dividend: async () => null };
+    const list = async () => ({ entries: [{ id: "123_456", bursaCode: "1155", exDate, amountMyr: 0.01 }], next: null });
+    const earlier = "2026-11-14T00:00:00.000Z";
+    await importCompanyCalendar("2026-11-14", earlier, quote, { list, payment: async () => paymentDate });
+
+    const report = await importCompanyCalendar(today, now, quote, {
+      list, payment: async () => parseDividendPayment("<h1>Temporarily unavailable</h1>", exDate),
+    });
+
+    expect(report.error).toBe("Some dividend payment dates could not be checked");
+    expect(db.select().from(dividendAnnouncements).get()).toMatchObject({ paymentDate, checkedAt: earlier });
+  });
+
   it("stores both sources, preserves saved dates on failure, and limits the agenda to the selected stocks and upcoming dates", async () => {
     vi.stubEnv("BURSA_SQLITE_PATH", ":memory:");
     vi.stubEnv("VERCEL", "0");
