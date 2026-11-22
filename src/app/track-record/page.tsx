@@ -16,7 +16,7 @@ export default function TrackRecordPage() {
     </header>
     <div className="market-card space-y-2 p-5 text-sm text-muted-foreground">
       <p>Each refresh saves the default top picks and up to 30 of the largest listed companies by market value with a closing price on the pick date. Each company gets an equal share of its basket.</p>
-      <p>Price return only: dividends, fees and trading costs are not included. We compare the saved closing price with each company’s latest stored close; prices are not live and may have different dates. This is not a backtest or a promise of future returns.</p>
+      <p>Returns use Yahoo adjusted closes on the pick date and latest date when both are available, accounting for splits and provider dividend adjustments. Otherwise, we show price return only from the saved entry price; splits may distort that fallback. Displayed prices remain unadjusted. Fees and trading costs are not included. Prices are not live and may have different dates. This is not a backtest or a promise of future returns.</p>
       <p>Same-date refreshes replace that date’s picks. Averages give each saved date equal weight; they are not a compounded portfolio return. Missing latest prices are left out: {summary.excluded} saved entries excluded.</p>
     </div>
     {!dates.length ? <p className="market-card p-6">Top picks are saved at each refresh; the first results appear after the next refresh.</p> : <>

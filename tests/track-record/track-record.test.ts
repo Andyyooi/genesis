@@ -69,6 +69,25 @@ describe("track record recording", () => {
 });
 
 describe("track record returns", () => {
+  it("uses refreshed adjusted closes across a split without changing the saved entry price", () => {
+    const id = seed("T0", 1, 100);
+    recordTrackRecord();
+    getSqlite().prepare("UPDATE price_bars SET adj_close = 50 WHERE instrument_id = ? AND bar_date = ?").run(id, date);
+    getDb().insert(priceBars).values({ instrumentId: id, barDate: "2026-11-23", close: 55, adjClose: 55, source: "yahoo", retrievedAt: asOf }).run();
+    const result = loadTrackRecord();
+    expect(result.latestPicks[0].entryClose).toBe(100);
+    expect(result.latestPicks[0].latestClose).toBe(55);
+    expect(result.latestPicks[0].priceReturn).toBeCloseTo(0.1);
+    expect(result.dates[0].basket.priceReturn).toBeCloseTo(0.1);
+    expect(result.dates[0].difference).toBeCloseTo(0);
+  });
+  it.each([[null, 55], [50, null], [0, 55], [50, -1]])("falls back to raw prices if adjusted endpoints are incomplete or invalid (%s, %s)", (entryAdjusted, latestAdjusted) => {
+    const id = seed("T0", 1, 100);
+    recordTrackRecord();
+    getSqlite().prepare("UPDATE price_bars SET adj_close = ? WHERE instrument_id = ?").run(entryAdjusted, id);
+    getDb().insert(priceBars).values({ instrumentId: id, barDate: "2026-11-23", close: 55, adjClose: latestAdjusted, source: "yahoo", retrievedAt: asOf }).run();
+    expect(loadTrackRecord().latestPicks[0].priceReturn).toBeCloseTo(-0.45);
+  });
   it("has an empty summary without saved entries", () => {
     expect(loadTrackRecord().summary).toEqual({ count: 0, pickReturn: null, basketReturn: null, beatCount: 0, comparableCount: 0, excluded: 0 });
   });
