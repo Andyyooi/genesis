@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Genesis Research</title>
+  <rect width="512" height="512" fill="#090b10"/>
+  <rect x="96" y="96" width="320" height="320" rx="76" fill="#141720" stroke="#9779df" stroke-width="8"/>
+  <path d="M160 330V285M224 330V249M288 330V210M352 330V162" fill="none" stroke="#f4f4f8" stroke-width="20" stroke-linecap="round"/>
+  <path d="m155 242 65-50 56 12 75-64" fill="none" stroke="#b5a0f3" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

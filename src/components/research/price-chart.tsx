@@ -36,10 +36,10 @@ export function PriceChart({
   const last = selected.at(-1);
   const colour =
     change === null || change === 0
-      ? "#71808d"
+      ? "var(--muted-foreground)"
       : change > 0
-        ? "#087e60"
-        : "#cf4646";
+        ? "var(--positive)"
+        : "var(--negative)";
   const values = selected.map((point) => point.close).filter(validClose);
   return (
     <section
@@ -122,10 +122,10 @@ export function PriceChart({
                     x2="730"
                     y1={y}
                     y2={y}
-                    stroke="#e7edf1"
+                    stroke="var(--border)"
                     strokeDasharray="3 5"
                   />
-                  <text x="745" y={y + 3} fill="#7b8994" fontSize="10">
+                  <text x="745" y={y + 3} fill="var(--muted-foreground)" fontSize="10">
                     {value.toFixed(3)}
                   </text>
                 </g>
@@ -146,7 +146,7 @@ export function PriceChart({
                   x2={plot.x(index)}
                   y1="8"
                   y2="210"
-                  stroke="#b6c5ce"
+                  stroke="var(--muted-foreground)"
                   strokeDasharray="3 4"
                 />
                 <circle
@@ -159,10 +159,10 @@ export function PriceChart({
                 />
               </g>
             ) : null}
-            <text x="12" y="238" fill="#7b8994" fontSize="10">
+            <text x="12" y="238" fill="var(--muted-foreground)" fontSize="10">
               {selected[0]?.date}
             </text>
-            <text x="718" y="238" textAnchor="end" fill="#7b8994" fontSize="10">
+            <text x="718" y="238" textAnchor="end" fill="var(--muted-foreground)" fontSize="10">
               {last?.date}
             </text>
           </svg>

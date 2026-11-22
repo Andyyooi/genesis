@@ -32,10 +32,10 @@ export function CalendarAgenda({ stocks, today, checkedOn, incomplete }: {
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="group" aria-label="Stocks to show" className="flex flex-wrap gap-1 rounded-xl border bg-white p-1">
+        <div role="group" aria-label="Stocks to show" className="flex flex-wrap gap-1 rounded-xl border bg-card p-1">
           {scopes.map(({ id, label }) => (
             <button key={id} type="button" onClick={() => setChoice(id)} aria-pressed={scope === id}
-              className="rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100 aria-pressed:bg-slate-900 aria-pressed:text-white">
+              className="rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted aria-pressed:bg-accent aria-pressed:text-primary">
               {label}
             </button>
           ))}
@@ -44,7 +44,7 @@ export function CalendarAgenda({ stocks, today, checkedOn, incomplete }: {
           Yahoo Finance{checkedOn ? ` · Last checked ${displayDate(checkedOn)}` : ""}
         </p>
       </div>
-      {incomplete && <p className="rounded-lg border bg-white px-4 py-3 text-sm text-muted-foreground">
+      {incomplete && <p className="rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">
         The last refresh couldn&apos;t check every stock. Some dates may be missing or out of date.
       </p>}
       {scope === "holdings" && held.size === 0 ? (

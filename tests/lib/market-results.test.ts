@@ -19,6 +19,7 @@ const rows = Array.from({ length: 60 }, (_, i) => ({
 function render(
   requestedPage = "1",
   selectedRows: Record<string, unknown>[] = rows,
+  belowFairRange = false,
 ) {
   return renderToStaticMarkup(
     createElement(MarketResults, {
@@ -28,11 +29,18 @@ function render(
       eligibility: "eligible",
       requestedPage,
       fairRanges: {},
+      belowFairRange,
     }),
   );
 }
 
 describe("market explorer results", () => {
+  it("preserves the one-tap fair-range filter through search and pagination", () => {
+    const html = render("1", rows, true);
+    expect(html).toContain('name="fair" value="below"');
+    expect(html).toContain("q=bank+%26+trust&amp;eligibility=eligible&amp;fair=below&amp;page=2#companies");
+    expect(html).toContain("Below fair range · On");
+  });
   it("paginates without dropping names and preserves filters in navigation", () => {
     const first = render();
     expect(first).toContain('href="/stock/COMPANY1"');
