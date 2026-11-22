@@ -51,13 +51,17 @@ export function recentPriceDrop(bars: Bar[], windowBars = PRICE_DROP_WINDOW_BARS
   };
 }
 
-/** Business quality and financial health, where this profile scores them. All must be strong. */
+/** Business quality and financial health, where this profile scores them. Each must be scored and strong. */
 export function strongAccountScores(result: ScoreResult, threshold = STRONG_SCORE): StrongScore[] | null {
-  const scores = ["quality", "financial_health"]
+  const scored = ["quality", "financial_health"]
     .map((id) => result.categories.find((c) => c.id === id))
-    .filter((c) => c?.inThisRun && c.score !== null && Number.isFinite(c.score))
-    .map((c) => ({ id: c!.id, label: CATEGORY_LABELS[c!.id] ?? c!.id, score: c!.score as number }));
-  if (scores.length === 0 || scores.some((s) => s.score < threshold)) return null;
+    .filter((c) => c !== undefined && c.configuredWeight > 0 && c.totalFactorWeights > 0);
+  if (scored.length === 0) return null;
+  const scores: StrongScore[] = [];
+  for (const c of scored) {
+    if (!c!.inThisRun || c!.score === null || !Number.isFinite(c!.score) || c!.score < threshold) return null;
+    scores.push({ id: c!.id, label: CATEGORY_LABELS[c!.id] ?? c!.id, score: c!.score });
+  }
   return scores;
 }
 

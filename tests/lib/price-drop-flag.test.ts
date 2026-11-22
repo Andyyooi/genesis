@@ -11,9 +11,16 @@ function bars(closes: number[]) {
   return closes.map((close, i) => ({ barDate: `2026-11-${String(30 - (i % 30)).padStart(2, "0")}`, close, source: "yahoo" }));
 }
 
-function result(scores: Record<string, number | null>): ScoreResult {
+/** "off" = the profile does not score this category (e.g. bank financial health). */
+function result(scores: Record<string, number | null | "off">): ScoreResult {
   return {
-    categories: Object.entries(scores).map(([id, score]) => ({ id, score, inThisRun: score !== null })),
+    categories: Object.entries(scores).map(([id, score]) => ({
+      id,
+      score: score === "off" ? null : score,
+      inThisRun: typeof score === "number",
+      configuredWeight: score === "off" ? 0 : 20,
+      totalFactorWeights: score === "off" ? 0 : 100,
+    })),
   } as unknown as ScoreResult;
 }
 
@@ -37,7 +44,8 @@ describe("strongAccountScores", () => {
   it("requires every available accounts score to be strong", () => {
     expect(strongAccountScores(result({ quality: 72, financial_health: 65 }))).toHaveLength(2);
     expect(strongAccountScores(result({ quality: 72, financial_health: 40 }))).toBeNull();
-    expect(strongAccountScores(result({ quality: 72, financial_health: null }))).toHaveLength(1);
+    expect(strongAccountScores(result({ quality: 72, financial_health: "off" }))).toHaveLength(1);
+    expect(strongAccountScores(result({ quality: 80, financial_health: null }))).toBeNull();
     expect(strongAccountScores(result({ momentum: 90 }))).toBeNull();
   });
 });
