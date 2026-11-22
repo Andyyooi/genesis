@@ -61,9 +61,9 @@ export async function importCompanyCalendar(
     }
   }
   try {
-    const { saved, detailFailed } = await importDividendAnnouncements(listed, marketDate, checkedAt, announcementSource);
+    const { saved, error } = await importDividendAnnouncements(listed, marketDate, checkedAt, announcementSource);
     report.announcements = saved;
-    if (detailFailed) throw new Error("Some dividend payment dates could not be checked");
+    if (error) report.error = [report.error, error].filter(Boolean).join("; ");
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     report.error = [report.error, detail].filter(Boolean).join("; ");
@@ -85,10 +85,18 @@ async function importDividendAnnouncements(
   const seen = new Set<string>();
   let saved = 0;
   let detailFailed = false;
+  let listingError: string | null = null;
   let page: number | null = 1;
   while (page !== null && page <= 5) {
     const currentPage: number = page;
-    const { entries, next } = await source.list(currentPage);
+    let listing: Awaited<ReturnType<DividendAnnouncementSource["list"]>>;
+    try {
+      listing = await source.list(currentPage);
+    } catch (error) {
+      listingError = error instanceof Error ? error.message : String(error);
+      break;
+    }
+    const { entries, next } = listing;
     const targets = entries.filter((entry) => {
       if (!byCode.has(entry.bursaCode) || entry.exDate < earliest || seen.has(entry.id)) return false;
       seen.add(entry.id);
@@ -125,5 +133,6 @@ async function importDividendAnnouncements(
     }
     page = next !== null && next > currentPage ? next : null;
   }
-  return { saved, detailFailed };
+  const error = [listingError, detailFailed && "Some dividend payment dates could not be checked"].filter(Boolean).join("; ");
+  return { saved, error };
 }
