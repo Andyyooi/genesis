@@ -86,7 +86,7 @@ export function EstimatedFairValue({ result }: { result: FairValueResult }) {
         </CardHeader>
         <CardContent className="flex flex-col gap-4 text-sm">
           <dl className="grid gap-3 sm:grid-cols-2">
-            {range ? <Detail label="Range" value={range} /> : null}
+            {range ? <Detail label="Full spread of methods" value={range} /> : null}
             <Detail label="Price used" value={fairValuePriceUsedText(result)} />
             <Detail
               label="Difference"
