@@ -30,6 +30,29 @@ export const instruments = sqliteTable("instruments", {
   updatedAt: text("updated_at").notNull(),
 });
 
+export const companyCalendar = sqliteTable("company_calendar", {
+  instrumentId: integer("instrument_id").primaryKey().references(() => instruments.id),
+  yahooSymbol: text("yahoo_symbol").notNull(),
+  checkedAt: text("checked_at").notNull(),
+  resultsFrom: text("results_from"),
+  resultsThrough: text("results_through"),
+  resultsEstimated: integer("results_estimated", { mode: "boolean" }).notNull(),
+  exDate: text("ex_date"),
+  paymentDate: text("payment_date"),
+  dividendAmount: real("dividend_amount"),
+  dividendCurrency: text("dividend_currency"),
+  annualYieldPercent: real("annual_yield_percent"),
+});
+
+export const dividendAnnouncements = sqliteTable("dividend_announcements", {
+  sourceId: text("source_id").primaryKey(),
+  instrumentId: integer("instrument_id").notNull().references(() => instruments.id),
+  exDate: text("ex_date").notNull(),
+  paymentDate: text("payment_date"),
+  amountMyr: real("amount_myr"),
+  checkedAt: text("checked_at").notNull(),
+});
+
 export const priceBars = sqliteTable(
   "price_bars",
   {
@@ -250,7 +273,7 @@ export const REFRESH_STATUSES = [
 ] as const;
 export type RefreshStatus = (typeof REFRESH_STATUSES)[number];
 
-export const REFRESH_DATASETS = ["prices", "fundamentals", "events", "news", "scores", "fair_value"] as const;
+export const REFRESH_DATASETS = ["prices", "fundamentals", "events", "news", "scores", "fair_value", "calendar"] as const;
 export type RefreshDataset = (typeof REFRESH_DATASETS)[number];
 
 /**
