@@ -4,7 +4,7 @@ import { validateRefreshStages } from "../src/refresh/validate-publication";
 const sqlite = getSqlite();
 const startedAt = process.env.REFRESH_STARTED_AT ?? "";
 const latest = sqlite.prepare("SELECT run_id FROM refresh_runs WHERE dataset = 'prices' ORDER BY id DESC LIMIT 1").get() as { run_id: string } | undefined;
-const rows = sqlite.prepare("SELECT dataset, status, failed_count, json_extract(metadata_json, '$.requestsSucceeded') AS requested_succeeded_count, started_at FROM refresh_runs WHERE run_id = ?").all(latest?.run_id ?? "") as Parameters<typeof validateRefreshStages>[0];
+const rows = sqlite.prepare("SELECT dataset, status, failed_count, json_extract(metadata_json, '$.requestsSucceeded') AS requested_succeeded_count, json_extract(metadata_json, '$.neverAvailableNoData') AS never_available_count, started_at FROM refresh_runs WHERE run_id = ?").all(latest?.run_id ?? "") as Parameters<typeof validateRefreshStages>[0];
 validateRefreshStages(rows, startedAt);
 const run = sqlite.prepare("SELECT id, as_of, summary_json FROM market_scan_runs ORDER BY id DESC LIMIT 1").get() as { id: number; as_of: string; summary_json: string } | undefined;
 if (!run || Date.parse(run.as_of) < Date.parse(startedAt) || JSON.parse(run.summary_json).methodology !== "cross-sectional-v2") throw new Error("Fresh universe-wide percentile publication is required");

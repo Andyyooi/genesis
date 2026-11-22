@@ -128,11 +128,23 @@ describe("Phase 18B daily refresh", () => {
       rescore: () => ({ kind: "ok" }),
       now: () => new Date("2026-09-24T10:00:00.000Z"),
     });
-    const stages = getSqlite().prepare("SELECT dataset, status, failed_count, json_extract(metadata_json, '$.requestsSucceeded') AS requested_succeeded_count, started_at FROM refresh_runs WHERE run_id = ?").all(summary.runId) as Parameters<typeof validateRefreshStages>[0];
+    const stages = getSqlite().prepare("SELECT dataset, status, failed_count, json_extract(metadata_json, '$.requestsSucceeded') AS requested_succeeded_count, json_extract(metadata_json, '$.neverAvailableNoData') AS never_available_count, started_at FROM refresh_runs WHERE run_id = ?").all(summary.runId) as Parameters<typeof validateRefreshStages>[0];
     expect(stages.find((r) => r.dataset === "fundamentals")).toMatchObject({ status: "PARTIAL", failed_count: 10, requested_succeeded_count: 0 });
     expect(stages.find((r) => r.dataset === "prices")).toMatchObject({ status: "SOURCE_FAILED", failed_count: 10, requested_succeeded_count: 0 });
     expect(() => validateRefreshStages(stages, summary.startedAt)).toThrow(/prices/);
     expect(() => validateRefreshStages(stages.map((r) => r.dataset === "prices" ? { ...r, status: "SUCCESS", failed_count: 0, requested_succeeded_count: 1 } : r), summary.startedAt)).toThrow(/fundamentals/);
+  });
+  it("publishes when the only fundamentals misses are stocks Yahoo has never had accounts for", async () => {
+    const noData = ["SCBUILD", "SMTRACK"].map((ticker) => ({ ticker, yahooTicker: "0109.KL", mappingTried: ["0109.KL"], code: "NO_DATA" as const, reason: "Yahoo returned no annual statements (unavailable, not invented)" }));
+    const ok = await runDailyRefresh({
+      importPrices: async () => ({ kind: "prices", startedAt: "a", finishedAt: "b", succeeded: ["MAYBANK"], failed: [], barsUpserted: 1 }),
+      importFundamentals: async () => emptyFundReport({ attempted: 1057, instrumentsUnchanged: 1055, instrumentsSkippedFresh: 1039, instrumentsFetched: 18, neverAvailableNoData: 2, failed: noData }),
+      rescore: () => ({ kind: "ok" }),
+      now: () => new Date("2026-09-24T10:00:00.000Z"),
+    });
+    const okStages = getSqlite().prepare("SELECT dataset, status, failed_count, json_extract(metadata_json, '$.requestsSucceeded') AS requested_succeeded_count, json_extract(metadata_json, '$.neverAvailableNoData') AS never_available_count, started_at FROM refresh_runs WHERE run_id = ?").all(ok.runId) as Parameters<typeof validateRefreshStages>[0];
+    expect(okStages.find((r) => r.dataset === "fundamentals")).toMatchObject({ status: "PARTIAL", failed_count: 2, requested_succeeded_count: 16, never_available_count: 2 });
+    expect(() => validateRefreshStages(okStages.filter((r) => r.dataset !== "fair_value").concat({ dataset: "fair_value", status: "SUCCESS", failed_count: 0, started_at: ok.startedAt }), ok.startedAt)).not.toThrow();
   });
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "genesis-refresh-"));

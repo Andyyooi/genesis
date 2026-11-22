@@ -1,4 +1,4 @@
-type Stage = { dataset: string; status: string; failed_count: number; started_at: string; requested_succeeded_count?: number | null };
+type Stage = { dataset: string; status: string; failed_count: number; started_at: string; requested_succeeded_count?: number | null; never_available_count?: number | null };
 
 export function validateRefreshStages(rows: Stage[], startedAt: string) {
   if (!Number.isFinite(Date.parse(startedAt))) throw new Error("A valid REFRESH_STARTED_AT is required");
@@ -8,10 +8,11 @@ export function validateRefreshStages(rows: Stage[], startedAt: string) {
     let usable = !!row && allowed.includes(row.status) && row.failed_count === 0;
     if (row && dataset !== "fair_value") {
       const succeeded = row.requested_succeeded_count ?? -1;
-      const failed = row.failed_count;
+      const neverAvailable = dataset === "fundamentals" ? (row.never_available_count ?? 0) : 0;
+      const failed = row.failed_count - neverAvailable;
       const requested = succeeded + failed;
-      const validCounts = Number.isSafeInteger(succeeded) && succeeded >= 0 && Number.isSafeInteger(failed) && failed >= 0;
-      const validStatus = failed > 0 ? row.status === "PARTIAL" : allowed.includes(row.status);
+      const validCounts = Number.isSafeInteger(succeeded) && succeeded >= 0 && Number.isSafeInteger(failed) && failed >= 0 && Number.isSafeInteger(neverAvailable) && neverAvailable >= 0;
+      const validStatus = row.failed_count > 0 ? row.status === "PARTIAL" : allowed.includes(row.status);
       usable = validCounts && validStatus && (requested === 0 || (succeeded > 0 && failed / requested <= 0.05));
     }
     if (!row || !Number.isFinite(Date.parse(row.started_at)) || Date.parse(row.started_at) < Date.parse(startedAt) || !usable) {

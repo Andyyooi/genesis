@@ -53,6 +53,11 @@ export type YahooFundamentalsReport = {
   instrumentsSkippedFresh: number;
   /** Instruments that made at least one Yahoo fundamentals HTTP attempt. */
   instrumentsFetched: number;
+  /**
+   * NO_DATA failures for instruments that have never had Yahoo annuals stored:
+   * Yahoo has nothing for them, as opposed to a request that went wrong.
+   */
+  neverAvailableNoData?: number;
   failed: TypedFundamentalFailure[];
 };
 
@@ -143,6 +148,7 @@ export async function importYahooFundamentals(
   let instrumentsUnchanged = 0;
   let instrumentsSkippedFresh = 0;
   let instrumentsFetched = 0;
+  let neverAvailableNoData = 0;
   let unsupported = 0;
   const failed: TypedFundamentalFailure[] = [];
   const retrievedAt = new Date().toISOString();
@@ -233,6 +239,8 @@ export async function importYahooFundamentals(
         };
         failed.push(row);
         recordIngestFailure("fundamentals", instrument.ticker, mappingTried[0] ?? null, row.reason, code);
+        const hadYahooAnnuals = existing.some((period) => period.statementType === "annual" && period.source.startsWith("yahoo"));
+        if (code === "NO_DATA" && !hadYahooAnnuals) neverAvailableNoData += 1;
         continue;
       }
 
@@ -287,6 +295,7 @@ export async function importYahooFundamentals(
     instrumentsUnchanged,
     instrumentsSkippedFresh,
     instrumentsFetched,
+    neverAvailableNoData,
     failed,
   };
   db.insert(ingestReports)
