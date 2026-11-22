@@ -6,7 +6,7 @@ import { ArrowUpRight, ChevronDown, Search } from "lucide-react";
 import { StatusLabel } from "./status-label";
 import { dataConfidenceLabel, formatScore100 } from "@/lib/research-copy";
 import { FairRangePill } from "./fair-range-pill";
-import type { FairRangeHeadline } from "@/lib/fair-range";
+import type { ListFairRange } from "@/lib/fair-range-summary";
 
 const PAGE_SIZE = 25;
 
@@ -23,7 +23,7 @@ export function MarketResults({
   query: string;
   eligibility: string;
   requestedPage: string;
-  fairRanges: Record<string, FairRangeHeadline>;
+  fairRanges: Record<string, ListFairRange>;
 }) {
   const held = useHeldTickers();
   rows = [...rows].sort((a, b) => Number(held.has(String(b.ticker))) - Number(held.has(String(a.ticker))));

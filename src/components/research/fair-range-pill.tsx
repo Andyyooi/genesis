@@ -1,7 +1,7 @@
-import { FAIR_RANGE_POSITION_TEXT, type FairRangeHeadline } from "@/lib/fair-range";
-import { fairRangeSummary } from "@/lib/fair-range-summary";
+import { FAIR_RANGE_POSITION_TEXT } from "@/lib/fair-range";
+import { fairRangeSummary, type ListFairRange } from "@/lib/fair-range-summary";
 
-export function FairRangePill({ range }: { range?: FairRangeHeadline }) {
+export function FairRangePill({ range }: { range?: ListFairRange }) {
   const { label, text, position } = fairRangeSummary(range);
   const color = position === "below"
     ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"

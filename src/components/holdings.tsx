@@ -6,9 +6,9 @@ import { backupJson, HOLDINGS_KEY, holdingValue, mergeHolding, parseBackup, vali
 import { formatMyr } from "@/lib/format-myr";
 import { formatScore100 } from "@/lib/research-copy";
 import { FairRangePill } from "@/components/research/fair-range-pill";
-import type { FairRangeHeadline } from "@/lib/fair-range";
+import type { ListFairRange } from "@/lib/fair-range-summary";
 
-type Quote = { ticker: string; fairRange?: FairRangeHeadline; price: number | null; priceDate: string | null; score: number | null; warnings: string[] };
+type Quote = { ticker: string; fairRange?: ListFairRange; price: number | null; priceDate: string | null; score: number | null; warnings: string[] };
 type Data = { universe: { ticker: string; name: string }[]; quotes: Quote[] };
 const priceText = (n: number | null) => n === null ? "Unavailable" : `RM ${n.toLocaleString("en-MY", { minimumFractionDigits: 3, maximumFractionDigits: 5 })}`;
 const button = "rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted";
