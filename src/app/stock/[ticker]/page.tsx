@@ -41,6 +41,8 @@ import { buildSnapshotDates, latestAnnualPeriod } from "@/lib/snapshot-dates";
 import type { MetricValue } from "@/metrics/types";
 import { PersistedFairValue } from "@/components/research/persisted-fair-value";
 import { loadPersistedFairValueForPage } from "@/fair-value/load-persisted-page";
+import { FairRangeLine } from "@/components/research/fair-range-line";
+import { fairRangeHeadline } from "@/lib/fair-range";
 import { scoreTicker } from "@/scoring/run-ticker";
 import { PriceChart } from "@/components/research/price-chart";
 import { loadSavedPrices } from "@/db/price-history";
@@ -175,6 +177,7 @@ export default async function ResearchPage({
   });
   const profileIds = profileMetricIds(result.researchProfile, isReit);
   const fairValue = loadPersistedFairValueForPage(instrument.id);
+  const fairRange = fairRangeHeadline(fairValue, lastClose?.value ?? null);
   const priceDownFlag = goodCompanyPriceDown({ result, bars, periods, pn17: instrument.pn17, includeSales: !isBank });
   const latestResults = priceDownFlag ? null : latestResultsComparison(periods, { includeSales: !isBank });
 
@@ -225,6 +228,7 @@ export default async function ResearchPage({
             <dd className="font-medium">{formatDateSafe(result.asOf)}</dd>
           </div>
         </dl>
+        <FairRangeLine range={fairRange} />
         <LatestResultsLine results={latestResults} />
         {priceDownFlag ? <GoodCompanyPriceDownCard flag={priceDownFlag} /> : null}
         <DataLagBanner dates={snapshotDates} />
