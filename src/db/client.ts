@@ -57,15 +57,6 @@ function ensureSchema(sqlite: Database.Database) {
       annual_yield_percent REAL
     );
 
-    CREATE TABLE IF NOT EXISTS dividend_announcements (
-      source_id TEXT PRIMARY KEY,
-      instrument_id INTEGER NOT NULL REFERENCES instruments(id),
-      ex_date TEXT NOT NULL,
-      payment_date TEXT,
-      amount_myr REAL,
-      checked_at TEXT NOT NULL
-    );
-
     CREATE TABLE IF NOT EXISTS financial_periods (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       instrument_id INTEGER NOT NULL REFERENCES instruments(id),

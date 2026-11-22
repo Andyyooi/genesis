@@ -44,15 +44,6 @@ export const companyCalendar = sqliteTable("company_calendar", {
   annualYieldPercent: real("annual_yield_percent"),
 });
 
-export const dividendAnnouncements = sqliteTable("dividend_announcements", {
-  sourceId: text("source_id").primaryKey(),
-  instrumentId: integer("instrument_id").notNull().references(() => instruments.id),
-  exDate: text("ex_date").notNull(),
-  paymentDate: text("payment_date"),
-  amountMyr: real("amount_myr"),
-  checkedAt: text("checked_at").notNull(),
-});
-
 export const priceBars = sqliteTable(
   "price_bars",
   {

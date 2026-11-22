@@ -5,9 +5,8 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { loadScoringConfig } from "@/config/load-scoring";
 import { getDb, getSqlite } from "@/db/client";
-import { dividendAnnouncements, fairValueRuns, financialPeriods, instruments, priceBars, refreshRuns } from "@/db/schema";
+import { fairValueRuns, financialPeriods, instruments, priceBars, refreshRuns } from "@/db/schema";
 import type { EventDraft, EventSourceProvider } from "@/events/types";
-import { importCompanyCalendar } from "@/ingest/import-calendar";
 import type { PricesImportReport } from "@/ingest/types";
 import type { YahooFundamentalsReport } from "@/market/ingest-fundamentals-yahoo";
 import { formatDailyRefreshSummary, runDailyRefresh } from "@/refresh/daily";
@@ -193,30 +192,6 @@ describe("Phase 18B daily refresh", () => {
       .at(-1)!;
     expect(lastFail.status).toBe("SOURCE_FAILED");
     expect(lastFail.lastSuccessfulAt).toBe(first.datasets.find((d) => d.dataset === "prices")!.completedAt);
-  });
-
-  it("records a partial calendar refresh when a later announcement page fails and Yahoo is down", async () => {
-    const summary = await runDailyRefresh({
-      importPrices: async () => { throw new Error("Prices offline"); },
-      importFundamentals: async () => emptyFundReport(),
-      skipRescore: true,
-      now: () => new Date("2026-09-24T10:00:00.000Z"),
-      importCalendar: (date, checkedAt) => importCompanyCalendar(date, checkedAt, {
-        quotes: async () => { throw new Error("Yahoo offline"); },
-        dividend: async () => null,
-      }, {
-        list: async (page) => {
-          if (page === 2) throw new Error("Page two offline");
-          return { entries: [{ id: "123_456", bursaCode: "1155", exDate: "2026-09-25", amountMyr: 0.01 }], next: 2 };
-        },
-        payment: async () => "2026-10-01",
-      }),
-    });
-
-    expect(getDb().select().from(dividendAnnouncements).get()).toMatchObject({ sourceId: "123_456", paymentDate: "2026-10-01" });
-    expect(summary.datasets.find((row) => row.dataset === "calendar")).toMatchObject({
-      status: "PARTIAL", errorSummary: "Yahoo offline; Page two offline", metadata: { dividendAnnouncementsSaved: 1 },
-    });
   });
 
   it("marks events and news as NO_SOURCE without deleting existing rows", async () => {

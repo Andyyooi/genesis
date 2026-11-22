@@ -63,14 +63,14 @@ async function refreshCalendar(
 ): Promise<DatasetRefreshResult> {
   const startedAt = now().toISOString();
   const report = await load(marketDate, startedAt).catch((error: unknown) => ({
-    attempted: 0, updated: 0, failed: 0, unavailable: 0, announcements: 0,
+    attempted: 0, updated: 0, failed: 0, unavailable: 0,
     error: error instanceof Error ? error.message : String(error),
   }));
   return persistDatasetRefresh(runId, {
     dataset: "calendar",
-    source: "yahoo+i3investor",
-    status: report.error ? (report.updated || report.announcements ? "PARTIAL" : "SOURCE_FAILED")
-      : report.updated || report.announcements ? (report.unavailable ? "PARTIAL" : "SUCCESS") : "NO_DATA",
+    source: "yahoo",
+    status: report.error ? (report.updated ? "PARTIAL" : "SOURCE_FAILED")
+      : report.updated ? (report.unavailable ? "PARTIAL" : "SUCCESS") : "NO_DATA",
     startedAt,
     completedAt: now().toISOString(),
     marketDate,
@@ -81,7 +81,6 @@ async function refreshCalendar(
     unavailableCount: report.unavailable,
     lastSuccessfulAt: null,
     errorSummary: report.error,
-    metadata: { dividendAnnouncementsSaved: report.announcements },
   });
 }
 

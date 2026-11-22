@@ -14,7 +14,6 @@ const scopes = [
   { id: "all", label: "All tracked stocks" },
 ] as const;
 const pageSize = 10;
-const i3Detail = "https://klse.i3investor.com/web/entitlement/detail/";
 
 export function CalendarAgenda({ stocks, today, checkedOn, incomplete }: {
   stocks: CalendarStock[];
@@ -42,7 +41,7 @@ export function CalendarAgenda({ stocks, today, checkedOn, incomplete }: {
           ))}
         </div>
         <p className="text-sm text-muted-foreground">
-          Yahoo Finance and I3investor{checkedOn ? ` · Last checked ${displayDate(checkedOn)}` : ""}
+          Yahoo Finance{checkedOn ? ` · Last checked ${displayDate(checkedOn)}` : ""}
         </p>
       </div>
       {incomplete && <p className="rounded-lg border bg-white px-4 py-3 text-sm text-muted-foreground">
@@ -53,13 +52,12 @@ export function CalendarAgenda({ stocks, today, checkedOn, incomplete }: {
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-2">
           <AgendaSection key={`dividends-${scope}`} title="Upcoming dividends" icon={<Banknote className="size-5" aria-hidden="true" />}
-            help="Buy before the ex-dividend date to qualify. The payment date is when the company pays. Yield is annual, not for a single payout." count={dividends.length} empty={empty}
+            help={<>Buy before the ex-dividend date to qualify. Yield is annual, not for a single payout.{" "}
+              <a href="https://www.bursamalaysia.com/market_information/announcements/entitlement_by_ex_date" className="underline underline-offset-4">Check payment dates on Bursa Malaysia</a>.
+            </>} count={dividends.length} empty={empty}
             render={(limit) => dividends.slice(0, limit).map((row) => (
-              <li key={row.sourceId ?? row.ticker} className="px-5 py-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <StockTitle ticker={row.ticker} name={row.name} />
-                  {row.sourceId && <a href={i3Detail + encodeURIComponent(row.sourceId)} className="text-xs text-muted-foreground underline underline-offset-4">Dividend details</a>}
-                </div>
+              <li key={row.ticker} className="px-5 py-4">
+                <StockTitle ticker={row.ticker} name={row.name} />
                 <dl className="mt-3 grid grid-cols-2 gap-x-2 gap-y-2 text-sm sm:grid-cols-4">
                   <Metric label="Ex-dividend date">{displayDate(row.exDate)}</Metric>
                   <Metric label="Payment date">{displayDate(row.paymentDate)}</Metric>
@@ -101,7 +99,7 @@ function Metric({ label, children }: { label: string; children: ReactNode }) {
 function AgendaSection({ title, icon, help, count, empty, render }: {
   title: string;
   icon: ReactNode;
-  help: string;
+  help: ReactNode;
   count: number;
   empty: string;
   render: (limit: number) => ReactNode;

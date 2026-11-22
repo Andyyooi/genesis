@@ -1,26 +1,15 @@
-import { eq, gte, ne, or } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 import { CalendarAgenda } from "@/components/calendar-agenda";
 import { getDb } from "@/db/client";
-import { companyCalendar, dividendAnnouncements, instruments } from "@/db/schema";
+import { companyCalendar, instruments } from "@/db/schema";
 import { loadLatestDatasetRefresh } from "@/refresh/persist";
 import { malaysiaMarketDate } from "@/refresh/types";
 
 export const dynamic = "force-dynamic";
 
 export default function CalendarPage() {
-  const db = getDb();
   const today = malaysiaMarketDate();
-  const announcements = db.select().from(dividendAnnouncements)
-    .where(or(gte(dividendAnnouncements.exDate, today), gte(dividendAnnouncements.paymentDate, today)))
-    .all();
-  const byInstrument = new Map<number, typeof announcements>();
-  for (const announcement of announcements) {
-    const existing = byInstrument.get(announcement.instrumentId);
-    if (existing) existing.push(announcement);
-    else byInstrument.set(announcement.instrumentId, [announcement]);
-  }
-  const stocks = db.select({
-    instrumentId: instruments.id,
+  const stocks = getDb().select({
     ticker: instruments.ticker,
     name: instruments.name,
     watchlist: instruments.watchlist,
@@ -29,10 +18,7 @@ export default function CalendarPage() {
     .leftJoin(companyCalendar, eq(companyCalendar.instrumentId, instruments.id))
     .where(ne(instruments.listingStatus, "inactive"))
     .all();
-  const checkedAt = [
-    ...stocks.flatMap(({ dates }) => dates ? [dates.checkedAt] : []),
-    ...announcements.map((row) => row.checkedAt),
-  ].sort().at(-1);
+  const checkedAt = stocks.flatMap(({ dates }) => dates ? [dates.checkedAt] : []).sort().at(-1);
   const refresh = loadLatestDatasetRefresh("calendar");
 
   return (
@@ -43,7 +29,7 @@ export default function CalendarPage() {
         <p className="mt-2 text-muted-foreground">See when companies plan to pay dividends or release their financial results.</p>
       </header>
       <CalendarAgenda
-        stocks={stocks.map(({ instrumentId, ...stock }) => ({ ...stock, announcedDividends: byInstrument.get(instrumentId) }))}
+        stocks={stocks}
         today={today}
         checkedOn={checkedAt ? malaysiaMarketDate(new Date(checkedAt)) : null}
         incomplete={refresh?.status === "SOURCE_FAILED" || refresh?.status === "PARTIAL"}
