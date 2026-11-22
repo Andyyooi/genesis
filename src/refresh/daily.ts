@@ -115,6 +115,7 @@ async function refreshPrices(
       skipAlerts: true,
       range: "auto",
       rateLimitMs: 100,
+      refreshTrackRecordHistory: true,
     });
     const completedAt = (deps.now?.() ?? new Date()).toISOString();
     const status = pricesStatus(report);

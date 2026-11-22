@@ -189,6 +189,19 @@ function ensureSchema(sqlite: Database.Database) {
       observation_key TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS track_record_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pick_date TEXT NOT NULL,
+      basket TEXT NOT NULL,
+      ticker TEXT NOT NULL,
+      rank INTEGER NOT NULL,
+      score REAL,
+      entry_close REAL NOT NULL,
+      recorded_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS track_record_date_basket_ticker
+      ON track_record_entries (pick_date, basket, ticker);
+
     CREATE TABLE IF NOT EXISTS refresh_runs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       run_id TEXT NOT NULL,
