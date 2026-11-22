@@ -10,7 +10,7 @@ import { getDb } from "@/db/client";
 import { financialPeriods, instruments, priceBars } from "@/db/schema";
 import { calculateFairValue } from "@/fair-value/orchestrate";
 import { assessFairValueQuality } from "@/fair-value/quality";
-import { buyScore, BUY_SCORE_RESEARCH_WEIGHT } from "@/lib/buy-score";
+import { buyScore } from "@/lib/buy-score";
 import { fairRangeHeadline } from "@/lib/fair-range";
 import { usableAccounts } from "@/metrics/evidence";
 import { snapshotsToMetrics } from "@/metrics/from-snapshots";
@@ -107,8 +107,13 @@ function main() {
       const fv = calculateFairValue({ ticker: instrument.ticker, researchProfile: profile, industry: instrument.industry, sector: instrument.sector, periods: snapshots, bars: bars.map((b) => ({ barDate: b.barDate, close: b.close, high: b.high, low: b.low })), peers, asOf });
       const quality = assessFairValueQuality(fv, snapshots.filter((s) => s.statementType === "annual").map((s) => ({ periodEnd: s.periodEnd, eps: s.eps, pat: s.pat, shares: s.shares, dividendPerShare: s.dividendPerShare })));
       const range = fairRangeHeadline({ ok: true, run: { id: 0, instrumentId: instrument.id, calculatedAt: asOf, observationKey: "", qualityVersion: "", result: fv, quality } }, entry.price);
-      const caution = result.dataConfidence.needsVerification || instrument.pn17 || instrument.warningFlag || result.eligibility?.eligible !== true;
-      const buy = buyScore({ researchScore: result.researchScore, allResearchScores: allScores, fairRange: range, caution });
+      const caution = result.dataConfidence.needsVerification || result.eligibility?.eligible !== true;
+      const buy = buyScore({
+        researchScore: result.researchScore,
+        allResearchScores: allScores,
+        eligible: result.eligibility?.eligible === true,
+        needsVerification: result.dataConfidence.needsVerification,
+      });
       const adjEntry = closeOn(instrument.id, day, true);
       const returns: Record<string, number | null> = {};
       for (const months of HORIZONS) {
@@ -119,13 +124,13 @@ function main() {
       samples.push({
         day, ticker: instrument.ticker, research: result.researchScore, eligible: result.eligibility?.eligible === true, caution,
         position: range.available ? range.position : null,
-        buy: buy.available ? buy.score : null, rank: buy.available ? buy.researchRank : null, priceScore: buy.available ? buy.priceScore : null,
+        buy: buy.available ? buy.score : null,
         ...returns,
       });
     }
     console.error(`${day}: ${samples.length} samples so far`);
   }
-  console.log(JSON.stringify({ weight: BUY_SCORE_RESEARCH_WEIGHT, lastBarDay, dates, samples }));
+  console.log(JSON.stringify({ lastBarDay, dates, samples }));
 }
 
 main();

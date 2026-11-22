@@ -124,19 +124,19 @@ export function MarketResults({
       </form>
       <p className="scan-list-note">
         Your held stocks appear first within the current filters. {" "}
-        Scores are out of 100, not buy signals. Open a company for research;
+        Scores are out of 100. The Buy score ranks the research score against all stocks and is held below 70 when a safety check fails; it is not a guarantee. Open a company for research;
         expand its review for coverage and exclusions.
       </p>
       {visible.length ? (
         <table className="scan-table" role="table">
           <caption className="sr-only">
-            Market scan companies with research and valuation scores, data
+            Market scan companies with Buy, research and valuation scores, data
             confidence, coverage and eligibility review
           </caption>
           <thead role="rowgroup">
             <tr role="row">
               <th scope="col">Company</th>
-              <th scope="col">Research</th>
+              <th scope="col">Buy score</th>
               <th scope="col">Valuation</th>
               <th scope="col">Confidence</th>
               <th scope="col">Coverage</th>
@@ -180,12 +180,15 @@ export function MarketResults({
                   </td>
                   <td role="cell">
                     <span className="scan-mobile-label" aria-hidden="true">
-                      Research
+                      Buy score
                     </span>
                     <ScanScore
-                      value={row.researchScore}
+                      value={row.buyScore}
                       muted={needsVerification}
                     />
+                    <span className="block text-xs text-muted-foreground">
+                      Research {typeof row.researchScore === "number" && Number.isFinite(row.researchScore) ? row.researchScore.toFixed(0) : "—"}
+                    </span>
                   </td>
                   <td role="cell">
                     <span className="scan-mobile-label" aria-hidden="true">

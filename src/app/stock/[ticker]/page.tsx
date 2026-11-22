@@ -40,7 +40,6 @@ import { formatScore100 } from "@/lib/research-copy";
 import {
   absoluteValuationBlurb,
   researchInterpretationBullets,
-  researchVerdict,
 } from "@/lib/research-presentation";
 import { buildSnapshotDates, latestAnnualPeriod } from "@/lib/snapshot-dates";
 import type { MetricValue } from "@/metrics/types";
@@ -48,6 +47,8 @@ import { PersistedFairValue } from "@/components/research/persisted-fair-value";
 import { loadPersistedFairValueForPage } from "@/fair-value/load-persisted-page";
 import { FairRangeLine } from "@/components/research/fair-range-line";
 import { fairRangeHeadline } from "@/lib/fair-range";
+import { BUY_SCORE_BACKTEST_NOTE, buyScoreValue, buyScoreVerdict } from "@/lib/buy-score";
+import { publishedBuyScore } from "@/scoring/published-research-scores";
 import { scoreTicker } from "@/scoring/run-ticker";
 import { PriceChart } from "@/components/research/price-chart";
 import { loadSavedPrices } from "@/db/price-history";
@@ -219,7 +220,8 @@ export default async function ResearchPage({
   const fairRange = fairRangeHeadline(fairValue, close);
   const priceDownFlag = goodCompanyPriceDown({ result, bars, periods, pn17: instrument.pn17, includeSales: !isBank });
   const latestResults = priceDownFlag ? null : latestResultsComparison(periods, { includeSales: !isBank });
-  const verdict = researchVerdict(result.researchScore, result.dataConfidence.needsVerification);
+  const buy = publishedBuyScore({ researchScore: result.researchScore, eligible: result.eligibility?.eligible === true, needsVerification: result.dataConfidence.needsVerification });
+  const verdict = buyScoreVerdict(buy);
   const size = metricById(metrics, "market_cap");
   const dividendYield = metricById(metrics, "dividend_yield");
   const riskFlag = instrument.pn17 ? "Financial distress (PN17)"
@@ -264,7 +266,7 @@ export default async function ResearchPage({
       </header>
 
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3" aria-label="Stock at a glance">
-        <section className="market-card min-w-0 p-4" aria-label="Price and research score">
+        <section className="market-card min-w-0 p-4" aria-label="Price and Buy score">
           <div className="mb-2 grid grid-cols-2 gap-3">
             <div>
               <h2 className="text-xs font-medium text-muted-foreground">Last close</h2>
@@ -272,20 +274,26 @@ export default async function ResearchPage({
               <p className="text-xs text-muted-foreground">{formatDateSafe(priceDate)}</p>
             </div>
             <div>
-              <h2 className="text-xs font-medium text-muted-foreground">Research score</h2>
-              <p className="text-xl font-semibold tabular-nums">{formatScore100(result.researchScore)}</p>
+              <h2 className="text-xs font-medium text-muted-foreground">Buy score</h2>
+              <p className="text-xl font-semibold tabular-nums">{formatScore100(buyScoreValue(buy))}</p>
             </div>
           </div>
           <StatusLabel level={verdict.tone}>{verdict.label}</StatusLabel>
-          <p className="mt-1.5 text-xs text-muted-foreground">{verdict.why} Not a buy or sell signal.</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">{verdict.why}</p>
+          <details className="mt-1.5 text-xs text-muted-foreground">
+            <summary className="cursor-pointer">How good is a high Buy score?</summary>
+            <p className="mt-1">The Buy score ranks this stock&apos;s research score ({formatScore100(result.researchScore)}) against every other stock, then holds it below 70 if a safety check fails. {BUY_SCORE_BACKTEST_NOTE}</p>
+          </details>
         </section>
         <section className="market-card min-w-0 p-4">
-          <h2 className="mb-2 font-semibold">Fair price range</h2>
+          <h2 className="font-semibold">Fair price range</h2>
+          <p className="mb-2 text-xs text-muted-foreground">Entry price guide, not part of the Buy score.</p>
           <FairRangeLine range={fairRange} compact />
         </section>
         <section className="market-card min-w-0 p-4 md:col-span-2 lg:col-span-1">
           <h2 className="mb-2 font-semibold">Key numbers</h2>
           <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+            <div><dt className="text-xs text-muted-foreground">Research score</dt><dd className="font-medium">{formatScore100(result.researchScore)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Valuation score</dt><dd className="font-medium">{formatScore100(result.valuationScore)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">{isReit ? "Distribution yield" : "Dividend yield"}</dt><dd className="font-medium">{dividendYield?.available ? fmtRatio(dividendYield) : "Unavailable"}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Company size</dt><dd className="font-medium">{size?.available && size.value !== null && Number.isFinite(size.value) ? `RM ${size.value.toLocaleString("en-MY", { notation: "compact", maximumFractionDigits: 1 })}` : "Unavailable"}</dd></div>
