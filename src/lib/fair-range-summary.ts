@@ -1,7 +1,7 @@
 import { type FairRangeHeadline } from "@/lib/fair-range";
 import { formatSharePrice } from "@/lib/format-myr";
 
-export type ListFairRange = Pick<Extract<FairRangeHeadline, { available: true }>, "available" | "position" | "low" | "high"> | { available: false };
+export type ListFairRange = (Pick<Extract<FairRangeHeadline, { available: true }>, "available" | "position" | "low" | "high"> & { positionText?: string | null }) | { available: false };
 
 export function fairRangeSummary(range: ListFairRange | undefined) {
   if (!range?.available) return { label: "No fair range", text: null, position: null };
