@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, inArray, max, ne } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { events, financialPeriods, ingestReports, instruments, marketScanRuns, priceBars, scoreRuns } from "@/db/schema";
+import { companyCalendar, events, financialPeriods, ingestReports, instruments, marketScanRuns, priceBars, scoreRuns } from "@/db/schema";
 import { seedUniverseFromYaml } from "@/db/seed";
 import type { EventSnapshot } from "@/metrics/types";
 import { readPublishedWatchlist, type WatchlistReason } from "@/opportunities/watchlist-selection";
@@ -103,6 +103,11 @@ export function loadWatchlist(): WatchlistRow[] {
       periodCount: periodsById.get(row.id) ?? 0,
     };
   });
+}
+
+export function loadDividendQuote(instrumentId: number) {
+  return getDb().select({ annualYieldPercent: companyCalendar.annualYieldPercent, checkedAt: companyCalendar.checkedAt })
+    .from(companyCalendar).where(eq(companyCalendar.instrumentId, instrumentId)).get();
 }
 
 export function loadInstrumentSnapshots(ticker: string, skipSeed = false) {

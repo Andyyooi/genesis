@@ -6,6 +6,8 @@ import { FairRangePill } from "@/components/research/fair-range-pill";
 import type { FairValueRunRead } from "@/fair-value/load-run";
 import type { FairValueMethodKind } from "@/fair-value/types";
 import { fairRangeHeadline } from "@/lib/fair-range";
+import { PersistedFairValue } from "@/components/research/persisted-fair-value";
+import { BROAD_PEERS_WITHHELD, NO_COMPARABLE_PEERS } from "@/fair-value/comparable-peers";
 
 function stored(
   values: (number | null)[],
@@ -36,6 +38,29 @@ function stored(
 }
 
 describe("fairRangeHeadline", () => {
+  it.each([
+    ["INDUSTRY_FAMILY", "industry family “Utilities - *”"],
+    ["SECTOR", "same sector “Utilities”"],
+    ["INDUSTRY", "exact industry “Specialty Chemicals”"],
+  ] as const)("hides saved estimates based on broad %s comparisons", (peerGroupType, peerSelectionPath) => {
+    const storedRun = stored([4.3, 6.08], "POINT_OK", 5);
+    if (!storedRun.ok) throw new Error("Expected readable run");
+    storedRun.run.result.researchProfile = "GENERAL";
+    storedRun.run.result.assumptions = { peerGroupType, peerSelectionPath } as typeof storedRun.run.result.assumptions;
+    expect(fairRangeHeadline(storedRun, 1.85)).toEqual({ available: false, reason: BROAD_PEERS_WITHHELD });
+    expect(renderToStaticMarkup(createElement(PersistedFairValue, { stored: storedRun }))).toContain(BROAD_PEERS_WITHHELD);
+  });
+
+  it("explains that a valid history-only range does not use peers", () => {
+    const storedRun = stored([1.1, 1.2], "POINT_OK", 1.15, [], ["history", "history"]);
+    if (!storedRun.ok) throw new Error("Expected readable run");
+    storedRun.run.result.researchProfile = "GENERAL";
+    storedRun.run.result.assumptions = { peerGroupType: "NONE", peerUnavailableReason: NO_COMPARABLE_PEERS } as typeof storedRun.run.result.assumptions;
+    const range = fairRangeHeadline(storedRun, 1.15);
+    expect(range).toMatchObject({ available: true, peerNote: expect.stringContaining("own trading history") });
+    expect(renderToStaticMarkup(createElement(FairRangeLine, { range, compact: true }))).toContain("Too few similar companies");
+  });
+
   it("uses the middle half of method values so one outlier does not stretch it", () => {
     const range = fairRangeHeadline(stored([0.817, 1.933, 0.121, 1.796, 0.525, null], "POINT_OK", 0.817), 0.995);
     expect(range.available).toBe(true);

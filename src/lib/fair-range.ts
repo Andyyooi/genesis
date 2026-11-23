@@ -1,5 +1,6 @@
 import { isFiniteNumber } from "@/lib/display";
 import type { FairValueRunRead } from "@/fair-value/load-run";
+import { BROAD_PEERS_WITHHELD, usesBroadGeneralPeers } from "@/fair-value/comparable-peers";
 
 export type FairRangePosition = "below" | "inside" | "above";
 
@@ -16,6 +17,7 @@ export type FairRangeHeadline =
       /** Methods disagree a lot: the highest is more than double the lowest. */
       wideSpread: boolean;
       caution: boolean;
+      peerNote?: string;
     }
   | { available: false; reason: string };
 
@@ -39,13 +41,20 @@ export function fairRangeHeadline(
 ): FairRangeHeadline {
   if (!stored?.ok) return { available: false, reason: "No fair value has been worked out for this stock yet." };
   const { result, quality } = stored.run;
+  if (usesBroadGeneralPeers(result)) return { available: false, reason: BROAD_PEERS_WITHHELD };
+  const peerNote = result.researchProfile === "GENERAL" && result.assumptions?.peerGroupType === "NONE"
+    ? result.assumptions.peerUnavailableReason ?? undefined : undefined;
+  const unavailable = (reason: string): FairRangeHeadline => ({
+    available: false,
+    reason: peerNote ? `${peerNote} ${reason}` : reason,
+  });
   if (quality.baseUse === "NO_POINT") {
     const reason = result.researchProfile === "OTHER_FINANCIAL" || result.researchProfile === "UNKNOWN"
       ? result.unavailableReason : null;
-    return { available: false, reason: reason ?? "The available figures did not support a valuation." };
+    return unavailable(reason ?? "The available figures did not support a valuation.");
   }
   if (quality.baseUse === "POINT_WITHHELD") {
-    return { available: false, reason: "The valuation checks did not pass, so no fair range is shown." };
+    return unavailable("The valuation checks did not pass, so no fair range is shown.");
   }
   const flagged = new Set(quality.methods.filter((method) => method.state === "FLAGGED").map((method) => method.id));
   const methods = result.methods
@@ -55,7 +64,7 @@ export function fairRangeHeadline(
     .map((method) => method.methodValue as number)
     .sort((a, b) => a - b);
   if (values.length < 2) {
-    return { available: false, reason: result.unavailableReason ?? "Fewer than two valuation methods passed the checks, so there is no range." };
+    return unavailable(result.unavailableReason ?? "Fewer than two valuation methods passed the checks, so there is no range.");
   }
   const low = values.length === 2 ? values[0] : quantile(values, 0.25);
   const high = values.length === 2 ? values[1] : quantile(values, 0.75);
@@ -79,6 +88,7 @@ export function fairRangeHeadline(
     methodCount: values.length,
     wideSpread: values[values.length - 1] > values[0] * 2,
     caution: quality.baseUse === "POINT_WITH_CAUTION",
+    ...(peerNote ? { peerNote: `${peerNote} This range uses the stock’s own trading history.` } : {}),
   };
 }
 
