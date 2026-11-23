@@ -47,6 +47,24 @@ describe("cross-sectional ranks", () => {
 });
 
 describe("universe scoring", () => {
+  it("ranks insurer financial health against insurers and never gives one check all its weight", () => {
+    const healthMetrics = (equity: number, roa?: number) => [
+      available("equity_to_assets", "Equity / assets", equity, "ratio", "", [], null),
+      ...(roa === undefined ? [] : [available("three_year_min_roa", "Earnings floor", roa, "ratio", "", [], null)]),
+    ];
+    const insurer = (ticker: string, equity: number, roa?: number) => input(ticker, 0.1, {
+      industry: "Insurance - Life", sector: "Financial Services", metrics: healthMetrics(equity, roa),
+    });
+    const result = scoreUniverse([
+      insurer("TOP", 0.3, 0.02), insurer("LOW", 0.1, -0.01), insurer("THIN", 0.2),
+      input("OTHER", 0.1, { metrics: healthMetrics(0.8, 0.1) }),
+    ]);
+    const health = (ticker: string) => result.get(ticker)?.categories.find(({ id }) => id === "financial_health");
+    expect(health("TOP")).toMatchObject({ score: 100, inThisRun: true });
+    expect(health("TOP")?.factors.map(({ id }) => id)).toEqual(["equity_to_assets", "three_year_min_roa"]);
+    expect(health("THIN")).toMatchObject({ score: null, inThisRun: false, coverage: 0.5 });
+    expect(health("OTHER")?.factors.map(({ id }) => id)).toEqual(["debt_to_equity", "net_debt_to_ebitda", "interest_coverage"]);
+  });
   it("renormalizes available factors/categories without anchors or news", () => {
     const scored = scoreUniverse([input("A", 0.01), input("B", 0.1)]);
     expect(scored.get("A")?.researchScore).toBe(0);

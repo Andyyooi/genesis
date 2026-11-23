@@ -35,6 +35,10 @@ function includesAny(haystack: string, needles: string[]): boolean {
   return needles.some((needle) => text.includes(needle.toLowerCase()));
 }
 
+export function isInsuranceIndustry(industry: string | null | undefined): boolean {
+  return /insurance|takaful/i.test(industry ?? "");
+}
+
 export function factorSetForProfile(profile: ResearchProfile): FactorSetName {
   if (profile === "REIT") return "reit";
   if (profile === "BANK") return "bank";

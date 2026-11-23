@@ -11,6 +11,7 @@ export type FairRangeHeadline =
       middle: number;
       price: number | null;
       position: FairRangePosition | null;
+      positionText: string | null;
       methodCount: number;
       /** Methods disagree a lot: the highest is more than double the lowest. */
       wideSpread: boolean;
@@ -38,17 +39,23 @@ export function fairRangeHeadline(
 ): FairRangeHeadline {
   if (!stored?.ok) return { available: false, reason: "No fair value has been worked out for this stock yet." };
   const { result, quality } = stored.run;
-  if (quality.baseUse === "POINT_WITHHELD" || quality.baseUse === "NO_POINT") {
+  if (quality.baseUse === "NO_POINT") {
+    const reason = result.researchProfile === "OTHER_FINANCIAL" || result.researchProfile === "UNKNOWN"
+      ? result.unavailableReason : null;
+    return { available: false, reason: reason ?? "The available figures did not support a valuation." };
+  }
+  if (quality.baseUse === "POINT_WITHHELD") {
     return { available: false, reason: "The valuation checks did not pass, so no fair range is shown." };
   }
   const flagged = new Set(quality.methods.filter((method) => method.state === "FLAGGED").map((method) => method.id));
-  const values = result.methods
+  const methods = result.methods
     .filter((method) => !flagged.has(method.id))
-    .filter((method) => method.available && isFiniteNumber(method.methodValue) && method.methodValue > 0)
+    .filter((method) => method.available && isFiniteNumber(method.methodValue) && method.methodValue > 0);
+  const values = methods
     .map((method) => method.methodValue as number)
     .sort((a, b) => a - b);
   if (values.length < 2) {
-    return { available: false, reason: "Only one valuation method worked for this stock, so there is no range." };
+    return { available: false, reason: result.unavailableReason ?? "Fewer than two valuation methods passed the checks, so there is no range." };
   }
   const low = values.length === 2 ? values[0] : quantile(values, 0.25);
   const high = values.length === 2 ? values[1] : quantile(values, 0.75);
@@ -68,14 +75,18 @@ export function fairRangeHeadline(
     middle,
     price: isFiniteNumber(price) ? price : null,
     position,
+    positionText: position ? fairRangePositionText(position, methods.some(({ kind }) => kind === "peer"), methods.some(({ kind }) => kind === "history")) : null,
     methodCount: values.length,
     wideSpread: values[values.length - 1] > values[0] * 2,
     caution: quality.baseUse === "POINT_WITH_CAUTION",
   };
 }
 
-export const FAIR_RANGE_POSITION_TEXT: Record<FairRangePosition, string> = {
-  below: "The price is below the fair range: cheaper than similar companies and its own past suggest.",
-  inside: "The price is inside the fair range: not an unusually cheap or expensive price.",
-  above: "The price is above the fair range: dearer than similar companies and its own past suggest.",
-};
+function fairRangePositionText(position: FairRangePosition, hasPeers: boolean, hasHistory: boolean): string {
+  if (position === "inside") return "The price is inside the fair range: not an unusually cheap or expensive price.";
+  const prefix = `The price is ${position} the fair range`;
+  const comparison = hasPeers && hasHistory ? "similar companies and its own past suggest"
+    : hasPeers ? "similar companies suggest"
+      : hasHistory ? "its own trading history suggests" : null;
+  return comparison ? `${prefix}: ${position === "below" ? "cheaper" : "dearer"} than ${comparison}.` : `${prefix}.`;
+}

@@ -6,7 +6,7 @@ import type { FairRangeHeadline, FairRangePosition } from "@/lib/fair-range";
 import { fairRangeSummary } from "@/lib/fair-range-summary";
 
 function range(position: FairRangePosition | null): FairRangeHeadline {
-  return { available: true, low: 1.203, high: 1.502, middle: 1.3, price: 1, position, methodCount: 2, wideSpread: false, caution: false };
+  return { available: true, low: 1.203, high: 1.502, middle: 1.3, price: 1, position, positionText: null, methodCount: 2, wideSpread: false, caution: false };
 }
 
 describe("list fair ranges", () => {

@@ -1,6 +1,6 @@
 import { CATEGORY_KEYS, getFactorProfile, profileName, resolveResearchProfile, type ScoringConfig } from "@/config/load-scoring";
 import type { MetricValue, PriceBarSnapshot } from "@/metrics/types";
-import type { ResearchProfile } from "@/research/profiles";
+import { isInsuranceIndustry, type ResearchProfile } from "@/research/profiles";
 import { assessDataQuality } from "@/scoring/confidence";
 import { evaluateConcerns } from "@/scoring/concerns";
 import { assessEligibility } from "@/scoring/eligibility";
@@ -17,21 +17,30 @@ export type ScoreInput = {
   latestAnnual?: { periodEnd: string; availableAt: string | null } | null;
 };
 
+function scoreProfile(input: ScoreInput, researchProfile: ResearchProfile) {
+  const hints = { sector: input.sector, industry: input.industry, explicit: researchProfile };
+  const profile = getFactorProfile(input.config, input.instrumentType, input.ticker, hints);
+  const insurer = researchProfile === "OTHER_FINANCIAL" && isInsuranceIndustry(input.industry);
+  const factorSets = insurer ? { ...profile.factor_sets, financial_health: input.config.insurer_health_factors } : profile.factor_sets;
+  return { profile, factorSets, insurer };
+}
+
 export function scoreFromMetrics(args: ScoreInput, ranks: Map<string, PercentileEvidence> = new Map()): ScoreResult {
   const classified = resolveResearchProfile(args.instrumentType, args.ticker, { sector: args.sector, industry: args.industry, explicit: args.researchProfile }, args.config);
   const hints = { sector: args.sector, industry: args.industry, explicit: classified.profile };
-  const profile = getFactorProfile(args.config, args.instrumentType, args.ticker, hints);
+  const { profile, factorSets, insurer } = scoreProfile(args, classified.profile);
   const weights = profile.category_weights ?? args.config.category_weights;
   const asOf = args.asOf ?? new Date().toISOString();
   const categories: CategoryScore[] = CATEGORY_KEYS.map((id) => {
-    const factors = profile.factor_sets[id].map((factor) => ({ ...scoreFactor(factor, args.metrics, ranks.get(factor.metric)), category: id }));
+    const factors = factorSets[id].map((factor) => ({ ...scoreFactor(factor, args.metrics, ranks.get(factor.metric)), category: id }));
     const live = factors.filter((f) => f.available && f.score !== null);
     const totalFactorWeights = factors.reduce((sum, f) => sum + f.weight, 0);
     const availableFactorWeights = live.reduce((sum, f) => sum + f.weight, 0);
     const coverage = totalFactorWeights ? availableFactorWeights / totalFactorWeights : 0;
-    const score = availableFactorWeights ? live.reduce((sum, f) => sum + f.score! * f.weight, 0) / availableFactorWeights : null;
+    const incompleteInsurerHealth = insurer && id === "financial_health" && live.length < factors.length;
+    const score = availableFactorWeights && !incompleteInsurerHealth ? live.reduce((sum, f) => sum + f.score! * f.weight, 0) / availableFactorWeights : null;
     return { id, configuredWeight: weights[id], liveWeight: null, score, coverage, availableFactorWeights, totalFactorWeights, inThisRun: false, factors,
-      warning: score === null ? "No available ranked evidence; category excluded, not zero." : coverage < args.config.min_category_coverage ? "Thin factor coverage; remaining evidence renormalized." : null };
+      warning: incompleteInsurerHealth ? "Both insurer health checks are required; financial health is not scored." : score === null ? "No available ranked evidence; category excluded, not zero." : coverage < args.config.min_category_coverage ? "Thin factor coverage; remaining evidence renormalized." : null };
   });
   const live = categories.filter((c) => c.score !== null && c.configuredWeight > 0);
   const liveWeight = live.reduce((sum, c) => sum + c.configuredWeight, 0);
@@ -53,8 +62,8 @@ export function scoreFromMetrics(args: ScoreInput, ranks: Map<string, Percentile
 export function scoreUniverse(inputs: ScoreInput[]): Map<string, ScoreResult> {
   const prepared = inputs.map((input) => {
     const classified = resolveResearchProfile(input.instrumentType, input.ticker, { sector: input.sector, industry: input.industry, explicit: input.researchProfile }, input.config);
-    const profile = getFactorProfile(input.config, input.instrumentType, input.ticker, { explicit: classified.profile });
-    return { input, group: classified.factorSet, factors: Object.values(profile.factor_sets).flat() };
+    const { factorSets } = scoreProfile(input, classified.profile);
+    return { input, group: classified.factorSet, factors: Object.values(factorSets).flat() };
   });
   const ranks = new Map<string, Map<string, PercentileEvidence>>();
   for (const metricId of new Set(prepared.flatMap((p) => p.factors.map((f) => f.metric)))) {

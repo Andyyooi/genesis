@@ -41,6 +41,9 @@ confidence:
   medium_coverage: 0.5
   high_max_age_months: 18
   medium_max_age_months: 30
+insurer_health_factors:
+  - {id: equity_to_assets, metric: equity_to_assets, label: "Equity / assets", weight: 50, direction: higher_better, explanation: "Book equity relative to total assets. A bigger equity cushion helps absorb losses; this is not a regulatory solvency ratio."}
+  - {id: three_year_min_roa, metric: three_year_min_roa, label: "Weakest return on assets in three years", weight: 50, direction: higher_better, explanation: "The lowest annual profit divided by assets over three consecutive years. Looks at earnings through weaker years without treating operating cash flow as spare cash."}
 research_profile_rules:
   bank_industry_includes: [banks]
   other_financial_industry_includes: [insurance, takaful, asset management, capital markets, credit services, financial data, stock exchanges]

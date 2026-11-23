@@ -194,7 +194,7 @@ describe("Fair Value orchestration", () => {
     expectOnly("REIT");
   });
 
-  it("returns unavailable for OTHER_FINANCIAL without calling a calculator", () => {
+  it("does not use ordinary companies as non-bank financial peers", () => {
     const productive = input("GENERAL");
     const direct = generalFairValue.calculateGeneralFairValue(productive);
     expect(direct.fairValueBase).toBe(20);
@@ -203,34 +203,35 @@ describe("Fair Value orchestration", () => {
 
     const args = { ...productive, researchProfile: "OTHER_FINANCIAL" as const };
     const routed = calculateFairValue(args);
-    expect(routed.modelVersion).toBe("unsupported");
-    expect(routed.modelVersion).toBe(UNSUPPORTED_FAIR_VALUE_MODEL_VERSION);
+    expect(routed.modelVersion).toBe("nonbank-financial-relative-v1");
     expect(routed.confidence).toBe("UNAVAILABLE");
-    expect(routed.methods).toEqual([]);
+    expect(routed.methods).toHaveLength(4);
+    expect(routed.methods.every((method) => !method.available)).toBe(true);
     expect(routed.fairValueLow).toBeNull();
     expect(routed.fairValueBase).toBeNull();
     expect(routed.fairValueHigh).toBeNull();
     expect(routed.differenceVsPrice).toBeNull();
     expect(routed.researchProfile).toBe("OTHER_FINANCIAL");
-    expect(routed.unavailableReason).toContain("OTHER_FINANCIAL");
+    expect(routed.unavailableReason).toContain("aren't enough comparable");
     expect(routed.assumptions.modelDefaultsUsed).toBe(false);
     expect(routed.assumptions.yamlScoreBandsUsed).toBe(false);
-    expect(routed.assumptions.modelVersion).toBe("unsupported");
+    expect(routed.assumptions.modelVersion).toBe(routed.modelVersion);
     expectOnly("NONE");
   });
 
-  it("returns unavailable for UNKNOWN and any other unsupported profile", () => {
+  it("does not assume an unclassified company has peers, and rejects invalid profiles", () => {
     const productive = input("GENERAL");
     generalSpy.mockClear();
     const unknown = calculateFairValue({ ...productive, researchProfile: "UNKNOWN" });
-    expect(unknown.modelVersion).toBe("unsupported");
+    expect(unknown.modelVersion).toBe("unclassified-history-v1");
     expect(unknown.confidence).toBe("UNAVAILABLE");
-    expect(unknown.methods).toEqual([]);
+    expect(unknown.methods).toHaveLength(2);
+    expect(unknown.methods.every((method) => method.kind === "history" && !method.available)).toBe(true);
     expect(unknown.fairValueBase).toBeNull();
     expect(unknown.fairValueLow).toBeNull();
     expect(unknown.fairValueHigh).toBeNull();
     expect(unknown.differenceVsPrice).toBeNull();
-    expect(unknown.unavailableReason).toContain("UNKNOWN");
+    expect(unknown.unavailableReason).toContain("unclassified");
     expect(unknown.assumptions.modelDefaultsUsed).toBe(false);
     expect(unknown.assumptions.yamlScoreBandsUsed).toBe(false);
     expectOnly("NONE");
@@ -240,11 +241,72 @@ describe("Fair Value orchestration", () => {
       researchProfile: "NOT_A_PROFILE" as ResearchProfile,
     });
     expect(other.modelVersion).toBe("unsupported");
+    expect(other.modelVersion).toBe(UNSUPPORTED_FAIR_VALUE_MODEL_VERSION);
     expect(other.confidence).toBe("UNAVAILABLE");
     expect(other.methods).toEqual([]);
     expect(other.fairValueBase).toBeNull();
     expect(other.unavailableReason).toContain("NOT_A_PROFILE");
     expectOnly("NONE");
+  });
+
+  it("uses distinct insurer issuers for P/E and P/B, and never uses bank or unrelated financial peers", () => {
+    const args = { ...input("GENERAL"), researchProfile: "OTHER_FINANCIAL" as const, industry: "Insurance - Diversified" };
+    const comparable = listedPeers(5, "OTHER_FINANCIAL", "Insurance - Life", "Financial Services", "COMMON_STOCK", "INS");
+    const subject = { ...comparable[0], ticker: args.ticker, name: "Subject" };
+    const duplicate = { ...comparable[0], ticker: "INS-DUPLICATE" };
+    const unrelated = [
+      ...listedPeers(5, "BANK", "Banks", "Financial Services", "COMMON_STOCK", "B"),
+      ...listedPeers(5, "OTHER_FINANCIAL", "Credit Services", "Financial Services", "COMMON_STOCK", "C"),
+      { ...subject, ticker: "SUBJECT-DUPLICATE" },
+      duplicate,
+    ];
+    const enough = calculateFairValue({ ...args, peers: [subject, ...comparable, ...unrelated] });
+    expect(enough).toMatchObject({ modelVersion: "insurer-relative-v1", fairValueLow: 20, fairValueHigh: 20 });
+    expect(enough.methods.map(({ id, peerCount }) => [id, peerCount])).toEqual([["earnings_peer_pe", 5], ["book_peer_pb", 5]]);
+    const thin = calculateFairValue({ ...args, peers: [subject, ...comparable.slice(0, 4), ...unrelated] });
+    expect(thin.fairValueBase).toBeNull();
+    expect(thin.unavailableReason).toContain("Not enough comparable insurers");
+    expectOnly("NONE");
+  });
+
+  it("uses filing-dated own history for unclassified operating businesses, not shell companies", () => {
+    const periods = [2023, 2024, 2025].map((year) => ({
+      ...annual({ periodEnd: `${year}-12-31`, eps: 2, equity: 100, shares: 10 }),
+      availableAt: `${year + 1}-03-31`,
+    }));
+    const bars = [2024, 2025, 2026].map((year) => bar(`${year}-03-31`, 15));
+    const args = { ...input("GENERAL"), researchProfile: "UNKNOWN" as const, periods, bars };
+    const result = calculateFairValue(args);
+    expect(result.fairValueBase).toBe(15);
+    expect(result.methods.every((method) => method.kind === "history" && method.lookAheadSafe)).toBe(true);
+    const shell = calculateFairValue({ ...args, industry: "Shell Companies" });
+    expect(shell.fairValueBase).toBeNull();
+    expect(shell.unavailableReason).toContain("shell company");
+  });
+
+  it("widens only the insurer multiple that lacks enough usable peers in the exact industry", () => {
+    const industry = "Insurance - Life";
+    const exact = listedPeers(5, "OTHER_FINANCIAL", industry, "Financial Services", "COMMON_STOCK", "LIFE");
+    exact[4] = { ...exact[4], eps: null };
+    const broader = listedPeers(1, "OTHER_FINANCIAL", "Insurance - Diversified", "Financial Services", "COMMON_STOCK", "DIV");
+    broader[0] = { ...broader[0], lastClose: 30 };
+    const result = calculateFairValue({
+      ...input("GENERAL"), researchProfile: "OTHER_FINANCIAL", industry, peers: [...exact, ...broader],
+    });
+    expect(result).toMatchObject({ fairValueLow: 20, fairValueHigh: 20 });
+    expect(result.methods).toMatchObject([
+      { id: "earnings_peer_pe", peerCount: 5, peerGroup: expect.stringContaining("industry family") },
+      { id: "book_peer_pb", peerCount: 5, peerGroup: expect.stringContaining("exact industry") },
+    ]);
+    expect(result.assumptions.peerSelectionPath).toBeNull();
+  });
+
+  it("can value non-bank lenders against other non-bank lenders", () => {
+    const industry = "Credit Services";
+    const peers = listedPeers(5, "OTHER_FINANCIAL", industry, "Financial Services", "COMMON_STOCK", "LENDER");
+    const result = calculateFairValue({ ...input("GENERAL"), researchProfile: "OTHER_FINANCIAL", industry, peers });
+    expect(result).toMatchObject({ modelVersion: "nonbank-financial-relative-v1", fairValueBase: 20 });
+    expect(result.methods.filter((method) => method.available).map((method) => method.kind)).toEqual(["peer", "peer"]);
   });
 
   it("does not mutate calculator inputs", () => {

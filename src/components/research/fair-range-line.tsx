@@ -1,5 +1,5 @@
 import { formatSharePrice } from "@/lib/format-myr";
-import { FAIR_RANGE_POSITION_TEXT, type FairRangeHeadline } from "@/lib/fair-range";
+import type { FairRangeHeadline } from "@/lib/fair-range";
 
 /** Estimates to the nearest half sen; more digits would suggest false precision. */
 function estimate(value: number): string {
@@ -21,9 +21,9 @@ export function FairRangeLine({ range, compact = false }: { range: FairRangeHead
         {compact ? "" : "Fair range "}{estimate(range.low)} to {estimate(range.high)}
         {compact || range.price == null ? "" : `, now ${formatSharePrice(range.price)}`}
       </p>
-      {range.position ? <p>{FAIR_RANGE_POSITION_TEXT[range.position]}</p> : null}
+      {range.positionText ? <p>{range.positionText}</p> : null}
       <p className="text-muted-foreground">
-        Middle estimate {estimate(range.middle)}. {compact ? "An estimate, not a price target." : `Worked out from what similar companies, and this company in past years, trade at against profits, book value and dividends (${range.methodCount} methods). An estimate to compare against, not a promise the price will get there.`}
+        Middle estimate {estimate(range.middle)}. {compact ? "An estimate, not a price target." : `Based on ${range.methodCount} valuation methods; see “Fair value” below for details. An estimate to compare against, not a promise the price will get there.`}
       </p>
       {range.wideSpread ? (
         <p className="text-amber-800 dark:text-amber-300">

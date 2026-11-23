@@ -117,6 +117,7 @@ export function selectPeerSet(args: {
   peers: PeerUniverseRow[];
   voteMetricIds: string[];
   metricValue: (metricId: string, row: PeerUniverseRow) => number | null;
+  industryOnly?: boolean;
 }): { rows: PeerUniverseRow[]; qualityBase: Omit<PeerQuality, "metrics" | "contextLabel"> } {
   const industry = (args.industry ?? "").trim();
   const sector = (args.sector ?? "").trim();
@@ -176,7 +177,7 @@ export function selectPeerSet(args: {
         });
       }
     }
-    if (sector) {
+    if (sector && !args.industryOnly) {
       levels.push({
         groupType: "SECTOR",
         path: `same sector “${sector}” (narrower industry/family had too few usable peers)`,

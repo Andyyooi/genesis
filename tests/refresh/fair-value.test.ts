@@ -249,23 +249,22 @@ describe("fair value daily refresh", () => {
     expect(again[0]!.calculatedAt).toBe(AS_OF);
   });
 
-  it("stores unsupported and supported NO_VALUE observations without calling them valuations", () => {
+  it("stores insurer and general NO_VALUE observations without calling them valuations", () => {
     seed("INSURE", "Insurance", "Financial Services");
     seed("WIDGET", "Industrial Products");
     const report = refreshFairValueUniverse({ asOf: AS_OF });
     expect(report.failed).toEqual([]);
     expect(report.inserted).toBe(2);
-    expect(report.unsupported).toBe(1);
+    expect(report.unsupported).toBe(0);
     expect(report.noValue).toBe(2);
     const rows = getDb().select().from(fairValueRuns).all();
-    expect(rows.map((row) => row.modelVersion).sort()).toEqual(["general-relative-v1", "unsupported"]);
+    expect(rows.map((row) => row.modelVersion).sort()).toEqual(["general-relative-v1", "insurer-relative-v1"]);
     expect(rows.every((row) => row.fairValueBase == null)).toBe(true);
     expect(rows.every((row) => row.qualityStatus === "NO_VALUE" && row.baseUse === "NO_POINT")).toBe(true);
     const outcome = fairValueRefreshOutcome(report);
     expect(outcome.status).toBe("NO_DATA");
     expect(outcome.updatedCount).toBe(0);
     expect(outcome.unavailableCount).toBe(2);
-    expect(outcome.errorSummary).toContain("No Fair Value model");
     expect(outcome.errorSummary).toContain("did not produce a value");
   });
 
@@ -451,7 +450,7 @@ describe("fair value daily refresh", () => {
     ]);
   });
 
-  it("persists unsupported and missing-input Fair Value through daily refresh", async () => {
+  it("persists insurer and general missing-input Fair Value through daily refresh", async () => {
     seed("INSURE", "Insurance", "Financial Services");
     seed("WIDGET", "Industrial Products");
     const deps = {
@@ -492,10 +491,9 @@ describe("fair value daily refresh", () => {
     expect(fairValue.updatedCount).toBe(0);
     expect(fairValue.failedCount).toBe(0);
     expect(fairValue.unavailableCount).toBe(2);
-    expect(fairValue.errorSummary).toContain("No Fair Value model");
     expect(fairValue.errorSummary).toContain("did not produce a value");
     expect(fairValue.metadata).toMatchObject({
-      unsupported: 1,
+      unsupported: 0,
       noValue: 2,
       flagged: 0,
       caution: 0,
@@ -505,7 +503,7 @@ describe("fair value daily refresh", () => {
     expect(stored).toHaveLength(2);
     const insure = stored.find((row) => row.ticker === "INSURE")!;
     const widget = stored.find((row) => row.ticker === "WIDGET")!;
-    expect(insure.modelVersion).toBe("unsupported");
+    expect(insure.modelVersion).toBe("insurer-relative-v1");
     expect(widget.modelVersion).toBe("general-relative-v1");
     for (const row of [insure, widget]) {
       expect(row.fairValueBase).toBeNull();

@@ -2,7 +2,9 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { FairRangeLine } from "@/components/research/fair-range-line";
+import { FairRangePill } from "@/components/research/fair-range-pill";
 import type { FairValueRunRead } from "@/fair-value/load-run";
+import type { FairValueMethodKind } from "@/fair-value/types";
 import { fairRangeHeadline } from "@/lib/fair-range";
 
 function stored(
@@ -10,6 +12,7 @@ function stored(
   baseUse = "POINT_OK",
   base: number | null = null,
   flaggedIndexes: number[] = [],
+  kinds: FairValueMethodKind[] = [],
 ): FairValueRunRead {
   return {
     ok: true,
@@ -26,7 +29,7 @@ function stored(
       result: {
         currentPrice: 0.99,
         fairValueBase: base,
-        methods: values.map((methodValue, index) => ({ id: `m${index}`, available: methodValue != null, methodValue })),
+        methods: values.map((methodValue, index) => ({ id: `m${index}`, available: methodValue != null, methodValue, kind: kinds[index] })),
       } as never,
     },
   };
@@ -65,10 +68,33 @@ describe("fairRangeHeadline", () => {
     expect(range.available && range.caution).toBe(true);
   });
 
+  it.each([
+    { kinds: ["peer", "peer", "history"], flagged: [2], comparison: "similar companies suggest" },
+    { kinds: ["history", "history", "peer"], flagged: [2], comparison: "its own trading history suggests" },
+    { kinds: ["peer", "history", "peer"], flagged: [], comparison: "similar companies and its own past suggest" },
+  ] satisfies { kinds: FairValueMethodKind[]; flagged: number[]; comparison: string }[])(
+    "uses only the sources of estimates that made it into the range: $comparison", ({ kinds, flagged, comparison }) => {
+      const range = fairRangeHeadline(stored([1, 1.2, 1.3], "POINT_OK", 1.2, flagged, kinds), 2);
+      const phrase = `dearer than ${comparison}.`;
+      expect(renderToStaticMarkup(createElement(FairRangeLine, { range }))).toContain(phrase);
+      expect(renderToStaticMarkup(createElement(FairRangePill, { range }))).toContain(phrase);
+    },
+  );
+
   it("is unavailable when checks fail or only one method worked", () => {
     expect(fairRangeHeadline(stored([1, 2], "POINT_WITHHELD"), 1).available).toBe(false);
     expect(fairRangeHeadline(stored([1.5, null]), 1).available).toBe(false);
     expect(fairRangeHeadline(null, 1).available).toBe(false);
+  });
+
+  it("shows the model's plain reason when it cannot produce a range", () => {
+    const run = stored([], "NO_POINT");
+    if (!run.ok) throw new Error("Expected a readable run");
+    run.run.result.researchProfile = "UNKNOWN";
+    run.run.result.unavailableReason = "This is a shell company. There is no operating business to compare.";
+    const range = fairRangeHeadline(run, 1);
+    expect(range).toEqual({ available: false, reason: run.run.result.unavailableReason });
+    expect(renderToStaticMarkup(createElement(FairRangeLine, { range }))).toContain("This is a shell company.");
   });
 
   it("renders a plain line with half-sen prices", () => {

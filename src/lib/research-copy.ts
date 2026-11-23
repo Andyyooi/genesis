@@ -12,7 +12,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
 export const CATEGORY_EXPLANATIONS: Record<string, string> = {
   valuation: "What the company earns, owns or distributes relative to its market price. Higher percentiles mean more accounting value per ringgit paid, not an intrinsic-value guarantee.",
   quality: "Profitability and financial-statement strength. Higher percentiles indicate stronger available profitability and accounting evidence than peers.",
-  financial_health: "Leverage and debt-servicing resilience. Lower leverage and stronger coverage rank better; REITs use gearing, banks omit industrial debt health.",
+  financial_health: "Balance-sheet and earnings resilience. Insurers use equity and earnings through weaker years, REITs use gearing, and banks omit the industrial debt checks.",
   growth: "Annualised changes over the configured fixed fiscal-year window. Both annual endpoints must be present and usable; a shorter window is never substituted.",
   momentum: "The preceding year's price performance with the latest trading month skipped. Captures persistent price trends, not a forecast.",
   low_volatility: "How variable daily returns were over 252 sessions. Lower historical volatility ranks better, but does not guarantee lower future losses.",
