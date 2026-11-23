@@ -120,9 +120,9 @@ export function buildStockBrief(args: {
     watch.push("Verify the latest results before relying on the scores.");
   }
 
-  const eps = positive(latest?.eps) && args.profile !== "REIT" ? latest.eps : null;
+  const eps = args.profile !== "REIT" && positive(latest?.pat) && positive(latest.shares) ? latest.pat / latest.shares : null;
   const assetsPerShare = positive(latest?.equity) && positive(latest.shares) ? latest.equity / latest.shares : null;
-  const earningsMultiple = positive(args.close) && eps ? args.close / eps : null;
+  const earningsMultiple = positive(args.close) && positive(eps) ? args.close / eps : null;
   const assetMultiple = positive(args.close) && assetsPerShare ? args.close / assetsPerShare : null;
   const assetGap = positive(assetMultiple) ? Math.round(Math.abs(1 - assetMultiple) * 100) : null;
   const assetComparison = assetGap === null || assetMultiple === null ? null

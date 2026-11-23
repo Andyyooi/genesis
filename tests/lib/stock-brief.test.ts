@@ -29,8 +29,8 @@ describe("stock brief", () => {
       ...base,
       periods: [
         annual("2026-12-31", { pat: 500e6 }, "estimate"),
-        annual("2025-12-31", { pat: 80e6, eps: 0.4, equity: 300e6, shares: 100e6, revenue: 200e6, ocf: 20e6, capex: 30e6, totalDebt: 80e6, cash: 85e6 }),
-        annual("2024-12-31", { pat: 100e6, revenue: 180e6, totalDebt: 40e6 }),
+        annual("2025-12-31", { pat: 40e6, eps: 8, equity: 300e6, shares: 100e6, revenue: 200e6, ocf: 20e6, capex: 30e6, totalDebt: 80e6, cash: 85e6 }),
+        annual("2024-12-31", { pat: 50e6, revenue: 180e6, totalDebt: 40e6 }),
       ],
       dividendQuote: { annualYieldPercent: 3.23, checkedAt: "2026-11-23T15:02:00Z" },
     });
@@ -42,6 +42,15 @@ describe("stock brief", () => {
     expect(brief.dividend).toContain("3.2% (provider estimate, 2026-11-23)");
     expect(brief.watch).toContain("Check what the extra borrowing funded and whether debt keeps rising.");
     expect(renderToStaticMarkup(createElement(StockBrief, { brief }))).toContain("What to watch next");
+  });
+
+  it("does not show a positive earnings multiple for a loss, even with positive reported EPS", () => {
+    const brief = buildStockBrief({
+      ...base,
+      periods: [annual("2025-12-31", { pat: -2e6, eps: 0.02, shares: 100e6 })],
+    });
+    expect(brief.pricing).not.toContain("annual profit per share");
+    expect(brief.risks).toContain("The latest full-year accounts show a loss.");
   });
 
   it("shows sharp falls and reported share count changes without inventing an explanation", () => {
