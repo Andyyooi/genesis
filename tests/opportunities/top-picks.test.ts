@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadScoringConfig } from "@/config/load-scoring";
 import { scoreFromMetrics } from "@/scoring/score";
 import type { FactorEvidence } from "@/scoring/types";
@@ -15,7 +15,10 @@ function candidate(ticker: string, score: number | null, eligible = true): PickC
 }
 describe("published picks and market filtering", () => {
   beforeEach(() => { vi.resetAllMocks(); });
+  afterEach(() => { vi.unstubAllEnvs(); });
   it("reads cap and closing price from published scored metrics and skips unreadable evidence", () => {
+    vi.stubEnv("BURSA_SNAPSHOT_READONLY", "0");
+    vi.stubEnv("VERCEL", "0");
     const row = candidate("A", 75);
     published.scan.mockReturnValue({ summary: { asOf: row.result.asOf }, rows: [{ ticker: "A", name: "A", researchScore: 75, eligible: true }] });
     published.stored.mockReturnValue([{ ticker: "BAD", evidence: "not json" }, { ticker: "A", evidence: JSON.stringify({ storedResult: row.result, scoredMetrics: [{ id: "market_cap", available: true, value: 2e9 }, { id: "last_close", available: true, value: 10 }] }) }]);
@@ -25,6 +28,19 @@ describe("published picks and market filtering", () => {
     expect(loadTopPicks().picks).toEqual([]);
     published.scan.mockReturnValue({ summary: null, rows: [] });
     expect(loadTopPicks().picks).toEqual([]);
+  });
+  it("reuses published inputs in snapshot mode but still applies each request's options", () => {
+    vi.stubEnv("BURSA_SNAPSHOT_READONLY", "1");
+    const row = candidate("A", 75);
+    row.result.categories.forEach(c => { c.score = c.id === "quality" ? 90 : null; });
+    published.scan.mockReturnValue({ summary: { asOf: row.result.asOf }, rows: [{ ticker: "A", name: "A", researchScore: 75, eligible: true }] });
+    published.stored.mockReturnValue([{ ticker: "A", evidence: JSON.stringify({ storedResult: row.result, scoredMetrics: [{ id: "market_cap", available: true, value: 2e9 }, { id: "last_close", available: true, value: 10 }] }) }]);
+
+    expect(loadTopPicks({ lotBudget: 999 }).picks).toEqual([]);
+    expect(loadTopPicks({ lotBudget: 1000, qualityTilt: true }).picks[0]).toMatchObject({ ticker: "A", selectionScore: 90 });
+    expect(loadTopPicks().picks[0].selectionScore).toBe(75);
+    expect(published.scan).toHaveBeenCalledTimes(1);
+    expect(published.stored).toHaveBeenCalledTimes(1);
   });
   it("ranks only eligible finite published scores, with deterministic ties and a limit", () => {
     expect(selectTopPicks([candidate("B", 75), candidate("A", 75), candidate("X", 99, false), candidate("N", null)], 1).map((row) => row.ticker)).toEqual(["A"]);
