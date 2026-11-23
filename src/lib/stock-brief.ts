@@ -86,6 +86,7 @@ export function buildStockBrief(args: {
   const risks: string[] = [];
   const watch: string[] = [];
   const latestResults = latestResultsComparison(annuals, { includeSales: args.profile !== "BANK" });
+  const hasLoss = isFiniteNumber(latest?.pat) && latest.pat < 0;
   const corporate = args.profile === "GENERAL";
   const latestDebt = latest?.totalDebt;
   const priorDebt = previous?.totalDebt;
@@ -95,10 +96,11 @@ export function buildStockBrief(args: {
     risks.push(args.pn17 ? "Bursa has flagged this company for financial distress (PN17)." : "This company has a listing warning.");
     watch.push("Check the latest exchange notice and what the company is doing about it.");
   }
-  if (latestResults?.tone === "weaker") risks.push(latestResults.text);
-  if (latestResults?.tone === "stronger") positives.push(latestResults.text);
+  if (hasLoss || latestResults?.tone === "weaker") {
+    risks.push(latestResults?.text ?? "The latest full-year accounts show a loss.");
+  }
+  if (!hasLoss && latestResults?.tone === "stronger") positives.push(latestResults.text);
   else if (positive(latest?.pat)) positives.push(`The business reported ${compactMyr.format(latest.pat)} in annual profit.`);
-  else if (latestResults?.tone !== "weaker" && isFiniteNumber(latest?.pat) && latest.pat < 0) risks.push("The latest full-year accounts show a loss.");
 
   if (corporate && isFiniteNumber(latest?.ocf) && isFiniteNumber(latest.capex) && latest.capex >= 0) {
     const leftover = latest.ocf - latest.capex;

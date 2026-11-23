@@ -73,6 +73,19 @@ describe("stock brief", () => {
     expect(buildStockBrief({ ...base, periods: [annual("2025-12-31", { dividendPerShare: 0 })] }).dividend).toContain("0.0% at the last close");
   });
 
+  it.each([[-2e6, "a loss again, smaller"], [-1e6, "the same loss"]])(
+    "counts a continuing loss as a worry even if the prior result was %s",
+    (priorProfit, wording) => {
+      const brief = buildStockBrief({
+        ...base,
+        periods: [annual("2025-12-31", { pat: -1e6 }), annual("2024-12-31", { pat: priorProfit })],
+      });
+      expect(brief.positives).toEqual([]);
+      expect(brief.risks).toEqual([expect.stringContaining(wording)]);
+      expect(renderToStaticMarkup(createElement(StockBrief, { brief, ticker: base.ticker }))).toContain("1 worry");
+    },
+  );
+
   it("shows sharp falls and reported share count changes without inventing an explanation", () => {
     const brief = buildStockBrief({
       ...base,
