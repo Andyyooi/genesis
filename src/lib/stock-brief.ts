@@ -25,6 +25,10 @@ function positive(value: unknown): value is number {
   return isFiniteNumber(value) && value > 0;
 }
 
+function nonnegative(value: unknown): value is number {
+  return isFiniteNumber(value) && value >= 0;
+}
+
 function consecutiveYear(newer: string, older: string): boolean {
   const days = (Date.parse(newer) - Date.parse(older)) / 86_400_000;
   return days >= 330 && days <= 400;
@@ -139,11 +143,11 @@ export function buildStockBrief(args: {
 
   const quotedYield = args.dividendQuote?.annualYieldPercent;
   const dividendName = args.profile === "REIT" ? "Distribution" : "Dividend";
-  const reportedYield = annuals[0]?.source !== "yahoo-quote-summary" && positive(latest?.dividendPerShare) && positive(args.close)
+  const reportedYield = annuals[0]?.source !== "yahoo-quote-summary" && nonnegative(latest?.dividendPerShare) && positive(args.close)
     ? latest.dividendPerShare / args.close * 100 : null;
-  const dividend = positive(quotedYield) && args.dividendQuote
+  const dividend = nonnegative(quotedYield) && args.dividendQuote
     ? `${dividendName} yield: ${quotedYield.toFixed(1)}% (provider estimate, ${args.dividendQuote.checkedAt.slice(0, 10)}). Not guaranteed.`
-    : positive(reportedYield) ? `${dividendName} yield: ${reportedYield.toFixed(1)}% at the last close, using the saved annual payment. Not guaranteed.`
+    : nonnegative(reportedYield) ? `${dividendName} yield: ${reportedYield.toFixed(1)}% at the last close, using the saved annual payment. Not guaranteed.`
       : `${dividendName} yield not confirmed in the saved data.`;
 
   const description = Object.hasOwn(descriptions, args.ticker) ? descriptions[args.ticker] : null;

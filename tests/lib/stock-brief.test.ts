@@ -53,6 +53,16 @@ describe("stock brief", () => {
     expect(brief.risks).toContain("The latest full-year accounts show a loss.");
   });
 
+  it("retains a saved zero yield instead of falling back to an older positive payment", () => {
+    const brief = buildStockBrief({
+      ...base,
+      periods: [annual("2025-12-31", { dividendPerShare: 0.08 })],
+      dividendQuote: { annualYieldPercent: 0, checkedAt: "2026-11-23T15:02:00Z" },
+    });
+    expect(brief.dividend).toContain("0.0% (provider estimate, 2026-11-23)");
+    expect(buildStockBrief({ ...base, periods: [annual("2025-12-31", { dividendPerShare: 0 })] }).dividend).toContain("0.0% at the last close");
+  });
+
   it("shows sharp falls and reported share count changes without inventing an explanation", () => {
     const brief = buildStockBrief({
       ...base,
