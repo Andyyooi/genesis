@@ -3,10 +3,12 @@ import { plainFinancialText } from "@/lib/financial-terms";
 import { StatusLabel } from "./status-label";
 import { EstimatedFairValue } from "@/components/research/estimated-fair-value";
 import type { FairValueRunRead } from "@/fair-value/load-run";
+import { BROAD_PEERS_WITHHELD, usesBroadGeneralPeers } from "@/fair-value/comparable-peers";
 
 export function PersistedFairValue({ stored }: { stored: FairValueRunRead | null }) {
   if (!stored?.ok) return <section className="rounded-xl border bg-card p-5"><h2 className="text-lg font-semibold">Fair value</h2><div className="my-2"><StatusLabel level="LOW">Unavailable · value withheld</StatusLabel></div><p>No readable persisted quality assessment. Point fair value is withheld. Use Refresh data to publish an assessed result.</p>{stored ? <p>{stored.message}</p> : null}</section>;
   const { quality, result, calculatedAt } = stored.run;
+  if (usesBroadGeneralPeers(result)) return <p className="text-sm text-muted-foreground">{BROAD_PEERS_WITHHELD}</p>;
   const reasons = [...quality.methods.flatMap((method) => [...method.flags, ...method.notes].map((reason) => reason.text)), ...quality.notes.map((note) => note.text)];
   const usable = quality.status === "CLEAR" && quality.baseUse === "POINT_OK";
   return <section className="flex flex-col gap-3 rounded-lg border p-4">

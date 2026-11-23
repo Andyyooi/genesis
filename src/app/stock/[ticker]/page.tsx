@@ -1,5 +1,4 @@
 import { Disclosure } from "@/components/research/disclosure";
-import { DividendHistory } from "@/components/research/dividend-history";
 import { FinancialTerm } from "@/components/research/financial-term";
 import { plainConcern } from "@/lib/financial-terms";
 import Link from "next/link";
@@ -30,7 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { loadScoreHistory } from "@/db/queries";
+import { loadDividendQuote, loadScoreHistory } from "@/db/queries";
 import type { LineItems } from "@/ingest/types";
 import { formatDateSafe } from "@/lib/display";
 import { formatMetricValue } from "@/lib/format-metric";
@@ -52,9 +51,10 @@ import { publishedBuyScore } from "@/scoring/published-research-scores";
 import { scoreTicker } from "@/scoring/run-ticker";
 import { PriceChart } from "@/components/research/price-chart";
 import { loadSavedPrices } from "@/db/price-history";
-import { StockNewsSection } from "@/components/news-headlines";
 import { GoodCompanyPriceDownCard, LatestResultsLine } from "@/components/research/price-drop-flag";
-import { goodCompanyPriceDown, latestResultsComparison } from "@/lib/price-drop-flag";
+import { goodCompanyPriceDown, latestResultsComparison, recentPriceDrop } from "@/lib/price-drop-flag";
+import { buildStockBrief } from "@/lib/stock-brief";
+import { StockBrief } from "@/components/research/stock-brief";
 
 export const dynamic = "force-dynamic";
 
@@ -223,7 +223,21 @@ export default async function ResearchPage({
   const buy = publishedBuyScore({ researchScore: result.researchScore, eligible: result.eligibility?.eligible === true, needsVerification: result.dataConfidence.needsVerification });
   const verdict = buyScoreVerdict(buy);
   const size = metricById(metrics, "market_cap");
-  const dividendYield = metricById(metrics, "dividend_yield");
+  const brief = buildStockBrief({
+    ticker: instrument.ticker,
+    industry: instrument.industry,
+    sector: instrument.sector,
+    profile: isReit ? "REIT" : isBank ? "BANK" : result.researchProfile,
+    periods,
+    close,
+    fairRange,
+    peers: result.valuationContext.peer.peerQuality,
+    priceDrop: priceDownFlag?.priceDrop ?? recentPriceDrop(bars),
+    dividendQuote: loadDividendQuote(instrument.id),
+    pn17: instrument.pn17,
+    warningFlag: instrument.warningFlag,
+    needsVerification: result.dataConfidence.needsVerification,
+  });
   const riskFlag = instrument.pn17 ? "Financial distress (PN17)"
     : instrument.warningFlag ? "Listing warning"
       : result.dataConfidence.needsVerification ? "Check the evidence"
@@ -265,7 +279,9 @@ export default async function ResearchPage({
         </p>
       </header>
 
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3" aria-label="Stock at a glance">
+      <StockBrief brief={brief} ticker={instrument.ticker} />
+
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3" aria-label="Price and key numbers">
         <section className="market-card min-w-0 p-4" aria-label="Price and Buy score">
           <div className="mb-2 grid grid-cols-2 gap-3">
             <div>
@@ -295,7 +311,6 @@ export default async function ResearchPage({
           <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
             <div><dt className="text-xs text-muted-foreground">Research score</dt><dd className="font-medium">{formatScore100(result.researchScore)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Valuation score</dt><dd className="font-medium">{formatScore100(result.valuationScore)}</dd></div>
-            <div><dt className="text-xs text-muted-foreground">{isReit ? "Distribution yield" : "Dividend yield"}</dt><dd className="font-medium">{dividendYield?.available ? fmtRatio(dividendYield) : "Unavailable"}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Company size</dt><dd className="font-medium">{size?.available && size.value !== null && Number.isFinite(size.value) ? `RM ${size.value.toLocaleString("en-MY", { notation: "compact", maximumFractionDigits: 1 })}` : "Unavailable"}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Risk flags</dt><dd><StatusLabel level={instrument.pn17 ? "PN17" : riskFlag !== "No stored flags" ? "LOW" : "UNKNOWN"}>{riskFlag}</StatusLabel></dd></div>
           </dl>
@@ -414,14 +429,6 @@ export default async function ResearchPage({
           </ul>
         </Disclosure>
       ) : null}
-
-      <Disclosure title="Dividend history" hint="Five years of reported cash payments.">
-        <DividendHistory key={instrument.ticker} ticker={instrument.ticker} />
-      </Disclosure>
-
-      <Disclosure title="Company news" hint="Read recent headlines about this company.">
-        <StockNewsSection ticker={instrument.ticker} />
-      </Disclosure>
 
       <Disclosure title="Financials" hint="Annual accounts and reported line items.">
 

@@ -22,6 +22,7 @@ export function FairRangeLine({ range, compact = false }: { range: FairRangeHead
         {compact || range.price == null ? "" : `, now ${formatSharePrice(range.price)}`}
       </p>
       {range.positionText ? <p>{range.positionText}</p> : null}
+      {range.peerNote ? <p className="text-muted-foreground">{range.peerNote}</p> : null}
       <p className="text-muted-foreground">
         Middle estimate {estimate(range.middle)}. {compact ? "An estimate, not a price target." : `Based on ${range.methodCount} valuation methods; see “Fair value” below for details. An estimate to compare against, not a promise the price will get there.`}
       </p>

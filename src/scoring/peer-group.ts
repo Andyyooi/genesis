@@ -118,6 +118,7 @@ export function selectPeerSet(args: {
   voteMetricIds: string[];
   metricValue: (metricId: string, row: PeerUniverseRow) => number | null;
   industryOnly?: boolean;
+  exactIndustryOnly?: boolean;
 }): { rows: PeerUniverseRow[]; qualityBase: Omit<PeerQuality, "metrics" | "contextLabel"> } {
   const industry = (args.industry ?? "").trim();
   const sector = (args.sector ?? "").trim();
@@ -169,7 +170,7 @@ export function selectPeerSet(args: {
         rows: pool.filter((row) => sameIndustry(row, industry)),
       });
       const prefix = industryFamilyPrefix(industry);
-      if (prefix) {
+      if (prefix && !args.exactIndustryOnly) {
         levels.push({
           groupType: "INDUSTRY_FAMILY",
           path: `industry family “${prefix} - *” (narrower industry had too few usable peers)`,
@@ -177,7 +178,7 @@ export function selectPeerSet(args: {
         });
       }
     }
-    if (sector && !args.industryOnly) {
+    if (sector && !args.industryOnly && !args.exactIndustryOnly) {
       levels.push({
         groupType: "SECTOR",
         path: `same sector “${sector}” (narrower industry/family had too few usable peers)`,

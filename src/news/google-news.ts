@@ -24,6 +24,7 @@ const tag = (item: string, name: string) => {
 const ALIASES: Record<string, string[]> = {
   MAYBANK: ["Maybank"], TENAGA: ["Tenaga Nasional", "TNB"], PMETAL: ["Press Metal"], KLK: ["Kuala Lumpur Kepong", "KLK"],
   PCHEM: ["Petronas Chemicals", "PetChem"], MRDIY: ["Mr D.I.Y.", "Mr DIY"], IOICORP: ["IOI Corp"], CDB: ["CelcomDigi"],
+  PBA: ["PBA Holdings", "PBAPP", "Penang Water Supply Corporation"],
 };
 /** Press acronyms matched case-sensitively so "TNB" does not match ordinary words. */
 const ACRONYMS = new Set(Object.values(ALIASES).flat().filter(t => /^[A-Z]{2,5}$/.test(t)));

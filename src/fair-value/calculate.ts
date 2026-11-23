@@ -3,6 +3,7 @@ import { isInsuranceIndustry, type ResearchProfile } from "@/research/profiles";
 import type { HistoricalValuationStatus } from "@/db/point-in-time";
 import { historicalValuationStatus } from "@/db/point-in-time";
 import { assessObservationFreshness, type FreshnessBand } from "@/scoring/freshness";
+import { isMixedIndustry, NO_COMPARABLE_PEERS } from "@/fair-value/comparable-peers";
 import { isExcludedPeer, MIN_USABLE_PEERS, selectPeerSet, type PeerUniverseRow } from "@/scoring/peer-group";
 import {
   buildHistoricalPoints,
@@ -372,20 +373,24 @@ export function calculateGeneralFairValue(args: RelativeFairValueInput): FairVal
         ? FILING_ALIGNED_LIMITATION
         : PERIOD_END_LIMITATION;
 
+  const industry = args.industry?.trim() ?? "";
+  const mixedIndustry = isMixedIndustry(industry);
   const selected = selectPeerSet({
     ticker: args.ticker,
     researchProfile: "GENERAL",
-    industry: args.industry ?? null,
+    industry,
     sector: args.sector ?? null,
-    peers: args.peers,
+    peers: mixedIndustry ? [] : args.peers,
+    exactIndustryOnly: true,
     voteMetricIds: [...GENERAL_VOTE_METRICS],
-    metricValue: (id, row) => metricFromInputs(id, row.lastClose, row).value,
+    metricValue: (id, row) => {
+      const value = metricFromInputs(id, row.lastClose, row).value;
+      return positiveFinite(value) ? value : null;
+    },
   });
-  const peerBlocked =
-    selected.qualityBase.groupType === "NONE" || selected.rows.length < MIN_USABLE_PEERS
-      ? selected.qualityBase.unavailableReason ??
-        `Peer sample is too small (need ${MIN_USABLE_PEERS} usable names).`
-      : null;
+  const peerBlocked = selected.qualityBase.groupType !== "NONE" ? null
+    : mixedIndustry ? `“${industry}” mixes different businesses and is not used for fair value.`
+      : NO_COMPARABLE_PEERS;
   const peerGroup = selected.qualityBase.selectionPath;
 
   const earningsReason = earningsInputReason(fundamentals.eps);
@@ -543,7 +548,7 @@ export function calculateGeneralFairValue(args: RelativeFairValueInput): FairVal
     peerGroupType: selected.qualityBase.groupType,
     peerSelectionPath: selected.qualityBase.selectionPath,
     peerEligibleCount: selected.qualityBase.eligibleCount,
-    peerUnavailableReason: selected.qualityBase.unavailableReason,
+    peerUnavailableReason: peerBlocked,
     historicalPointCount: history.points.length,
     lookAheadSafe: history.lookAheadSafe,
     historicalValuationStatus: histStatus,

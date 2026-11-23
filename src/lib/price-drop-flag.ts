@@ -123,13 +123,19 @@ export function latestResultsComparison(periods: Period[], opts: { includeSales?
     profit = tone === "similar" ? "profit about the same as the year before" : `profit ${change < 0 ? "down" : "up"} ${pct(change)} on the year before`;
   } else if (pat > 0) {
     tone = "stronger";
-    profit = "back to a profit after a loss the year before";
+    profit = prevPat === 0 ? "made a profit after breaking even the year before" : "back to a profit after a loss the year before";
+  } else if (pat === 0) {
+    tone = prevPat > 0 ? "weaker" : prevPat < 0 ? "stronger" : "similar";
+    profit = prevPat === 0 ? "broke even in both years" : `broke even after a ${prevPat > 0 ? "profit" : "loss"} the year before`;
   } else if (prevPat > 0) {
     tone = "weaker";
     profit = "a loss, after a profit the year before";
+  } else if (prevPat === 0) {
+    tone = "weaker";
+    profit = "a loss, after breaking even the year before";
   } else {
-    tone = pat < prevPat ? "weaker" : "stronger";
-    profit = `a loss again, ${pat < prevPat ? "bigger" : "smaller"} than the year before`;
+    tone = pat < prevPat ? "weaker" : pat > prevPat ? "stronger" : "similar";
+    profit = tone === "similar" ? "the same loss in both years" : `a loss again, ${tone === "weaker" ? "bigger" : "smaller"} than the year before`;
   }
 
   const revenue = lineItem(latest, "revenue");

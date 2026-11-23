@@ -148,6 +148,36 @@ function assertFiniteNumbers(value: unknown): void {
 }
 
 describe("GENERAL fair value", () => {
+  it("never fills a thin water peer group with other utilities or a broader sector", () => {
+    const result = value({
+      industry: "Utilities - Regulated Water",
+      sector: "Utilities",
+      periods: [annual({ periodEnd: "2025-12-31", eps: 2 })],
+      peers: [
+        ...peers(5, { industry: "Utilities - Regulated Electric" }),
+        peer({ ticker: "WATER", industry: "Utilities - Regulated Water" }),
+        ...peers(5, { industry: "Independent Power" }).map(row => ({
+          ...row, ticker: `SECTOR-${row.ticker}`, sector: "Utilities",
+        })),
+      ],
+    });
+    expect(result.assumptions.peerGroupType).toBe("NONE");
+    expect(result.assumptions.peerUnavailableReason).toContain("Too few similar companies");
+    expect(result.methods.filter(row => row.kind === "peer").every(row => !row.available)).toBe(true);
+    expect(result.fairValueBase).toBeNull();
+  });
+
+  it("skips a known mixed classification even when the exact label matches", () => {
+    const result = value({
+      industry: "Specialty Chemicals",
+      periods: [annual({ periodEnd: "2025-12-31", eps: 2 })],
+      peers: peers(6, { industry: "Specialty Chemicals" }),
+    });
+    expect(result.assumptions.peerGroupType).toBe("NONE");
+    expect(result.assumptions.peerUnavailableReason).toContain("mixes different businesses");
+    expect(method(result, "earnings_peer_pe").available).toBe(false);
+  });
+
   it("prices earnings at the peer median P/E", () => {
     const result = value({
       periods: [annual({ periodEnd: "2025-12-31", eps: 2 })],

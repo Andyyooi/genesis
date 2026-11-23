@@ -64,6 +64,17 @@ describe("latestResultsComparison", () => {
     expect(latestResultsComparison([annual("2026-06-30", -1e6), annual("2025-06-30", 3e6)])?.tone).toBe("weaker");
   });
 
+  it.each([
+    { current: 0, previous: 0, tone: "similar", words: "broke even in both years" },
+    { current: 0, previous: 1, tone: "weaker", words: "broke even after a profit" },
+    { current: 0, previous: -1, tone: "stronger", words: "broke even after a loss" },
+    { current: -1, previous: 0, tone: "weaker", words: "a loss, after breaking even" },
+    { current: -1, previous: -1, tone: "similar", words: "the same loss in both years" },
+  ])("describes annual profit of $current after $previous without inventing an improvement", ({ current, previous, tone, words }) => {
+    const comparison = latestResultsComparison([annual("2026-06-30", current), annual("2025-06-30", previous)]);
+    expect(comparison).toMatchObject({ tone, text: expect.stringContaining(words) });
+  });
+
   it("skips gaps that are not one year apart or missing profit", () => {
     expect(latestResultsComparison([annual("2026-06-30", 5e6), annual("2024-06-30", 4e6)])).toBeNull();
     expect(latestResultsComparison([annual("2026-06-30", null), annual("2025-06-30", 4e6)])).toBeNull();
