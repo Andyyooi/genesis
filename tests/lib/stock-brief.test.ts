@@ -36,6 +36,7 @@ describe("stock brief", () => {
       dividendQuote: { annualYieldPercent: 3.23, checkedAt: "2026-11-23T15:02:00Z" },
     });
     expect(brief.periodEnd).toBe("2025-12-31");
+    expect(brief.verdict).toBe("Profitable, but debt rose");
     expect(brief.business).toBe("Listed industry: Water.");
     expect(brief.positives.join(" ")).toMatch(/annual profit.*exceeded debt/);
     expect(brief.risks.join(" ")).toMatch(/profit down 20%.*used RM.*Debt rose 100%/);
@@ -43,6 +44,10 @@ describe("stock brief", () => {
     expect(brief.dividend).toContain("3.2% (provider estimate, 2026-11-23)");
     expect(brief.watch).toContain("Check what the extra borrowing funded and whether debt keeps rising.");
     const markup = renderToStaticMarkup(createElement(StockBrief, { brief, ticker: base.ticker }));
+    expect(markup).toMatch(/^<details class="[^"]*"><summary/);
+    expect(markup).toContain("View summary");
+    expect(markup).toContain("2 good");
+    expect(markup).toContain("3 worries");
     expect(markup).toContain("What to watch next");
     expect(markup).toContain("Similar companies");
     expect(markup).toContain("Latest headlines");
@@ -83,6 +88,8 @@ describe("stock brief", () => {
       "Reported share count rose 20% in 2 years.",
     ]);
     expect(brief.priceDrop).toMatch(/fell 23%.*2026-09-20.*2026-11-23.*don’t tell us why/);
+    expect(brief.verdict).toBe("Profitable, but the price fell sharply");
+    expect(renderToStaticMarkup(createElement(StockBrief, { brief, ticker: base.ticker }))).toContain("3 worries");
     expect(brief.watch[0]).toContain("what drove the price drop");
     expect(brief.dividend).toContain("not confirmed");
   });

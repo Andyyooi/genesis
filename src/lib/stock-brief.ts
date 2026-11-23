@@ -87,6 +87,9 @@ export function buildStockBrief(args: {
   const watch: string[] = [];
   const latestResults = latestResultsComparison(annuals, { includeSales: args.profile !== "BANK" });
   const corporate = args.profile === "GENERAL";
+  const latestDebt = latest?.totalDebt;
+  const priorDebt = previous?.totalDebt;
+  const debtRose = corporate && isFiniteNumber(latestDebt) && positive(priorDebt) && latestDebt >= priorDebt * 1.2;
 
   if (args.pn17 || args.warningFlag) {
     risks.push(args.pn17 ? "Bursa has flagged this company for financial distress (PN17)." : "This company has a listing warning.");
@@ -106,8 +109,8 @@ export function buildStockBrief(args: {
       positives.push(`The business had ${compactMyr.format(leftover)} left after investment spending.`);
     }
   }
-  if (corporate && isFiniteNumber(latest?.totalDebt) && positive(previous?.totalDebt) && latest.totalDebt >= previous.totalDebt * 1.2) {
-    risks.push(`Debt rose ${Math.round(100 * (latest.totalDebt / previous.totalDebt - 1))}% to ${compactMyr.format(latest.totalDebt)} in a year.`);
+  if (debtRose) {
+    risks.push(`Debt rose ${Math.round(100 * (latestDebt / priorDebt - 1))}% to ${compactMyr.format(latestDebt)} in a year.`);
     watch.push("Check what the extra borrowing funded and whether debt keeps rising.");
   }
   if (corporate && isFiniteNumber(latest?.totalDebt) && latest.totalDebt >= 0 && positive(latest.cash) && latest.cash > latest.totalDebt) {
@@ -168,7 +171,17 @@ export function buildStockBrief(args: {
       : `${dividendName} yield not confirmed in the saved data.`;
 
   const description = Object.hasOwn(descriptions, args.ticker) ? descriptions[args.ticker] : null;
+  const verdict = args.pn17 ? "Financial distress warning"
+    : args.warningFlag ? "Listing warning"
+      : args.needsVerification ? "Some key figures need checking"
+        : positive(latest?.pat) ? debtRose ? "Profitable, but debt rose"
+          : sharpDrop ? "Profitable, but the price fell sharply"
+            : latestResults?.tone === "weaker" ? "Profitable, but results weakened"
+              : "Reported a full-year profit"
+          : isFiniteNumber(latest?.pat) ? latest.pat < 0 ? "Reported a full-year loss" : "Broke even in the latest accounts"
+            : "Annual profit not confirmed";
   return {
+    verdict,
     business: description?.text ?? (args.industry ? `Listed industry: ${args.industry}.` : args.sector ? `Listed sector: ${args.sector}.` : "Business classification unavailable."),
     businessSource: description?.source ?? null,
     periodEnd: annuals[0]?.periodEnd ?? null,
