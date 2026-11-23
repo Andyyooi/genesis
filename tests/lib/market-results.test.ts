@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MarketResults } from "@/components/research/market-results";
+import { toMarketResultRow, visibleFairRanges } from "@/market/result-props";
+
+const { useHeldTickers } = vi.hoisted(() => ({ useHeldTickers: vi.fn(() => new Set<string>()) }));
+vi.mock("@/components/holdings-store", () => ({ useHeldTickers }));
 
 const rows = Array.from({ length: 60 }, (_, i) => ({
   ticker: `COMPANY${i + 1}`,
@@ -23,7 +27,7 @@ function render(
 ) {
   return renderToStaticMarkup(
     createElement(MarketResults, {
-      rows: selectedRows,
+      rows: selectedRows.map(row => toMarketResultRow(row, null)),
       total: 60,
       query: "bank & trust",
       eligibility: "eligible",
@@ -56,6 +60,28 @@ describe("market explorer results", () => {
     const last = render("3");
     expect(last).toContain('href="/stock/COMPANY60"');
     expect(last).not.toContain('rel="next"');
+  });
+
+  it("prioritizes a holding from a later page after projecting the market data", () => {
+    useHeldTickers.mockReturnValueOnce(new Set(["COMPANY60"]));
+    const html = render();
+    expect(html.indexOf('href="/stock/COMPANY60"')).toBeGreaterThan(-1);
+    expect(html.indexOf('href="/stock/COMPANY60"')).toBeLessThan(html.indexOf('href="/stock/COMPANY1"'));
+    expect(html).not.toContain('href="/stock/COMPANY25"');
+    expect(html).toContain("My holding");
+  });
+
+  it("only sends display fields and available ranges for matching rows", () => {
+    const row = toMarketResultRow({ ...rows[0], sector: "Technology", marketCap: 1e9 }, 75);
+    expect(row).toMatchObject({ ticker: "COMPANY1", name: "Company 1", buyScore: 75, researchScore: 70 });
+    expect(row).not.toHaveProperty("sector");
+    expect(row).not.toHaveProperty("marketCap");
+    const range = { available: true, position: "below", low: 1, high: 2 } as const;
+    expect(visibleFairRanges([row, toMarketResultRow(rows[1], null)], {
+      COMPANY1: range,
+      COMPANY2: { available: false },
+      COMPANY3: range,
+    })).toEqual({ COMPANY1: range });
   });
 
   it("bounds invalid and out-of-range pages", () => {

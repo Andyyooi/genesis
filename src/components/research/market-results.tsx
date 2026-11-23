@@ -8,6 +8,7 @@ import { dataConfidenceLabel, formatScore100 } from "@/lib/research-copy";
 import { FairRangePill } from "./fair-range-pill";
 import type { ListFairRange } from "@/lib/fair-range-summary";
 import { STRONG_RESEARCH_SCORE } from "@/market/filters";
+import type { MarketResultRow } from "@/market/result-props";
 
 const PAGE_SIZE = 25;
 
@@ -20,7 +21,7 @@ export function MarketResults({
   fairRanges,
   belowFairRange,
 }: {
-  rows: Record<string, unknown>[];
+  rows: MarketResultRow[];
   total: number;
   query: string;
   eligibility: string;
@@ -29,7 +30,7 @@ export function MarketResults({
   belowFairRange: boolean;
 }) {
   const held = useHeldTickers();
-  rows = [...rows].sort((a, b) => Number(held.has(String(b.ticker))) - Number(held.has(String(a.ticker))));
+  rows = [...rows].sort((a, b) => Number(held.has(b.ticker)) - Number(held.has(a.ticker)));
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const parsed = /^\d+$/.test(requestedPage) ? Number(requestedPage) : 1;
   const page = Math.min(
@@ -145,7 +146,7 @@ export function MarketResults({
           </thead>
           <tbody role="rowgroup">
             {visible.map((row) => {
-              const ticker = String(row.ticker);
+              const { ticker } = row;
               const ratio =
                 typeof row.coreCoverageRatio === "number"
                   ? row.coreCoverageRatio

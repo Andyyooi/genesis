@@ -2,6 +2,7 @@ import { getSqlite } from "@/db/client";
 import { loadLatestMarketScan } from "@/market/scan";
 import type { ScoreResult } from "@/scoring/types";
 import { loadScoringConfig, type ScoringConfig } from "@/config/load-scoring";
+import { isSnapshotReadOnly } from "@/lib/data-mode";
 import type { MetricValue } from "@/metrics/types";
 
 export type PickCandidate = { ticker: string; name: string; lastTrade: string | null; marketCap: number | null; lastClose: number | null; result: ScoreResult };
@@ -57,10 +58,9 @@ export function exclusionCounts(rows: Record<string, unknown>[]) {
   return [...counts].sort((a, b) => b[1] - a[1]);
 }
 
-export function loadTopPicks(options: TopPicksOptions = {}) {
-  const settings = loadScoringConfig().top_picks;
+function loadTopPicksInputs() {
   const { summary, rows } = loadLatestMarketScan();
-  if (!summary) return { summary: null, picks: [], excluded: 0, exclusions: [] as [string, number][], settings };
+  if (!summary) return { summary: null, candidates: [], excluded: 0, exclusions: [] as [string, number][] };
   const published = new Map(rows.map((row) => [String(row.ticker), row]));
   const stored = getSqlite().prepare("SELECT i.ticker, s.evidence_json AS evidence FROM score_runs s JOIN instruments i ON i.id = s.instrument_id WHERE s.as_of = ? ORDER BY s.id DESC").all(summary.asOf) as { ticker: string; evidence: string }[];
   const candidates = new Map<string, PickCandidate>();
@@ -80,5 +80,15 @@ export function loadTopPicks(options: TopPicksOptions = {}) {
       candidates.set(row.ticker, { ticker: row.ticker, name: String(market.name), lastTrade: typeof market.lastTrade === "string" ? market.lastTrade : null, marketCap: metric("market_cap"), lastClose: metric("last_close"), result });
     } catch { /* Unreadable evidence is not a recommendation. */ }
   }
-  return { summary, picks: selectTopPicks([...candidates.values()], 15, options, settings), excluded: rows.filter((row) => row.eligible !== true).length, exclusions: exclusionCounts(rows), settings };
+  return { summary, candidates: [...candidates.values()], excluded: rows.filter((row) => row.eligible !== true).length, exclusions: exclusionCounts(rows) };
+}
+
+let snapshotTopPicksInputs: ReturnType<typeof loadTopPicksInputs> | undefined;
+
+export function loadTopPicks(options: TopPicksOptions = {}) {
+  const settings = loadScoringConfig().top_picks;
+  const { summary, candidates, excluded, exclusions } = isSnapshotReadOnly()
+    ? (snapshotTopPicksInputs ??= loadTopPicksInputs())
+    : loadTopPicksInputs();
+  return { summary, picks: selectTopPicks(candidates, 15, options, settings), excluded, exclusions, settings };
 }

@@ -2,6 +2,7 @@ import { getSqlite } from "@/db/client";
 import { loadLatestFairValueRunsForInstruments } from "@/fair-value/load-run";
 import { fairRangeHeadline } from "@/lib/fair-range";
 import type { ListFairRange } from "@/lib/fair-range-summary";
+import { isSnapshotReadOnly } from "@/lib/data-mode";
 
 export function loadListFairRanges(tickers: string[]): Record<string, ListFairRange> {
   if (!tickers.length) return {};
@@ -26,4 +27,15 @@ export function loadListFairRanges(tickers: string[]): Record<string, ListFairRa
       ? { available: true, position: range.position, positionText: range.positionText, low: range.low, high: range.high }
       : { available: false }];
   }));
+}
+
+let marketScanSnapshotRanges: { key: string; ranges: Record<string, ListFairRange> } | undefined;
+
+export function loadMarketScanFairRanges(tickers: string[]): Record<string, ListFairRange> {
+  if (!isSnapshotReadOnly()) return loadListFairRanges(tickers);
+  const key = JSON.stringify(tickers);
+  if (marketScanSnapshotRanges?.key !== key) {
+    marketScanSnapshotRanges = { key, ranges: loadListFairRanges(tickers) };
+  }
+  return marketScanSnapshotRanges.ranges;
 }
