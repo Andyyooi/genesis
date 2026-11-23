@@ -78,7 +78,7 @@ export function buildStockBrief(args: {
   if (latestResults?.tone === "weaker") risks.push(latestResults.text);
   if (latestResults?.tone === "stronger") positives.push(latestResults.text);
   else if (positive(latest?.pat)) positives.push(`The business reported ${compactMyr.format(latest.pat)} in annual profit.`);
-  else if (!latestResults && isFiniteNumber(latest?.pat) && latest.pat < 0) risks.push("The latest full-year accounts show a loss.");
+  else if (latestResults?.tone !== "weaker" && isFiniteNumber(latest?.pat) && latest.pat < 0) risks.push("The latest full-year accounts show a loss.");
 
   if (corporate && isFiniteNumber(latest?.ocf) && isFiniteNumber(latest.capex) && latest.capex >= 0) {
     const leftover = latest.ocf - latest.capex;
