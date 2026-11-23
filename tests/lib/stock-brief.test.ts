@@ -93,6 +93,6 @@ describe("stock brief", () => {
     });
     expect(brief.risks).toEqual([]);
     expect(brief.positives.join(" ")).not.toContain("sales");
-    expect(brief.pricing).not.toContain("×");
+    expect(brief.pricing).toContain("12.0× reported annual profit per share");
   });
 });
