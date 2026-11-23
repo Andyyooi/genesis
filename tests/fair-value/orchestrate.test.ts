@@ -284,6 +284,23 @@ describe("Fair Value orchestration", () => {
     expect(shell.unavailableReason).toContain("shell company");
   });
 
+  it("widens only the insurer multiple that lacks enough usable peers in the exact industry", () => {
+    const industry = "Insurance - Life";
+    const exact = listedPeers(5, "OTHER_FINANCIAL", industry, "Financial Services", "COMMON_STOCK", "LIFE");
+    exact[4] = { ...exact[4], eps: null };
+    const broader = listedPeers(1, "OTHER_FINANCIAL", "Insurance - Diversified", "Financial Services", "COMMON_STOCK", "DIV");
+    broader[0] = { ...broader[0], lastClose: 30 };
+    const result = calculateFairValue({
+      ...input("GENERAL"), researchProfile: "OTHER_FINANCIAL", industry, peers: [...exact, ...broader],
+    });
+    expect(result).toMatchObject({ fairValueLow: 20, fairValueHigh: 20 });
+    expect(result.methods).toMatchObject([
+      { id: "earnings_peer_pe", peerCount: 5, peerGroup: expect.stringContaining("industry family") },
+      { id: "book_peer_pb", peerCount: 5, peerGroup: expect.stringContaining("exact industry") },
+    ]);
+    expect(result.assumptions.peerSelectionPath).toBeNull();
+  });
+
   it("can value non-bank lenders against other non-bank lenders", () => {
     const industry = "Credit Services";
     const peers = listedPeers(5, "OTHER_FINANCIAL", industry, "Financial Services", "COMMON_STOCK", "LENDER");

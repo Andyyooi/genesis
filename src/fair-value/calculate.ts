@@ -624,23 +624,35 @@ function calculateFinancialRelatives(
   const freshness = assessObservationFreshness({
     asOf: args.asOf, periodEnd: fundamentals.periodEnd, availableAt: fundamentals.availableAt,
   });
-  const selected = unclassified ? null : selectPeerSet({
-    ticker: args.ticker,
-    researchProfile: "OTHER_FINANCIAL",
-    industry: insuranceIndustry ?? args.industry,
-    peers: comparableFinancialPeers(args, insuranceIndustry !== null),
-    industryOnly: true,
-    voteMetricIds: FINANCIAL_MULTIPLES.map(({ metric }) => metric),
-    metricValue: (id, row) => {
-      const value = metricFromInputs(id, row.lastClose, row).value;
-      return positiveFinite(value) ? value : null;
-    },
-  });
+  const peers = unclassified ? null : comparableFinancialPeers(args, insuranceIndustry !== null);
+  const peerSelections = peers === null ? [] : FINANCIAL_MULTIPLES.map(({ metric, ratio }) => ({
+    metric,
+    ratio,
+    ...selectPeerSet({
+      ticker: args.ticker,
+      researchProfile: "OTHER_FINANCIAL",
+      industry: insuranceIndustry ?? args.industry,
+      peers,
+      industryOnly: true,
+      voteMetricIds: [metric],
+      metricValue: (id, row) => {
+        const value = metricFromInputs(id, row.lastClose, row).value;
+        return positiveFinite(value) ? value : null;
+      },
+    }),
+  }));
+  const firstPeerGroup = peerSelections[0]?.qualityBase;
+  const sharedPeerGroup = peerSelections.every(({ qualityBase }) => qualityBase.selectionPath === firstPeerGroup?.selectionPath)
+    ? firstPeerGroup : undefined;
+  const peerUnavailableReasons = peerSelections.flatMap(({ ratio, qualityBase }) =>
+    qualityBase.unavailableReason ? [`${ratio}: ${qualityBase.unavailableReason}`] : [],
+  );
   const history = insuranceIndustry || shell ? null : buildHistoricalPoints(
     args.periods.filter((row) => row.availableAt && row.availableAt <= args.asOf),
     args.bars.filter((bar) => bar.barDate <= args.asOf.slice(0, 10)),
   );
   const methods = FINANCIAL_MULTIPLES.flatMap((spec) => {
+    const selected = peerSelections.find(({ metric }) => metric === spec.metric);
     const currentInput = spec.input === "eps" ? fundamentals.eps : fundamentals.bookValuePerShare;
     const inputReason = spec.input === "eps" ? earningsInputReason(currentInput) : fundamentals.bookUnavailableReason;
     const valuations: FairValueMethodEvidence[] = [];
@@ -703,10 +715,10 @@ function calculateFinancialRelatives(
             : "There aren't enough comparable companies or filing-dated accounts to support two estimates.",
     assumptions: {
       modelVersion, researchProfile: args.researchProfile, modelDefaultsUsed: false, yamlScoreBandsUsed: false,
-      peerGroupType: selected?.qualityBase.groupType ?? null,
-      peerSelectionPath: selected?.qualityBase.selectionPath ?? null,
-      peerEligibleCount: selected?.qualityBase.eligibleCount ?? null,
-      peerUnavailableReason: selected?.qualityBase.unavailableReason ?? null,
+      peerGroupType: sharedPeerGroup?.groupType ?? null,
+      peerSelectionPath: sharedPeerGroup?.selectionPath ?? null,
+      peerEligibleCount: sharedPeerGroup?.eligibleCount ?? null,
+      peerUnavailableReason: peerUnavailableReasons.join(" ") || null,
       historicalPointCount: history?.points.length ?? 0,
       lookAheadSafe: history?.lookAheadSafe ?? false,
       historicalValuationStatus: historicalValuationStatus({
