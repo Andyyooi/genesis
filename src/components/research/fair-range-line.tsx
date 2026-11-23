@@ -23,7 +23,7 @@ export function FairRangeLine({ range, compact = false }: { range: FairRangeHead
       </p>
       {range.position ? <p>{FAIR_RANGE_POSITION_TEXT[range.position]}</p> : null}
       <p className="text-muted-foreground">
-        Middle estimate {estimate(range.middle)}. {compact ? "An estimate, not a price target." : `Worked out from what similar companies, and this company in past years, trade at against profits, book value and dividends (${range.methodCount} methods). An estimate to compare against, not a promise the price will get there.`}
+        Middle estimate {estimate(range.middle)}. {compact ? "An estimate, not a price target." : `Based on ${range.methodCount} valuation methods; see “Fair value” below for details. An estimate to compare against, not a promise the price will get there.`}
       </p>
       {range.wideSpread ? (
         <p className="text-amber-800 dark:text-amber-300">

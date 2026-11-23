@@ -71,6 +71,16 @@ describe("fairRangeHeadline", () => {
     expect(fairRangeHeadline(null, 1).available).toBe(false);
   });
 
+  it("shows the model's plain reason when it cannot produce a range", () => {
+    const run = stored([], "NO_POINT");
+    if (!run.ok) throw new Error("Expected a readable run");
+    run.run.result.researchProfile = "UNKNOWN";
+    run.run.result.unavailableReason = "This is a shell company. There is no operating business to compare.";
+    const range = fairRangeHeadline(run, 1);
+    expect(range).toEqual({ available: false, reason: run.run.result.unavailableReason });
+    expect(renderToStaticMarkup(createElement(FairRangeLine, { range }))).toContain("This is a shell company.");
+  });
+
   it("renders a plain line with half-sen prices", () => {
     const html = renderToStaticMarkup(createElement(FairRangeLine, { range: fairRangeHeadline(stored([1.6, 1.8, 2.0]), 1.755) }));
     expect(html).toContain("Fair range RM");

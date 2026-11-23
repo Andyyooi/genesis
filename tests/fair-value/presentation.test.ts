@@ -411,7 +411,7 @@ describe("Fair Value page loader", () => {
       insertBar.run(id, 10);
     }
     const insurer = Number(
-      insertInstrument.run("INSURE", "Insure", "Financial Services", "Asset Management", "COMMON_STOCK", "OTHER_FINANCIAL")
+      insertInstrument.run("INSURE", "Insure", "Financial Services", "Insurance - Life", "COMMON_STOCK", "OTHER_FINANCIAL")
         .lastInsertRowid,
     );
     insertPeriod.run(insurer, JSON.stringify({ eps: 2, equity: 100, shares: 10 }));
@@ -427,9 +427,10 @@ describe("Fair Value page loader", () => {
       expect(general?.researchProfile).toBe("GENERAL");
       expect(general?.fairValueBase).toBe(20);
       expect(general?.methods.some((item) => item.available)).toBe(true);
-      expect(other?.modelVersion).toBe("unsupported");
+      expect(other?.modelVersion).toBe("insurer-relative-v1");
       expect(other?.confidence).toBe("UNAVAILABLE");
-      expect(other?.methods).toEqual([]);
+      expect(other?.methods).toHaveLength(2);
+      expect(other?.methods.every((item) => !item.available)).toBe(true);
       expect(other?.fairValueBase).toBeNull();
       const check = new Database(dbPath, { readonly: true, fileMustExist: true });
       const runs = (check.prepare("select count(*) as n from fair_value_runs").get() as { n: number }).n;

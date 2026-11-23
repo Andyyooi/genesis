@@ -55,6 +55,13 @@ describe("annual inputs and reporting lag", () => {
 });
 
 describe("evidence fundamentals", () => {
+  it("measures an insurer's equity cushion and retains losses in its three-year earnings floor", () => {
+    const annuals = [annual(), annual("2024-12-31", { pat: -20 }), annual("2023-12-31")];
+    const rows = evidenceMetrics(annuals, [], config, "2026-09-25");
+    expect(metric(rows, "equity_to_assets").value).toBe(0.5);
+    expect(metric(rows, "three_year_min_roa").value).toBe(-0.1);
+    expect(metric(evidenceMetrics(annuals.slice(0, 2), [], config, "2026-09-25"), "three_year_min_roa").value).toBeNull();
+  });
   it("uses signed PAT / market cap, never conflicting positive EPS, and preserves EBIT losses", () => {
     const prices = [{ barDate: "2026-09-25", close: 10, high: 10, low: 10 }];
     const rows = evidenceMetrics([annual("2025-12-31", { pat: -10, eps: 1, ebit: -20 })], prices, config, "2026-09-25");

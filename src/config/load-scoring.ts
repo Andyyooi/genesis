@@ -88,6 +88,10 @@ const scoringSchema = z
     eligibility: z.object({ min_median_traded_value: z.number().nonnegative(), min_price_days: z.number().int().positive(), min_coverage: z.number().min(0).max(1) }),
     unavailable_until_data: z.array(z.enum(CATEGORY_KEYS)),
     min_category_coverage: z.number().min(0).max(1),
+    insurer_health_factors: z.array(factorSchema).length(2).refine(
+      (factors) => factors.reduce((sum, factor) => sum + factor.weight, 0) === 100,
+      "Insurer health factor weights must sum to 100",
+    ),
     alerts: z
       .object({
         score_delta: z.number().positive(),

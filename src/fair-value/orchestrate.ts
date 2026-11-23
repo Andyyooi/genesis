@@ -21,7 +21,9 @@ export function calculateFairValue(args: FairValueInput): FairValueResult {
     case "REIT":
       return reitFairValue.calculateReitFairValue(args);
     case "OTHER_FINANCIAL":
+      return generalFairValue.calculateNonBankFinancialFairValue(args);
     case "UNKNOWN":
+      return generalFairValue.calculateUnclassifiedFairValue(args);
     default:
       return unsupportedFairValue(args);
   }

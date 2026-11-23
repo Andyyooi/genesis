@@ -38,7 +38,12 @@ export function fairRangeHeadline(
 ): FairRangeHeadline {
   if (!stored?.ok) return { available: false, reason: "No fair value has been worked out for this stock yet." };
   const { result, quality } = stored.run;
-  if (quality.baseUse === "POINT_WITHHELD" || quality.baseUse === "NO_POINT") {
+  if (quality.baseUse === "NO_POINT") {
+    const reason = result.researchProfile === "OTHER_FINANCIAL" || result.researchProfile === "UNKNOWN"
+      ? result.unavailableReason : null;
+    return { available: false, reason: reason ?? "The available figures did not support a valuation." };
+  }
+  if (quality.baseUse === "POINT_WITHHELD") {
     return { available: false, reason: "The valuation checks did not pass, so no fair range is shown." };
   }
   const flagged = new Set(quality.methods.filter((method) => method.state === "FLAGGED").map((method) => method.id));
@@ -48,7 +53,7 @@ export function fairRangeHeadline(
     .map((method) => method.methodValue as number)
     .sort((a, b) => a - b);
   if (values.length < 2) {
-    return { available: false, reason: "Only one valuation method worked for this stock, so there is no range." };
+    return { available: false, reason: result.unavailableReason ?? "Fewer than two valuation methods passed the checks, so there is no range." };
   }
   const low = values.length === 2 ? values[0] : quantile(values, 0.25);
   const high = values.length === 2 ? values[1] : quantile(values, 0.75);

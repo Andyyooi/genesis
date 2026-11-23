@@ -138,6 +138,11 @@ export function evidenceMetrics(periods: StatementSnapshot[], bars: PriceBarSnap
   ) : undefined;
   const previous = endpoint(1);
   const start = endpoint(config.growth_years);
+  const healthYears = [current, previous, endpoint(2)];
+  const annualRoa = healthYears.flatMap((row) => {
+    const value = divide(row?.pat, row?.totalAssets);
+    return finite(value) ? [value] : [];
+  });
   const close = dailyPriceBars(bars, asOf).at(-1)?.close;
   const cap = finite(close) && close > 0 && finite(current?.shares) && current.shares > 0 ? close * current.shares : null;
   const ev = cap !== null && finite(current?.totalDebt) && finite(current?.cash) ? cap + current.totalDebt - current.cash : null;
@@ -181,6 +186,10 @@ export function evidenceMetrics(periods: StatementSnapshot[], bars: PriceBarSnap
     ratio("gross_profitability", current?.grossProfit, current?.totalAssets, "annual gross profit / year-end total assets"),
     ratio("roe", current?.pat, current?.equity, "annual PAT / positive book equity"),
     ratio("debt_to_equity", current?.totalDebt, current?.equity, "total debt / positive book equity"),
+    ratio("equity_to_assets", current?.equity, current?.totalAssets, "book equity / positive total assets"),
+    metric("three_year_min_roa", annualRoa.length === 3 ? Math.min(...annualRoa) : null, "lowest annual PAT / positive total assets over three consecutive fiscal years", period,
+      healthYears.flatMap((row) => row ? [{ name: "PAT", value: row.pat, period: row.periodEnd }, { name: "totalAssets", value: row.totalAssets, period: row.periodEnd }] : []),
+      "Three consecutive usable annuals with profit and positive total assets are required"),
     ratio("nav_to_price", nav, close, "reported NAV / price; book equity per share if reported NAV is absent"),
     metric("piotroski", f.scaled, `Piotroski: ${f.points} passed / ${f.computable} computable × 9; minimum 6 of 9; year-end assets convention`, period, f.components, "Fewer than 6 of 9 Piotroski components computable from consecutive usable annuals"),
     metric("piotroski_computable", f.computable, "Number of available Piotroski checks out of nine", period),

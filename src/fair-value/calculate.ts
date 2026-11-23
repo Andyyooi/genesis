@@ -1,9 +1,9 @@
 import type { PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
-import type { ResearchProfile } from "@/research/profiles";
+import { isInsuranceIndustry, type ResearchProfile } from "@/research/profiles";
 import type { HistoricalValuationStatus } from "@/db/point-in-time";
 import { historicalValuationStatus } from "@/db/point-in-time";
 import { assessObservationFreshness, type FreshnessBand } from "@/scoring/freshness";
-import { MIN_USABLE_PEERS, selectPeerSet, type PeerUniverseRow } from "@/scoring/peer-group";
+import { isExcludedPeer, MIN_USABLE_PEERS, selectPeerSet, type PeerUniverseRow } from "@/scoring/peer-group";
 import {
   buildHistoricalPoints,
   median,
@@ -327,7 +327,7 @@ function unsupportedProfile(args: {
  * GENERAL relative Fair Value from stored prices, annuals, and the existing peer set.
  * Does not fetch data, does not read YAML score bands, and does not score the name.
  */
-export function calculateGeneralFairValue(args: {
+type RelativeFairValueInput = {
   ticker: string;
   researchProfile: ResearchProfile;
   industry?: string | null;
@@ -337,7 +337,9 @@ export function calculateGeneralFairValue(args: {
   peers: PeerUniverseRow[];
   /** Clock for freshness. Filing age uses available_at, else period_end. Never retrieved_at. */
   asOf: string;
-}): FairValueResult {
+};
+
+export function calculateGeneralFairValue(args: RelativeFairValueInput): FairValueResult {
   const price = latestClose(args.bars);
   const fundamentals = currentFundamentals(args.periods);
   const freshness = assessObservationFreshness({
@@ -568,5 +570,151 @@ export function calculateGeneralFairValue(args: {
     methods,
     assumptions,
     unavailableReason,
+  };
+}
+
+const FINANCIAL_MULTIPLES = [
+  { metric: "price_to_earnings", ratio: "P/E", multiple: "pe", peerId: "earnings_peer_pe", historyId: "earnings_history_pe", input: "eps", inputLabel: "EPS" },
+  { metric: "price_to_book", ratio: "P/B", multiple: "pb", peerId: "book_peer_pb", historyId: "book_history_pb", input: "book_value_per_share", inputLabel: "book value per share" },
+] as const;
+
+function insurerIndustry(industry: string | null | undefined): string | null {
+  const text = industry?.trim();
+  if (!text || !isInsuranceIndustry(text)) return null;
+  return /^Insurance - /.test(text) ? text : `Insurance - ${text}`;
+}
+
+function issuerKey(row: PeerUniverseRow): string {
+  return (row.name?.trim() || row.ticker).toLowerCase();
+}
+
+function comparableFinancialPeers(args: RelativeFairValueInput, insurer: boolean): PeerUniverseRow[] {
+  const subject = args.peers.find((row) => row.ticker === args.ticker);
+  const issuer = subject && issuerKey(subject);
+  const industry = args.industry?.trim();
+  const seen = new Set<string>();
+  return args.peers.flatMap((row) => {
+    const comparableIndustry = insurer ? insurerIndustry(row.industry) : row.industry?.trim();
+    if (!comparableIndustry || (!insurer && comparableIndustry !== industry)) return [];
+    if (row.researchProfile !== "OTHER_FINANCIAL" || row.ticker === args.ticker ||
+        isExcludedPeer(row) || issuerKey(row) === issuer || seen.has(issuerKey(row))) return [];
+    seen.add(issuerKey(row));
+    return [{ ...row, industry: comparableIndustry }];
+  });
+}
+
+export function calculateNonBankFinancialFairValue(args: RelativeFairValueInput): FairValueResult {
+  const industry = insurerIndustry(args.industry);
+  return calculateFinancialRelatives(args, industry ? "insurer-relative-v1" : "nonbank-financial-relative-v1", industry);
+}
+
+export function calculateUnclassifiedFairValue(args: RelativeFairValueInput): FairValueResult {
+  return calculateFinancialRelatives(args, "unclassified-history-v1", null);
+}
+
+function calculateFinancialRelatives(
+  args: RelativeFairValueInput,
+  modelVersion: string,
+  insuranceIndustry: string | null,
+): FairValueResult {
+  const unclassified = args.researchProfile === "UNKNOWN";
+  const shell = unclassified && /shell compan/i.test(args.industry ?? "");
+  const price = latestClose(args.bars);
+  const fundamentals = currentFundamentals(args.periods);
+  const freshness = assessObservationFreshness({
+    asOf: args.asOf, periodEnd: fundamentals.periodEnd, availableAt: fundamentals.availableAt,
+  });
+  const selected = unclassified ? null : selectPeerSet({
+    ticker: args.ticker,
+    researchProfile: "OTHER_FINANCIAL",
+    industry: insuranceIndustry ?? args.industry,
+    peers: comparableFinancialPeers(args, insuranceIndustry !== null),
+    industryOnly: true,
+    voteMetricIds: FINANCIAL_MULTIPLES.map(({ metric }) => metric),
+    metricValue: (id, row) => {
+      const value = metricFromInputs(id, row.lastClose, row).value;
+      return positiveFinite(value) ? value : null;
+    },
+  });
+  const history = insuranceIndustry || shell ? null : buildHistoricalPoints(
+    args.periods.filter((row) => row.availableAt && row.availableAt <= args.asOf),
+    args.bars.filter((bar) => bar.barDate <= args.asOf.slice(0, 10)),
+  );
+  const methods = FINANCIAL_MULTIPLES.flatMap((spec) => {
+    const currentInput = spec.input === "eps" ? fundamentals.eps : fundamentals.bookValuePerShare;
+    const inputReason = spec.input === "eps" ? earningsInputReason(currentInput) : fundamentals.bookUnavailableReason;
+    const valuations: FairValueMethodEvidence[] = [];
+    if (selected) {
+      const peers = selected.rows;
+      valuations.push(applyMultiple({
+        evidence: methodShell({
+          id: spec.peerId, label: `${spec.inputLabel} × comparable ${spec.ratio}`,
+          kind: "peer", formula: `${spec.inputLabel} × peer median ${spec.ratio}`,
+          currentInputName: spec.input, medianName: `peer_median_${spec.multiple}`,
+          fundamentals, valuationDate: price?.barDate ?? null,
+          peerGroup: selected.qualityBase.selectionPath, lookAheadSafe: null,
+        }),
+        currentInput, inputReason, sample: peerMultiples(spec.metric, peers), minSample: MIN_USABLE_PEERS,
+        sampleNoun: `Comparable ${spec.ratio} sample`, combine: "multiply",
+      }));
+    }
+    if (history) {
+      const sample = historyMultiples(spec.metric, history.points);
+      valuations.push(applyMultiple({
+        evidence: methodShell({
+          id: spec.historyId, label: `${spec.inputLabel} × own historical ${spec.ratio}`,
+          kind: "history", formula: `${spec.inputLabel} × own historical median ${spec.ratio}`,
+          currentInputName: spec.input, medianName: `historical_median_${spec.multiple}`,
+          fundamentals, valuationDate: price?.barDate ?? null,
+          peerGroup: null, lookAheadSafe: history.lookAheadSafe,
+        }),
+        currentInput, inputReason, sample: sample.values, minSample: MIN_HISTORICAL_POINTS,
+        sampleNoun: `Filing-dated ${spec.ratio} sample`, combine: "multiply",
+        priceDates: sample.priceDates, periodEnds: sample.periodEnds,
+      }));
+    }
+    return valuations;
+  });
+  const values = methods.flatMap((method) => positiveFinite(method.methodValue) ? [method.methodValue] : []);
+  const combined = combine(values);
+  return {
+    ticker: args.ticker,
+    researchProfile: args.researchProfile,
+    modelVersion,
+    valuationDate: price?.barDate ?? null,
+    fundamentalsPeriodEnd: fundamentals.periodEnd,
+    currentPrice: price?.close ?? null,
+    fairValueLow: combined.low,
+    fairValueBase: combined.base,
+    fairValueHigh: combined.high,
+    differenceVsPrice: differenceVsPrice(combined.base, price?.close ?? null),
+    confidence: confidenceFor({ methods, freshness: freshness.band }),
+    methods,
+    unavailableReason: values.length >= 2 ? null : shell
+      ? "This is a shell company. Its book equity does not show what shareholders could actually recover, and there is no operating business to compare."
+      : !fundamentals.periodEnd
+        ? "There are no annual accounts to use for a fair range."
+        : insuranceIndustry
+          ? !positiveFinite(fundamentals.eps) || !positiveFinite(fundamentals.bookValuePerShare)
+            ? "An insurer range needs both positive earnings per share and positive book value per share."
+            : "Not enough comparable insurers with usable figures for both earnings and book-value estimates."
+          : unclassified
+            ? "The business type is unclassified, and there isn't enough filing-dated history to estimate a range from its own past."
+            : "There aren't enough comparable companies or filing-dated accounts to support two estimates.",
+    assumptions: {
+      modelVersion, researchProfile: args.researchProfile, modelDefaultsUsed: false, yamlScoreBandsUsed: false,
+      peerGroupType: selected?.qualityBase.groupType ?? null,
+      peerSelectionPath: selected?.qualityBase.selectionPath ?? null,
+      peerEligibleCount: selected?.qualityBase.eligibleCount ?? null,
+      peerUnavailableReason: selected?.qualityBase.unavailableReason ?? null,
+      historicalPointCount: history?.points.length ?? 0,
+      lookAheadSafe: history?.lookAheadSafe ?? false,
+      historicalValuationStatus: historicalValuationStatus({
+        pointCount: history?.points.length ?? 0, allPointsHaveAvailableAt: history?.lookAheadSafe ?? false,
+      }),
+      historicalLimitation: history?.points.length ? FILING_ALIGNED_LIMITATION : null,
+      freshness: freshness.band, freshnessObservationDate: freshness.observationDate, freshnessAgeMonths: freshness.ageMonths,
+      currentPriceDate: price?.barDate ?? null, fundamentalsPeriodEnd: fundamentals.periodEnd,
+    },
   };
 }
