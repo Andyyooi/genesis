@@ -1,7 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { DividendHistory as History } from "@/providers/yahoo-dividends";
+import type { DividendHistory as History, DividendYear } from "@/providers/yahoo-dividends";
+
+function cashFormat(currency: string) {
+  return new Intl.NumberFormat("en-MY", {
+    style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 5,
+  });
+}
+
+export function dividendTrackRecord(history: History): string {
+  const fullYears = history.years.filter(year => !year.toDate);
+  const reported = fullYears.filter((year): year is DividendYear & { perShare: number } => year.perShare !== null);
+  const [latest, prior] = reported;
+  if (!latest) return "No payments reported for the full years checked; the record may be incomplete.";
+  const format = cashFormat(history.currency);
+  const change = prior && prior.year === latest.year - 1 ? ` vs ${format.format(prior.perShare)} in ${prior.year}` : "";
+  return `Payments reported in ${reported.length} of the last ${fullYears.length} full years. ${latest.year}: ${format.format(latest.perShare)}/share${change}.`;
+}
 
 export function DividendHistory({ ticker }: { ticker: string }) {
   const [attempt, setAttempt] = useState(0);
@@ -21,24 +37,22 @@ export function DividendHistory({ ticker }: { ticker: string }) {
   }, [ticker, attempt]);
   const current = result?.ticker === ticker && result.attempt === attempt ? result : null;
   const history = current?.history;
-  return <section className="market-card p-5" aria-labelledby="dividend-history-title">
-    <h2 id="dividend-history-title" className="text-xl font-semibold">Five-year dividend history</h2>
-    <p className="mt-2 text-sm text-muted-foreground">Cash dividends per share, grouped by the year of the ex-dividend date. The newest year is only the year so far.</p>
-    {!current ? <p className="mt-4 text-sm text-muted-foreground" role="status">Loading dividend history…</p>
-      : current.error ? <div className="mt-4"><p role="status" className="text-sm text-muted-foreground">{current.error}</p><button type="button" onClick={() => setAttempt(value => value + 1)} className="mt-3 rounded-lg border px-3 py-2 text-sm hover:bg-muted">Try again</button></div>
+  return <div>
+    {!current ? <p className="text-muted-foreground" role="status">Loading dividend track record…</p>
+      : current.error ? <div><p role="status" className="text-muted-foreground"><strong>Dividend track record:</strong> {current.error}</p><button type="button" onClick={() => setAttempt(value => value + 1)} className="mt-1 underline underline-offset-4">Try again</button></div>
       : history ? <>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <caption className="sr-only">Five-year cash dividend totals for {ticker}, per share in {history.currency}</caption>
-            <thead><tr className="border-b"><th scope="col" className="py-3 pr-4 font-medium text-muted-foreground">Year</th><th scope="col" className="px-2 py-3 font-medium text-muted-foreground">Cash per share ({history.currency})</th><th scope="col" className="py-3 pl-2 text-right font-medium text-muted-foreground">Payments reported</th></tr></thead>
-            <tbody>{history.years.map(row => <tr key={row.year} className="border-b last:border-0">
-              <th scope="row" className="py-3 pr-4 font-medium">{row.year}{row.toDate ? <span className="mt-1 block text-xs font-normal text-muted-foreground">Year to date</span> : null}</th>
-              <td className="px-2 py-3 tabular-nums">{row.perShare === null ? <span className="text-muted-foreground">Not reported</span> : new Intl.NumberFormat("en-MY", { style: "currency", currency: history.currency, minimumFractionDigits: 3, maximumFractionDigits: 5 }).format(row.perShare)}</td>
-              <td className="py-3 pl-2 text-right tabular-nums">{row.payments || "—"}</td>
-            </tr>)}</tbody>
-          </table>
-        </div>
-        <p className="mt-3 text-xs text-muted-foreground">Yahoo Finance · Checked {history.checkedAt.slice(0, 10)} · Loaded separately from saved research. No payments reported is not proof that no dividend was paid. Provider amounts may reflect share splits; check company announcements. Past dividends do not guarantee future income.</p>
+        <p><strong>Dividend track record:</strong> {dividendTrackRecord(history)}</p>
+        <details className="mt-1">
+          <summary className="cursor-pointer text-muted-foreground underline underline-offset-4">Five-year dividend history</summary>
+          <p className="mt-2 text-xs text-muted-foreground">Grouped by the year of the ex-dividend date.</p>
+          <ul className="mt-1 divide-y">
+            {history.years.map(row => <li key={row.year} className="flex flex-wrap items-baseline justify-between gap-x-2 py-2">
+              <span className="font-medium">{row.year}{row.toDate ? " so far" : ""}</span>
+              <span className="tabular-nums">{row.perShare === null ? "Not reported" : `${cashFormat(history.currency).format(row.perShare)}/share · ${row.payments} payment${row.payments === 1 ? "" : "s"}`}</span>
+            </li>)}
+          </ul>
+          <p className="mt-2 text-xs text-muted-foreground">Yahoo Finance · Checked {history.checkedAt.slice(0, 10)}. No payments reported is not proof that no dividend was paid. Amounts may reflect share splits; check company announcements. Past dividends do not guarantee future income.</p>
+        </details>
       </> : null}
-  </section>;
+  </div>;
 }

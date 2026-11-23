@@ -39,4 +39,10 @@ describe("news headlines", () => {
     expect(out[0].headlines).toHaveLength(1);
     expect(out[1]).toMatchObject({ ticker: "CIMB", headlines: [], error: expect.stringContaining("unavailable") });
   });
+  it("recognizes Penang water headlines without matching bare PBA", () => {
+    const items = ["PBAPP reports higher costs", "PBA Holdings reports results", "PBA basketball results"].map((title, i) => ({
+      title, source: null, link: `https://x.test/${i}`, publishedAt: null,
+    }));
+    expect(pickHeadlines(items, searchTerms("PBA", "PBA Holdings Bhd"), 5).map(h => h.title)).toEqual(items.slice(0, 2).map(h => h.title));
+  });
 });

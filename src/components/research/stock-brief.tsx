@@ -1,4 +1,6 @@
 import { ArrowDownRight, ArrowUpRight, Search, Tag } from "lucide-react";
+import { StockNewsSection } from "@/components/news-headlines";
+import { DividendHistory } from "@/components/research/dividend-history";
 import type { buildStockBrief } from "@/lib/stock-brief";
 
 function BriefItems({ items, limit = 3 }: { items: string[]; limit?: number }) {
@@ -17,7 +19,7 @@ function BriefItems({ items, limit = 3 }: { items: string[]; limit?: number }) {
   </>;
 }
 
-export function StockBrief({ brief }: { brief: ReturnType<typeof buildStockBrief> }) {
+export function StockBrief({ brief, ticker }: { brief: ReturnType<typeof buildStockBrief>; ticker: string }) {
   return (
     <section aria-labelledby="stock-brief-heading" className="market-card overflow-hidden">
       <div className="space-y-1 px-4 py-4 sm:px-5">
@@ -42,13 +44,17 @@ export function StockBrief({ brief }: { brief: ReturnType<typeof buildStockBrief
             <Tag aria-hidden="true" className="size-4 shrink-0" /> Price and income
           </h3>
           <p>{brief.pricing}</p>
+          <p><strong>Similar companies:</strong> {brief.peers}</p>
           <p className="text-muted-foreground">{brief.dividend}</p>
+          <DividendHistory key={ticker} ticker={ticker} />
         </div>
         <div className="min-w-0 space-y-1.5 bg-card p-4 text-sm sm:px-5">
           <h3 className="flex items-center gap-2 font-semibold text-amber-800 dark:text-amber-300">
             <ArrowDownRight aria-hidden="true" className="size-4 shrink-0" /> What to be careful about
           </h3>
-          {brief.risks.length ? <BriefItems items={brief.risks} /> : <p>No specific warning surfaced in these checks. That doesn’t guarantee safety.</p>}
+          {brief.risks.length ? <BriefItems items={brief.risks} /> : !brief.priceDrop ? <p>No specific warning surfaced in these checks. That doesn’t guarantee safety.</p> : null}
+          {brief.priceDrop ? <p>{brief.priceDrop}</p> : null}
+          <StockNewsSection key={ticker} ticker={ticker} />
         </div>
         <div className="min-w-0 space-y-1.5 bg-card p-4 text-sm sm:px-5">
           <h3 className="flex items-center gap-2 font-semibold">

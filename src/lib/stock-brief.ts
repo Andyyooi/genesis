@@ -1,7 +1,9 @@
 import type { FairRangeHeadline } from "@/lib/fair-range";
-import { isFiniteNumber } from "@/lib/display";
+import { formatDateSafe, isFiniteNumber } from "@/lib/display";
 import { parseLineItemsJson } from "@/ingest/merge-line-items";
 import { latestResultsComparison, SHARP_DROP, type PriceDrop } from "@/lib/price-drop-flag";
+import { isMixedIndustry, NO_COMPARABLE_PEERS } from "@/fair-value/comparable-peers";
+import { MIN_USABLE_PEERS, type PeerQuality } from "@/scoring/peer-group";
 
 type Period = { periodEnd: string; statementType: string; actualOrEstimate: string; source: string; lineItemsJson: string | null };
 type DividendQuote = { annualYieldPercent: number | null; checkedAt: string };
@@ -49,6 +51,20 @@ function reportedAnnuals(periods: Period[]) {
   return gap === -1 ? annuals : annuals.slice(0, gap);
 }
 
+function describePeerComparison(profile: string, industry: string, peers?: PeerQuality | null): string {
+  const expectedGroup = profile === "BANK" ? "BANK_PROFILE" : profile === "REIT" ? "REIT_PROFILE" : "INDUSTRY";
+  if (!peers || peers.groupType !== expectedGroup) return NO_COMPARABLE_PEERS;
+  if (expectedGroup === "INDUSTRY" && (!industry || isMixedIndustry(industry) || peers.classificationUsed.industry !== industry)) {
+    return "No reliable same-industry comparison is available.";
+  }
+  const book = peers.metrics.find(metric => metric.metricId === "price_to_book");
+  if (!book || book.usableCount < MIN_USABLE_PEERS || !positive(book.subject) || !positive(book.median)) {
+    return "Not enough usable net asset figures for a comparison.";
+  }
+  const group = profile === "BANK" ? "banks" : profile === "REIT" ? "REITs" : "same-industry companies";
+  return `In the saved comparison, the price was ${book.subject.toFixed(1)}× net assets per share, versus ${book.median.toFixed(1)}× for the middle of ${book.usableCount} other ${group}.`;
+}
+
 export function buildStockBrief(args: {
   ticker: string;
   industry: string | null;
@@ -57,6 +73,7 @@ export function buildStockBrief(args: {
   periods: Period[];
   close: number | null;
   fairRange: FairRangeHeadline;
+  peers?: PeerQuality | null;
   priceDrop: PriceDrop | null;
   dividendQuote?: DividendQuote;
   pn17: boolean;
@@ -115,8 +132,8 @@ export function buildStockBrief(args: {
     risks.push(`Reported share count rose ${Math.round(100 * (latest.shares / earlierShares - 1))}% in ${span}.`);
     watch.push("Check whether share issuance, a split, or a reporting change explains the higher share count.");
   }
-  if (args.priceDrop && args.priceDrop.drop >= SHARP_DROP - 1e-9) {
-    risks.push(`The ${args.priceDrop.adjusted ? "split- and dividend-adjusted " : ""}price is down ${Math.round(100 * args.priceDrop.drop)}% from its recent high. The figures do not tell us why.`);
+  const sharpDrop = args.priceDrop && args.priceDrop.drop >= SHARP_DROP - 1e-9 ? args.priceDrop : null;
+  if (sharpDrop) {
     watch.unshift("Check recent results and announcements for what drove the price drop.");
   }
   if (args.needsVerification) {
@@ -157,7 +174,9 @@ export function buildStockBrief(args: {
     periodEnd: annuals[0]?.periodEnd ?? null,
     positives,
     pricing: pricing || "The saved figures do not support a price comparison.",
+    peers: describePeerComparison(args.profile, args.industry?.trim() ?? "", args.peers),
     dividend,
+    priceDrop: sharpDrop ? `The ${sharpDrop.adjusted ? "split- and dividend-adjusted " : ""}price fell ${Math.round(100 * sharpDrop.drop)}% between its recent high on ${formatDateSafe(sharpDrop.highDate)} and ${formatDateSafe(sharpDrop.lastDate)}. The figures don’t tell us why.` : null,
     risks,
     watch: watch.length ? watch : ["Check the next results and company announcements for changes in the business."],
   };

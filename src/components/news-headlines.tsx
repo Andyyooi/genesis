@@ -38,13 +38,18 @@ const NOTE = "Latest headlines from Google News (The Star, The Edge, NST, Bernam
 export function StockNewsSection({ ticker }: { ticker: string }) {
   const { data, error } = useNews(`tickers=${encodeURIComponent(ticker)}`);
   const stock = data?.stocks[0];
-  return <section aria-labelledby="stock-news" className="market-card flex flex-col gap-3 p-5">
-    <h2 id="stock-news" className="text-xl font-semibold tracking-tight">Latest news</h2>
-    <p className="text-xs text-muted-foreground">{NOTE}</p>
+  const headlines = stock?.headlines ?? [];
+  return <section aria-labelledby="stock-news" className="mt-3 space-y-2 border-t pt-3">
+    <h4 id="stock-news" className="font-semibold">Latest headlines</h4>
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p>
-      : !data ? <p className="text-sm text-muted-foreground">Loading headlines…</p>
+      : !data ? <p role="status" className="text-sm text-muted-foreground">Loading headlines…</p>
       : stock?.error ? <p role="alert" className="text-sm text-destructive">{stock.error}</p>
-      : <HeadlineList headlines={stock?.headlines ?? []} empty="No headlines naming this company in the last 30 days." />}
+      : <HeadlineList headlines={headlines.slice(0, 2)} empty="No matching headlines found in the last 30 days." />}
+    {headlines.length > 2 ? <details>
+      <summary className="cursor-pointer text-muted-foreground underline underline-offset-4">More headlines</summary>
+      <div className="mt-2"><HeadlineList headlines={headlines.slice(2)} empty="" /></div>
+    </details> : null}
+    {headlines.length > 0 ? <p className="text-xs text-muted-foreground">Google News matches by name and may include related companies. Headlines don’t confirm why the price moved.</p> : null}
   </section>;
 }
 
