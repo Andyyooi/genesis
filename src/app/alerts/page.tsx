@@ -30,7 +30,7 @@ export default function AlertsPage() {
         <h1 className="text-3xl font-semibold tracking-tight">Alerts</h1>
         {refresh ? <p className="text-sm font-medium">Alerts from refresh of {refresh.asOf.slice(0, 10)}</p> : null}
         <p className="text-muted-foreground">
-          Check your holdings first, then see changes from the latest published refresh. Open a stock for its full research.
+          Check your holdings and starred stocks first, then see changes from the latest published refresh. Open a stock for its full research.
         </p>
       </header>
       <p className="text-sm text-muted-foreground">Universe-wide latest stored dates; individual companies can have older accounts.</p>

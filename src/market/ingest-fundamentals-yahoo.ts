@@ -199,13 +199,17 @@ export async function importYahooFundamentals(
 
     try {
       let periods: Awaited<ReturnType<FundamentalProvider["annualPeriods"]>> = [];
+      let matchedSymbol: string | null = null;
       let lastError: unknown;
       let fetched = false;
       for (const symbol of mappingTried) {
         try {
           periods = await withRetries(() => provider.annualPeriods(symbol));
           fetched = true;
-          if (periods.length) break;
+          if (periods.length) {
+            matchedSymbol = symbol;
+            break;
+          }
         } catch (error) {
           fetched = true;
           lastError = error;
@@ -213,6 +217,15 @@ export async function importYahooFundamentals(
       }
       if (fetched) instrumentsFetched += 1;
       if (!periods.length && lastError) throw lastError;
+
+      let quarterlyPeriods: Awaited<ReturnType<FundamentalProvider["annualPeriods"]>> = [];
+      if (matchedSymbol && provider.quarterlyPeriods) {
+        try {
+          quarterlyPeriods = await provider.quarterlyPeriods(matchedSymbol);
+        } catch {
+          /* quarterly statements are optional; do not fail annual import */
+        }
+      }
 
       if (provider.profile && mappingTried[0]) {
         const profile = await provider.profile(mappingTried[0]);
@@ -245,7 +258,7 @@ export async function importYahooFundamentals(
       }
 
       let instrumentChanged = false;
-      for (const period of periods) {
+      for (const period of [...periods, ...quarterlyPeriods]) {
         const result = persistAnnualPeriod(instrument.id, period, retrievedAt);
         if (result === "inserted") {
           inserted += 1;

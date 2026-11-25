@@ -429,7 +429,7 @@ describe("Fair Value page loader", () => {
       expect(general?.methods.some((item) => item.available)).toBe(true);
       expect(other?.modelVersion).toBe("insurer-relative-v1");
       expect(other?.confidence).toBe("UNAVAILABLE");
-      expect(other?.methods).toHaveLength(2);
+      expect(other?.methods).toHaveLength(6);
       expect(other?.methods.every((item) => !item.available)).toBe(true);
       expect(other?.fairValueBase).toBeNull();
       const check = new Database(dbPath, { readonly: true, fileMustExist: true });

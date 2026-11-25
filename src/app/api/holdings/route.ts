@@ -8,6 +8,7 @@ import { loadListFairRanges } from "@/fair-value/load-list-ranges";
 import { annualDividend } from "@/lib/holding-dividends";
 import { goodCompanyPriceDown } from "@/lib/price-drop-flag";
 import { holdingSignals } from "@/lib/holding-signals";
+import { toStatementSnapshots } from "@/metrics/from-snapshots";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ export function GET(request: Request) {
         includeSales: result.researchProfile !== "BANK" && result.profile !== "bank",
       }),
       priceDate: bar?.barDate ?? null,
+      periods: toStatementSnapshots(data.periods),
       inactive,
     });
     const warnings = [

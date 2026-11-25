@@ -62,7 +62,7 @@ export async function getRefreshStatus(snapshot: SnapshotState): Promise<Refresh
   if (config.missing.length) return { ...mapRefreshStatus(null, null, snapshot), configured: false, missing: config.missing };
   const key = `${config.repo}:${config.ref}:${config.token}`;
   if (!cache || cache.key !== key || Date.now() >= cache.until) {
-    const data = await github(`/actions/workflows/${workflow}/runs?per_page=100&event=workflow_dispatch`);
+    const data = await github(`/actions/workflows/${workflow}/runs?per_page=100`);
     const runs: WorkflowRun[] = data.workflow_runs;
     const run = runs.find((r) => active.has(r.status)) ?? runs[0] ?? null;
     let step: string | null = null;

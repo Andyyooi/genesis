@@ -34,13 +34,15 @@ export function PriceChart({
   const [range, setRange] = useState<PriceRange>("3M");
   const [inspection, setInspection] = useState<number | null>(null);
   const [hovered, setHovered] = useState<number | null>(null);
-  const [enabled, setEnabled] = useState<number[]>([]);
+  const [enabled, setEnabled] = useState<number[]>(() => indicators.map((indicator) => indicator.window));
   const chartId = useId();
   const selected = selectPriceRange(points, range);
   const averages = useMemo(() => indicators.map(({ window }) => movingAverage(points, window)), [points]);
+  const availableIndicators = averages.map((series) => series.some((point) => validClose(point.close)));
   const active = indicators.flatMap((indicator, index) => {
+    if (!availableIndicators[index] || !enabled.includes(indicator.window)) return [];
     const values = selectPriceRange(averages[index], range);
-    return enabled.includes(indicator.window) ? [{ ...indicator, values }] : [];
+    return [{ ...indicator, values }];
   });
   const plot = pricePlot(selected, plotWidth, plotHeight, plotPadding, {
     calendar: true,
@@ -117,12 +119,12 @@ export function PriceChart({
         <>
           <div className="mb-3 flex flex-wrap items-center gap-2" aria-label="Moving averages">
             {indicators.map(({ window, colour }, i) => {
-              const available = averages[i].some((point) => validClose(point.close));
+              const available = availableIndicators[i];
               return (
                 <button
                   key={window}
                   type="button"
-                  aria-pressed={enabled.includes(window)}
+                  aria-pressed={available && enabled.includes(window)}
                   disabled={!available}
                   className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs aria-pressed:bg-muted disabled:opacity-50"
                   onClick={() => setEnabled((current) => current.includes(window)
