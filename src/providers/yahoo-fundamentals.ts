@@ -81,6 +81,67 @@ const TIMESERIES_FIELDS: { key: string; line: keyof LineItems; abs?: boolean }[]
   { key: "annualTotalAssets", line: "totalAssets" },
 ];
 
+const QUARTERLY_TIMESERIES_FIELDS: { key: string; line: keyof LineItems; abs?: boolean }[] = [
+  { key: "quarterlyTotalRevenue", line: "revenue" },
+  { key: "quarterlyNetIncome", line: "pat" },
+  { key: "quarterlyDilutedEPS", line: "eps" },
+  { key: "quarterlyTotalDebt", line: "totalDebt" },
+  { key: "quarterlyStockholdersEquity", line: "equity" },
+  { key: "quarterlyCashAndCashEquivalents", line: "cash" },
+];
+
+const ALL_TIMESERIES_TYPES = [
+  ...TIMESERIES_FIELDS.map((f) => f.key),
+  ...QUARTERLY_TIMESERIES_FIELDS.map((f) => f.key),
+].join(",");
+
+export function parseYahooQuarterlyTimeseries(
+  json: TimeseriesResponse,
+  source: string,
+): FundamentalPeriodDraft[] {
+  const byEnd = new Map<string, FundamentalPeriodDraft>();
+  const ensure = (periodEnd: string) => {
+    let draft = byEnd.get(periodEnd);
+    if (!draft) {
+      const year = Number(periodEnd.slice(0, 4));
+      const month = Number(periodEnd.slice(5, 7));
+      const quarter = Number.isInteger(month) && month >= 1 && month <= 12 ? Math.ceil(month / 3) : null;
+      draft = {
+        periodEnd,
+        fiscalYear: Number.isInteger(year) ? year : null,
+        fiscalQuarter: quarter,
+        fiscalPeriod: Number.isInteger(year) && quarter ? `Q${quarter} FY${year}` : null,
+        statementType: "quarterly",
+        source,
+        availableAt: null,
+        filingDate: null,
+        availableAtSource: null,
+        actualOrEstimate: "actual",
+        lineItems: emptyLineItems(),
+      };
+      byEnd.set(periodEnd, draft);
+    }
+    return draft;
+  };
+
+  for (const row of json.timeseries?.result ?? []) {
+    for (const field of QUARTERLY_TIMESERIES_FIELDS) {
+      const points = row[field.key];
+      if (!Array.isArray(points)) continue;
+      for (const point of points as TimeseriesPoint[]) {
+        if (point.periodType && point.periodType !== "3M") continue;
+        const periodEnd = point.asOfDate?.slice(0, 10);
+        if (!periodEnd || !/^\d{4}-\d{2}-\d{2}$/.test(periodEnd)) continue;
+        let value = num(point.reportedValue);
+        if (value === null) continue;
+        if (field.abs) value = Math.abs(value);
+        ensure(periodEnd).lineItems[field.line] = value;
+      }
+    }
+  }
+  return [...byEnd.values()].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
+}
+
 export function parseYahooTimeseries(json: TimeseriesResponse, source: string): FundamentalPeriodDraft[] {
   const byEnd = new Map<string, FundamentalPeriodDraft>();
   const ensure = (periodEnd: string) => {
@@ -157,6 +218,7 @@ export class YahooFundamentalProvider implements FundamentalProvider {
   readonly id = "yahoo-timeseries";
   private session: YahooSession | null = null;
   private summaryCache = new Map<string, QuoteSummaryResult | null>();
+  private timeseriesCache = new Map<string, TimeseriesResponse>();
 
   private async sessionOrCreate() {
     this.session ??= await createYahooSession();
@@ -211,7 +273,22 @@ export class YahooFundamentalProvider implements FundamentalProvider {
     return this.quoteSummaryAnnuals(yahooTicker);
   }
 
-  private async timeseriesAnnuals(yahooTicker: string): Promise<FundamentalPeriodDraft[]> {
+  async quarterlyPeriods(yahooTicker: string): Promise<FundamentalPeriodDraft[]> {
+    const body = await this.fetchTimeseries(yahooTicker);
+    const drafts = parseYahooQuarterlyTimeseries(body, this.id);
+    if (!drafts.length) return [];
+    try {
+      const row = await this.summary(yahooTicker);
+      if (row) overlayYahooReportedDates(drafts, row, new Date().toISOString().slice(0, 10));
+    } catch {
+      /* reportedDate is optional; never invent available_at */
+    }
+    return drafts;
+  }
+
+  private async fetchTimeseries(yahooTicker: string): Promise<TimeseriesResponse> {
+    const hit = this.timeseriesCache.get(yahooTicker);
+    if (hit) return hit;
     const session = await this.sessionOrCreate();
     const url = new URL(
       `https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(yahooTicker)}`,
@@ -221,7 +298,7 @@ export class YahooFundamentalProvider implements FundamentalProvider {
     url.searchParams.set("merge", "false");
     url.searchParams.set("period1", "0");
     url.searchParams.set("period2", String(Math.floor(Date.now() / 1000)));
-    url.searchParams.set("type", TIMESERIES_FIELDS.map((f) => f.key).join(","));
+    url.searchParams.set("type", ALL_TIMESERIES_TYPES);
     const response = await yahooFetch(url.toString(), session);
     if (!response.ok) {
       const code = classifyHttpFailure(response.status);
@@ -243,6 +320,12 @@ export class YahooFundamentalProvider implements FundamentalProvider {
         body.timeseries.error.description ?? "Yahoo timeseries error",
       );
     }
+    this.timeseriesCache.set(yahooTicker, body);
+    return body;
+  }
+
+  private async timeseriesAnnuals(yahooTicker: string): Promise<FundamentalPeriodDraft[]> {
+    const body = await this.fetchTimeseries(yahooTicker);
     const drafts = parseYahooTimeseries(body, this.id);
     try {
       const row = await this.summary(yahooTicker);

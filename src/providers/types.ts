@@ -45,6 +45,7 @@ export interface PriceProvider {
 export interface FundamentalProvider {
   readonly id: string;
   annualPeriods(yahooTicker: string): Promise<FundamentalPeriodDraft[]>;
+  quarterlyPeriods?(yahooTicker: string): Promise<FundamentalPeriodDraft[]>;
   profile?(yahooTicker: string): Promise<{ sector: string | null; industry: string | null }>;
 }
 

@@ -51,4 +51,29 @@ export class CompositeFundamentalProvider implements FundamentalProvider {
     if (rows.length === 0 && lastError) throw lastError;
     return rows;
   }
+
+  async quarterlyPeriods(yahooTicker: string): Promise<FundamentalPeriodDraft[]> {
+    const byEnd = new Map<string, FundamentalPeriodDraft>();
+    for (const provider of this.providers) {
+      if (!provider.quarterlyPeriods) continue;
+      try {
+        const periods = await provider.quarterlyPeriods(yahooTicker);
+        for (const period of periods) {
+          const hit = byEnd.get(period.periodEnd);
+          if (!hit) {
+            byEnd.set(period.periodEnd, {
+              ...period,
+              lineItems: { ...period.lineItems },
+            });
+          } else {
+            hit.lineItems = mergeLineItems(hit.lineItems, period.lineItems);
+            if (!hit.availableAt && period.availableAt) hit.availableAt = period.availableAt;
+          }
+        }
+      } catch {
+        /* quarterly periods are optional alongside annuals */
+      }
+    }
+    return [...byEnd.values()].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
+  }
 }

@@ -1,22 +1,34 @@
 import type { ListFairRange } from "@/lib/fair-range-summary";
 import type { GoodCompanyPriceDown } from "@/lib/price-drop-flag";
+import { latestQuarterlyResultAlert } from "@/lib/quarterly-results";
+import type { StatementSnapshot } from "@/metrics/types";
 
 export type HoldingSignal = {
-  kind: "below-fair-range" | "price-down";
+  kind: "new-results" | "below-fair-range" | "price-down";
   title: string;
   why: string;
   date: string | null;
 };
 
 /** Current saved conditions, not claims that a threshold was crossed today. */
-export function holdingSignals({ range, priceDown, priceDate, inactive = false }: {
+export function holdingSignals({ range, priceDown, priceDate, periods = [], inactive = false }: {
   range?: ListFairRange;
   priceDown: GoodCompanyPriceDown | null;
   priceDate: string | null;
+  periods?: StatementSnapshot[];
   inactive?: boolean;
 }): HoldingSignal[] {
   if (inactive) return [];
   const signals: HoldingSignal[] = [];
+  const results = latestQuarterlyResultAlert(periods, priceDate);
+  if (results) {
+    signals.push({
+      kind: "new-results",
+      title: "New quarterly results",
+      why: results.summary,
+      date: results.reportedDate ?? results.periodEnd,
+    });
+  }
   if (priceDate && range?.available && range.position === "below") {
     signals.push({
       kind: "below-fair-range",

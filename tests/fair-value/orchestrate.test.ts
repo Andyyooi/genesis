@@ -205,7 +205,7 @@ describe("Fair Value orchestration", () => {
     const routed = calculateFairValue(args);
     expect(routed.modelVersion).toBe("nonbank-financial-relative-v1");
     expect(routed.confidence).toBe("UNAVAILABLE");
-    expect(routed.methods).toHaveLength(4);
+    expect(routed.methods).toHaveLength(6);
     expect(routed.methods.every((method) => !method.available)).toBe(true);
     expect(routed.fairValueLow).toBeNull();
     expect(routed.fairValueBase).toBeNull();
@@ -262,7 +262,7 @@ describe("Fair Value orchestration", () => {
     ];
     const enough = calculateFairValue({ ...args, peers: [subject, ...comparable, ...unrelated] });
     expect(enough).toMatchObject({ modelVersion: "insurer-relative-v1", fairValueLow: 20, fairValueHigh: 20 });
-    expect(enough.methods.map(({ id, peerCount }) => [id, peerCount])).toEqual([["earnings_peer_pe", 5], ["book_peer_pb", 5]]);
+    expect(enough.methods.filter((m) => m.available).map(({ id, peerCount }) => [id, peerCount])).toEqual([["earnings_peer_pe", 5], ["book_peer_pb", 5]]);
     const thin = calculateFairValue({ ...args, peers: [subject, ...comparable.slice(0, 4), ...unrelated] });
     expect(thin.fairValueBase).toBeNull();
     expect(thin.unavailableReason).toContain("Not enough comparable insurers");
@@ -287,14 +287,14 @@ describe("Fair Value orchestration", () => {
   it("widens only the insurer multiple that lacks enough usable peers in the exact industry", () => {
     const industry = "Insurance - Life";
     const exact = listedPeers(5, "OTHER_FINANCIAL", industry, "Financial Services", "COMMON_STOCK", "LIFE");
-    exact[4] = { ...exact[4], eps: null };
+    exact[4] = { ...exact[4], eps: null, pat: null };
     const broader = listedPeers(1, "OTHER_FINANCIAL", "Insurance - Diversified", "Financial Services", "COMMON_STOCK", "DIV");
     broader[0] = { ...broader[0], lastClose: 30 };
     const result = calculateFairValue({
       ...input("GENERAL"), researchProfile: "OTHER_FINANCIAL", industry, peers: [...exact, ...broader],
     });
     expect(result).toMatchObject({ fairValueLow: 20, fairValueHigh: 20 });
-    expect(result.methods).toMatchObject([
+    expect(result.methods.filter((m) => m.available)).toMatchObject([
       { id: "earnings_peer_pe", peerCount: 5, peerGroup: expect.stringContaining("industry family") },
       { id: "book_peer_pb", peerCount: 5, peerGroup: expect.stringContaining("exact industry") },
     ]);
@@ -307,6 +307,38 @@ describe("Fair Value orchestration", () => {
     const result = calculateFairValue({ ...input("GENERAL"), researchProfile: "OTHER_FINANCIAL", industry, peers });
     expect(result).toMatchObject({ modelVersion: "nonbank-financial-relative-v1", fairValueBase: 20 });
     expect(result.methods.filter((method) => method.available).map((method) => method.kind)).toEqual(["peer", "peer"]);
+  });
+
+  it("widens balance-sheet non-bank financials and derives EPS from PAT/shares, without mixing in insurers or exchanges", () => {
+    const capitalMarkets = listedPeers(3, "OTHER_FINANCIAL", "Capital Markets", "Financial Services", "COMMON_STOCK", "CM")
+      .map((row) => ({ ...row, eps: null, pat: 10, shares: 10 }));
+    const creditPeers = listedPeers(2, "OTHER_FINANCIAL", "Credit Services", "Financial Services", "COMMON_STOCK", "CS");
+    const excluded = [
+      ...listedPeers(3, "OTHER_FINANCIAL", "Insurance - Diversified", "Financial Services", "COMMON_STOCK", "INS"),
+      ...listedPeers(3, "OTHER_FINANCIAL", "Financial Data & Stock Exchanges", "Financial Services", "COMMON_STOCK", "EX"),
+      ...listedPeers(3, "BANK", "Banks", "Financial Services", "COMMON_STOCK", "BK"),
+    ];
+    const subjectPeriods = [{ ...annual({ periodEnd: "2025-12-31", eps: null, equity: 100, shares: 10 }), pat: 20 }];
+    const widened = calculateFairValue({
+      ...input("GENERAL"),
+      researchProfile: "OTHER_FINANCIAL",
+      industry: "Credit Services",
+      periods: subjectPeriods,
+      peers: [...capitalMarkets, ...creditPeers, ...excluded],
+    });
+    expect(widened).toMatchObject({ modelVersion: "nonbank-financial-relative-v1", fairValueLow: 20, fairValueHigh: 20 });
+    expect(widened.methods.filter((m) => m.available).map((m) => [m.id, m.peerCount])).toEqual([
+      ["earnings_peer_pe", 5],
+      ["book_peer_pb", 5],
+    ]);
+
+    const exchange = calculateFairValue({
+      ...input("GENERAL"),
+      researchProfile: "OTHER_FINANCIAL",
+      industry: "Financial Data & Stock Exchanges",
+      peers: [...capitalMarkets, ...creditPeers, ...excluded],
+    });
+    expect(exchange.fairValueBase).toBeNull();
   });
 
   it("does not mutate calculator inputs", () => {

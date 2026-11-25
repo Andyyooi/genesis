@@ -182,4 +182,22 @@ describe("price chart geometry", () => {
     expect(pricePlot([point("1", null), point("2", 10)])).toBeNull();
     expect(pricePlot([])).toBeNull();
   });
+
+  it("enables available moving-average indicators on PriceChart by default", async () => {
+    const React = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { PriceChart } = await import("@/components/research/price-chart");
+    const longSeries = Array.from({ length: 210 }, (_, idx) => {
+      const date = new Date(Date.UTC(2025, 0, 1 + idx)).toISOString().slice(0, 10);
+      return point(date, 10 + idx * 0.01);
+    });
+    const html = renderToStaticMarkup(React.createElement(PriceChart, { points: longSeries, ticker: "MAYBANK" }));
+    const maSection = html.slice(html.indexOf('aria-label="Moving averages"'), html.indexOf('<div class="price-plot">'));
+    expect(maSection).toContain("50-day average");
+    expect(maSection).toContain("200-day average");
+    expect(maSection).toContain('aria-pressed="true"');
+    expect(maSection).not.toContain('aria-pressed="false"');
+    expect(html).toContain('stroke="#29b6e3"');
+    expect(html).toContain('stroke="#fbac51"');
+  });
 });

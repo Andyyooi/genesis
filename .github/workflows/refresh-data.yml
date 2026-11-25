@@ -2,6 +2,9 @@ name: Refresh data
 
 on:
   workflow_dispatch:
+  schedule:
+    # Every weekday at 6:00 PM Malaysia time (10:00 UTC), an hour after Bursa Malaysia closes.
+    - cron: '0 10 * * 1-5'
 
 permissions:
   contents: write

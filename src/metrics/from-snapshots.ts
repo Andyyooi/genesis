@@ -50,18 +50,8 @@ function emptyItems(): LineItems & {
   };
 }
 
-export function snapshotsToMetrics(args: {
-  instrumentType: "COMMON_STOCK" | "REIT";
-  ticker?: string | null;
-  sector?: string | null;
-  industry?: string | null;
-  periods: PeriodRow[];
-  bars: BarRow[];
-  events?: EventSnapshot[];
-  asOf?: string;
-  config?: ScoringConfig;
-}) {
-  const periods: StatementSnapshot[] = args.periods.map((row) => {
+export function toStatementSnapshots(rows: PeriodRow[]): StatementSnapshot[] {
+  return rows.map((row) => {
     let items = emptyItems();
     if (row.lineItemsJson) {
       try {
@@ -80,6 +70,20 @@ export function snapshotsToMetrics(args: {
       ...items,
     };
   });
+}
+
+export function snapshotsToMetrics(args: {
+  instrumentType: "COMMON_STOCK" | "REIT";
+  ticker?: string | null;
+  sector?: string | null;
+  industry?: string | null;
+  periods: PeriodRow[];
+  bars: BarRow[];
+  events?: EventSnapshot[];
+  asOf?: string;
+  config?: ScoringConfig;
+}) {
+  const periods = toStatementSnapshots(args.periods);
 
   const bars: PriceBarSnapshot[] = args.bars.map((bar) => ({
     barDate: bar.barDate,

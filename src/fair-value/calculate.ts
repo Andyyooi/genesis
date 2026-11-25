@@ -579,14 +579,36 @@ export function calculateGeneralFairValue(args: RelativeFairValueInput): FairVal
 }
 
 const FINANCIAL_MULTIPLES = [
-  { metric: "price_to_earnings", ratio: "P/E", multiple: "pe", peerId: "earnings_peer_pe", historyId: "earnings_history_pe", input: "eps", inputLabel: "EPS" },
-  { metric: "price_to_book", ratio: "P/B", multiple: "pb", peerId: "book_peer_pb", historyId: "book_history_pb", input: "book_value_per_share", inputLabel: "book value per share" },
+  { metric: "price_to_earnings", ratio: "P/E", multiple: "pe", peerId: "earnings_peer_pe", historyId: "earnings_history_pe", input: "eps", inputLabel: "EPS", combine: "multiply" },
+  { metric: "price_to_book", ratio: "P/B", multiple: "pb", peerId: "book_peer_pb", historyId: "book_history_pb", input: "book_value_per_share", inputLabel: "book value per share", combine: "multiply" },
+  { metric: "dividend_yield", ratio: "dividend yield", multiple: "dividend_yield", peerId: "dividend_peer_yield", historyId: "dividend_history_yield", input: "dividend_per_share", inputLabel: "Dividend per share", combine: "divide" },
 ] as const;
+
+const BALANCE_SHEET_NONBANK_INDUSTRIES = new Set([
+  "Asset Management",
+  "Capital Markets",
+  "Credit Services",
+]);
+
+function derivedEps(eps: number | null | undefined, pat: number | null | undefined, shares: number | null | undefined): number | null {
+  if (finiteOrNull(eps) !== null) return finiteOrNull(eps);
+  if (finiteOrNull(pat) !== null && positiveFinite(shares)) {
+    const computed = pat! / shares;
+    return Number.isFinite(computed) ? computed : null;
+  }
+  return null;
+}
 
 function insurerIndustry(industry: string | null | undefined): string | null {
   const text = industry?.trim();
   if (!text || !isInsuranceIndustry(text)) return null;
   return /^Insurance - /.test(text) ? text : `Insurance - ${text}`;
+}
+
+function nonBankFinancialIndustry(industry: string | null | undefined): string | null {
+  const text = industry?.trim();
+  if (!text) return null;
+  return BALANCE_SHEET_NONBANK_INDUSTRIES.has(text) ? `Non-Bank Financial - ${text}` : text;
 }
 
 function issuerKey(row: PeerUniverseRow): string {
@@ -596,15 +618,21 @@ function issuerKey(row: PeerUniverseRow): string {
 function comparableFinancialPeers(args: RelativeFairValueInput, insurer: boolean): PeerUniverseRow[] {
   const subject = args.peers.find((row) => row.ticker === args.ticker);
   const issuer = subject && issuerKey(subject);
-  const industry = args.industry?.trim();
+  const subjectIndustry = args.industry?.trim() ?? "";
+  const widenBalanceSheet = !insurer && BALANCE_SHEET_NONBANK_INDUSTRIES.has(subjectIndustry);
   const seen = new Set<string>();
   return args.peers.flatMap((row) => {
-    const comparableIndustry = insurer ? insurerIndustry(row.industry) : row.industry?.trim();
-    if (!comparableIndustry || (!insurer && comparableIndustry !== industry)) return [];
+    const rawIndustry = row.industry?.trim();
+    const comparableIndustry = insurer
+      ? insurerIndustry(rawIndustry)
+      : widenBalanceSheet
+        ? (rawIndustry && BALANCE_SHEET_NONBANK_INDUSTRIES.has(rawIndustry) ? nonBankFinancialIndustry(rawIndustry) : null)
+        : rawIndustry === subjectIndustry ? rawIndustry : null;
+    if (!comparableIndustry) return [];
     if (row.researchProfile !== "OTHER_FINANCIAL" || row.ticker === args.ticker ||
         isExcludedPeer(row) || issuerKey(row) === issuer || seen.has(issuerKey(row))) return [];
     seen.add(issuerKey(row));
-    return [{ ...row, industry: comparableIndustry }];
+    return [{ ...row, industry: comparableIndustry, eps: derivedEps(row.eps, row.pat, row.shares) }];
   });
 }
 
@@ -625,18 +653,24 @@ function calculateFinancialRelatives(
   const unclassified = args.researchProfile === "UNKNOWN";
   const shell = unclassified && /shell compan/i.test(args.industry ?? "");
   const price = latestClose(args.bars);
-  const fundamentals = currentFundamentals(args.periods);
+  const latestRow = latestAnnual(args.periods);
+  const baseFundamentals = currentFundamentals(args.periods);
+  const fundamentals: CurrentFundamentals = unclassified
+    ? baseFundamentals
+    : { ...baseFundamentals, eps: derivedEps(baseFundamentals.eps, latestRow?.pat, baseFundamentals.shares) };
   const freshness = assessObservationFreshness({
     asOf: args.asOf, periodEnd: fundamentals.periodEnd, availableAt: fundamentals.availableAt,
   });
+  const subjectIndustry = insuranceIndustry ?? nonBankFinancialIndustry(args.industry);
   const peers = unclassified ? null : comparableFinancialPeers(args, insuranceIndustry !== null);
-  const peerSelections = peers === null ? [] : FINANCIAL_MULTIPLES.map(({ metric, ratio }) => ({
+  const multiples = unclassified ? FINANCIAL_MULTIPLES.slice(0, 2) : FINANCIAL_MULTIPLES;
+  const peerSelections = peers === null ? [] : multiples.map(({ metric, ratio }) => ({
     metric,
     ratio,
     ...selectPeerSet({
       ticker: args.ticker,
       researchProfile: "OTHER_FINANCIAL",
-      industry: insuranceIndustry ?? args.industry,
+      industry: subjectIndustry,
       peers,
       industryOnly: true,
       voteMetricIds: [metric],
@@ -652,41 +686,62 @@ function calculateFinancialRelatives(
   const peerUnavailableReasons = peerSelections.flatMap(({ ratio, qualityBase }) =>
     qualityBase.unavailableReason ? [`${ratio}: ${qualityBase.unavailableReason}`] : [],
   );
-  const history = insuranceIndustry || shell ? null : buildHistoricalPoints(
-    args.periods.filter((row) => row.availableAt && row.availableAt <= args.asOf),
-    args.bars.filter((bar) => bar.barDate <= args.asOf.slice(0, 10)),
-  );
-  const methods = FINANCIAL_MULTIPLES.flatMap((spec) => {
+  const rawHistory = shell
+    ? null
+    : unclassified
+      ? buildHistoricalPoints(
+          args.periods.filter((row) => row.availableAt && row.availableAt <= args.asOf),
+          args.bars.filter((bar) => bar.barDate <= args.asOf.slice(0, 10)),
+        )
+      : buildHistoricalPoints(args.periods, args.bars);
+  const history = rawHistory && !unclassified
+    ? {
+        ...rawHistory,
+        points: rawHistory.points.map((point) => ({
+          ...point,
+          eps: derivedEps(point.eps, point.pat, point.shares),
+        })),
+      }
+    : rawHistory;
+  const methods = multiples.flatMap((spec) => {
     const selected = peerSelections.find(({ metric }) => metric === spec.metric);
-    const currentInput = spec.input === "eps" ? fundamentals.eps : fundamentals.bookValuePerShare;
-    const inputReason = spec.input === "eps" ? earningsInputReason(currentInput) : fundamentals.bookUnavailableReason;
+    const currentInput = spec.input === "eps"
+      ? fundamentals.eps
+      : spec.input === "book_value_per_share"
+        ? fundamentals.bookValuePerShare
+        : fundamentals.dividendPerShare;
+    const inputReason = spec.input === "eps"
+      ? earningsInputReason(currentInput)
+      : spec.input === "book_value_per_share"
+        ? fundamentals.bookUnavailableReason
+        : dividendInputReason(currentInput);
     const valuations: FairValueMethodEvidence[] = [];
     if (selected) {
       const peers = selected.rows;
       valuations.push(applyMultiple({
         evidence: methodShell({
-          id: spec.peerId, label: `${spec.inputLabel} × comparable ${spec.ratio}`,
-          kind: "peer", formula: `${spec.inputLabel} × peer median ${spec.ratio}`,
+          id: spec.peerId, label: `${spec.inputLabel} ${spec.combine === "divide" ? "/" : "×"} comparable ${spec.ratio}`,
+          kind: "peer", formula: spec.combine === "divide" ? `${spec.inputLabel} / peer median ${spec.ratio}` : `${spec.inputLabel} × peer median ${spec.ratio}`,
           currentInputName: spec.input, medianName: `peer_median_${spec.multiple}`,
           fundamentals, valuationDate: price?.barDate ?? null,
           peerGroup: selected.qualityBase.selectionPath, lookAheadSafe: null,
         }),
         currentInput, inputReason, sample: peerMultiples(spec.metric, peers), minSample: MIN_USABLE_PEERS,
-        sampleNoun: `Comparable ${spec.ratio} sample`, combine: "multiply",
+        sampleNoun: `Comparable ${spec.ratio} sample`, combine: spec.combine,
       }));
     }
     if (history) {
       const sample = historyMultiples(spec.metric, history.points);
       valuations.push(applyMultiple({
         evidence: methodShell({
-          id: spec.historyId, label: `${spec.inputLabel} × own historical ${spec.ratio}`,
-          kind: "history", formula: `${spec.inputLabel} × own historical median ${spec.ratio}`,
+          id: spec.historyId, label: `${spec.inputLabel} ${spec.combine === "divide" ? "/" : "×"} own historical ${spec.ratio}`,
+          kind: "history", formula: spec.combine === "divide" ? `${spec.inputLabel} / own historical median ${spec.ratio}` : `${spec.inputLabel} × own historical median ${spec.ratio}`,
           currentInputName: spec.input, medianName: `historical_median_${spec.multiple}`,
           fundamentals, valuationDate: price?.barDate ?? null,
           peerGroup: null, lookAheadSafe: history.lookAheadSafe,
         }),
         currentInput, inputReason, sample: sample.values, minSample: MIN_HISTORICAL_POINTS,
-        sampleNoun: `Filing-dated ${spec.ratio} sample`, combine: "multiply",
+        sampleNoun: `${unclassified ? "Filing-dated" : "Historical"} ${spec.ratio} sample`, combine: spec.combine,
         priceDates: sample.priceDates, periodEnds: sample.periodEnds,
       }));
     }

@@ -101,4 +101,12 @@ describe("GitHub refresh API", () => {
   ])("maps %s/%s/%s to %s", (status, conclusion, step, phase) => {
     expect(mapRefreshStatus({ ...run, status: status!, conclusion }, step, snapshot).phase).toBe(phase);
   });
+
+  it("schedules weekday 6pm MYT (10:00 UTC) automatic refreshes alongside workflow_dispatch", async () => {
+    const { readFileSync } = await import("node:fs");
+    const workflow = readFileSync(".github/workflows/refresh-data.yml", "utf8");
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toContain("schedule:");
+    expect(workflow).toContain("0 10 * * 1-5");
+  });
 });
