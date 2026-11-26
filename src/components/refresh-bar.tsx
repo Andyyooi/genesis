@@ -50,7 +50,7 @@ export function RefreshBar({ latestPriceDate, missing, allowed }: { latestPriceD
       <p className="font-semibold">Data as of {latestPriceDate ?? "unavailable"}</p>
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="outline" onClick={() => void refresh()} disabled={!allowed || !configured || submitting || running}>Refresh data</Button>
-        <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Update info</summary><p className="mt-2 max-w-md">Refreshes automatically every weekday at 6pm Malaysia time (an hour after Bursa closes). Use Refresh data anytime for a manual run — usually 10–20 minutes. {!configured ? `Refresh setup is incomplete: ${(status?.missing ?? missing).join(", ")}.` : "Updated data appears after publication."}</p></details>
+        <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Update info</summary><p className="mt-2 max-w-md">The automatic refresh tries at 6:23 pm on weekdays, with retries at 8:23 pm and 11:23 pm Malaysia time if the day’s after-close data isn’t published yet. Use Refresh data anytime for a manual run — usually 10–20 minutes. {!configured ? `Refresh setup is incomplete: ${(status?.missing ?? missing).join(", ")}.` : "Updated data appears after publication."}</p></details>
         <p role="status" aria-live="polite">
           {!configured ? "Refresh unavailable"
             : !allowed ? "Sign in to refresh data" : submitting ? "Requesting refresh…" : status ? labels[status.phase] : "Checking refresh status…"}

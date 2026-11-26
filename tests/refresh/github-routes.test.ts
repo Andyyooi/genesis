@@ -80,12 +80,37 @@ describe("GitHub refresh API", () => {
     vi.advanceTimersByTime(10001); await GET(); expect(fetch).toHaveBeenCalledTimes(4);
   });
   it("waits for the deployed publication, even on an unchanged price date", async () => {
-    const fetch = vi.fn(async () => json({ workflow_runs: [{ ...run, status: "completed", conclusion: "success" }] }));
+    const fetch = vi.fn(async (url: string) => url.includes("/jobs?")
+      ? json({ jobs: [{ name: "check", status: "completed", conclusion: "skipped" }, { name: "refresh", status: "completed", conclusion: "success" }] })
+      : json({ workflow_runs: [{ ...run, status: "completed", conclusion: "success" }] }));
     vi.stubGlobal("fetch", fetch);
     expect(await (await GET()).json()).toMatchObject({ phase: "deploying", latestPriceDate: "2026-09-25" });
     snapshot.publishedAt = "2026-10-01T10:12:00Z";
     expect(await (await GET()).json()).toMatchObject({ phase: "done", latestPriceDate: "2026-09-25" });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it.each([true, false])("ignores completed retries that skipped refresh (prior refresh: %s)", async (hasRefresh) => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-01T15:24:00Z"));
+    snapshot.publishedAt = "2026-10-01T10:12:00Z";
+    const completed = { ...run, status: "completed", conclusion: "success" };
+    const retries = [15, 12].map((hour, i) => ({
+      ...completed, id: 44 - i, created_at: `2026-10-01T${hour}:23:00Z`,
+      run_started_at: `2026-10-01T${hour}:23:00Z`, updated_at: `2026-10-01T${hour}:24:00Z`,
+      html_url: `https://github.com/Andyyooi/genesis/actions/runs/${44 - i}`,
+    }));
+    const fetch = vi.fn(async (url: string) => {
+      if (url.includes("/jobs?")) {
+        return json({ jobs: [{ name: "refresh", status: "completed", conclusion: url.includes(`/runs/${run.id}/`) ? "success" : "skipped" }] });
+      }
+      return json({ workflow_runs: hasRefresh ? [...retries, completed] : retries });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const expected = hasRefresh ? { phase: "done", html_url: run.html_url } : { phase: "idle", html_url: null };
+    expect(await (await GET()).json()).toMatchObject(expected);
+    expect(fetch).toHaveBeenCalledTimes(hasRefresh ? 4 : 3);
+    vi.advanceTimersByTime(10001);
+    expect(await (await GET()).json()).toMatchObject(expected);
+    expect(fetch).toHaveBeenCalledTimes(hasRefresh ? 5 : 4);
   });
   it("handles an empty run history and GitHub failures without exposing credentials", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ workflow_runs: [] })));
