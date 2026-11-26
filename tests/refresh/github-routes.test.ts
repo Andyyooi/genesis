@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { parse } from "yaml";
 import { POST } from "@/app/api/refresh/route";
 import { GET } from "@/app/api/refresh/status/route";
 import { mapRefreshStatus, resetGithubRefreshStateForTests, type WorkflowRun } from "@/refresh/github";
@@ -102,11 +104,16 @@ describe("GitHub refresh API", () => {
     expect(mapRefreshStatus({ ...run, status: status!, conclusion }, step, snapshot).phase).toBe(phase);
   });
 
-  it("schedules weekday 6pm MYT (10:00 UTC) automatic refreshes alongside workflow_dispatch", async () => {
-    const { readFileSync } = await import("node:fs");
+  it("schedules three weekday evening attempts in Malaysia time alongside workflow_dispatch", () => {
     const workflow = readFileSync(".github/workflows/refresh-data.yml", "utf8");
-    expect(workflow).toContain("workflow_dispatch:");
-    expect(workflow).toContain("schedule:");
-    expect(workflow).toContain("0 10 * * 1-5");
+    expect(parse(workflow).on).toEqual({
+      workflow_dispatch: null,
+      schedule: [{ cron: "23 10 * * 1-5" }, { cron: "23 12 * * 1-5" }, { cron: "23 15 * * 1-5" }],
+    });
+  });
+  it("uses the snapshot check to decide whether to run the refresh", () => {
+    const workflow = parse(readFileSync(".github/workflows/refresh-data.yml", "utf8"));
+    expect(workflow.jobs.check.outputs.run).toBe("${{ steps.snapshot.outputs.run }}");
+    expect(workflow.jobs.refresh).toMatchObject({ needs: "check", if: "needs.check.outputs.run == 'true'" });
   });
 });
