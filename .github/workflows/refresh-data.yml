@@ -4,7 +4,8 @@ on:
   workflow_dispatch:
   schedule:
     # GitHub may delay or drop runs at the top of the hour. Try at 6:23 PM, 8:23 PM,
-    # and 11:23 PM Malaysia time on weekdays; skip if today's post-close data is already published.
+    # and 11:23 PM Malaysia time on weekdays. Skip if today's snapshot was published
+    # at 6:00 PM or later, so a manual refresh started before Bursa closed doesn't count.
     - cron: '23 10 * * 1-5'
     - cron: '23 12 * * 1-5'
     - cron: '23 15 * * 1-5'
@@ -31,7 +32,7 @@ jobs:
           ref: main
           sparse-checkout: /data/snapshot.json
           sparse-checkout-cone-mode: false
-      - name: Check for today's post-close snapshot
+      - name: Check for today's evening snapshot
         id: snapshot
         shell: bash
         env:
@@ -40,8 +41,8 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]] &&
              published_at=$(jq -er '.publishedAt | select(type == "string" and length > 0)' data/snapshot.json) &&
              published_epoch=$(date -d "$published_at" +%s) &&
-             (( published_epoch >= $(date -d 'today 17:00' +%s) && published_epoch < $(date -d 'tomorrow 00:00' +%s) )); then
-            echo 'A snapshot was already published after Bursa closed today.'
+             (( published_epoch >= $(date -d 'today 18:00' +%s) && published_epoch < $(date -d 'tomorrow 00:00' +%s) )); then
+            echo 'A snapshot was already published at or after 6:00 PM Malaysia time today.'
             echo 'run=false' >> "$GITHUB_OUTPUT"
           else
             echo 'run=true' >> "$GITHUB_OUTPUT"
