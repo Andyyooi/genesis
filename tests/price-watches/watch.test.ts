@@ -15,6 +15,12 @@ describe("price watch rules", () => {
     expect(evaluatePriceWatch(target, latest(2.5))).toEqual({ status: "waiting", direction: "above", percent: 25 });
   });
 
+  it("matches Yahoo closes at the same precision as the displayed share price", () => {
+    const watch = { ...target, target: 10.14 };
+    expect(evaluatePriceWatch(watch, latest(10.140000343322754))).toEqual({ status: "triggered" });
+    expect(evaluatePriceWatch(watch, latest(10.140999794006348)).status).toBe("waiting");
+  });
+
   it("detects new entry from either side, including either endpoint", () => {
     expect(evaluatePriceWatch(fair, latest(4), previous(6), range)).toEqual({ status: "triggered" });
     expect(evaluatePriceWatch(fair, latest(2), previous(1), range)).toEqual({ status: "triggered" });

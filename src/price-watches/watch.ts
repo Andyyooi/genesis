@@ -2,7 +2,8 @@ import { z } from "zod";
 import { validClose, type PricePoint } from "@/lib/price-history";
 
 export const watchTicker = z.string().regex(/^[A-Z0-9._-]{1,32}$/);
-const targetRule = z.object({ kind: z.literal("target"), target: z.number().positive().refine((value) => Number(value.toFixed(3)) === value) });
+const pricePrecision = (value: number) => Number(value.toFixed(3));
+const targetRule = z.object({ kind: z.literal("target"), target: z.number().positive().refine((value) => pricePrecision(value) === value) });
 const fairRangeRule = z.object({ kind: z.literal("fair-range") });
 export const watchRule = z.discriminatedUnion("kind", [targetRule, fairRangeRule]);
 
@@ -18,8 +19,9 @@ export function evaluatePriceWatch(watch: PriceWatch, latest?: PricePoint, previ
   const close = latest?.close;
   if (!latest || !validClose(close)) return { status: "no-close" } as const;
   if (watch.kind === "target") {
-    if (close <= watch.target) return { status: "triggered" } as const;
-    return { status: "waiting", direction: "above", percent: (close - watch.target) / watch.target * 100 } as const;
+    const quotedClose = pricePrecision(close);
+    if (quotedClose <= watch.target) return { status: "triggered" } as const;
+    return { status: "waiting", direction: "above", percent: (quotedClose - watch.target) / watch.target * 100 } as const;
   }
 
   if (!range) return { status: "no-range" } as const;
