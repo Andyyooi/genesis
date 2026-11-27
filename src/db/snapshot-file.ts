@@ -1,6 +1,4 @@
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { isSnapshotReadOnly } from "@/lib/data-mode";
@@ -54,46 +52,30 @@ function refuseLiveResearchDatabaseInTests(filePath: string) {
   refuseLiveResearchDatabase(filePath);
 }
 
-/**
- * Local writable DB, or a /tmp copy of the committed gzip snapshot (read-only).
- * Vercel cannot persist SQLite writes; /tmp is per-instance only.
- * Tests may set BURSA_SQLITE_PATH to an isolated file.
- * Preview a candidate with BURSA_SNAPSHOT_READONLY=1 and BURSA_SNAPSHOT_GZ_PATH=<candidate.gz>.
- */
-export function resolveSqliteFile(): { path: string; readonly: boolean } {
+export function resolveSqliteSource(): { path: string; readonly: false } | { buffer: Buffer; readonly: true } {
   if (!isSnapshotReadOnly()) {
     const path = liveSqlitePath();
     refuseLiveResearchDatabaseInTests(path);
     mkdirSync(join(path, ".."), { recursive: true });
     return { path, readonly: false };
   }
-  const configuredGz = process.env.BURSA_SNAPSHOT_GZ_PATH?.trim();
-  // Keep the production path statically scoped so Turbopack does not trace the whole project.
-  const gz = configuredGz
-    ? resolve(/*turbopackIgnore: true*/ configuredGz)
-    : join(process.cwd(), "data", "snapshots", "research.db.gz");
+  const gz = snapshotGzPath();
   if (!existsSync(/*turbopackIgnore: true*/ gz)) {
     throw new Error(
       `Read-only snapshot missing at ${gz}. Run npm run snapshot:fetch before starting the app.`,
     );
   }
-  // Candidate paths use an isolated /tmp copy so they never collide with the committed snapshot cache.
-  const cacheKey = configuredGz
-    ? createHash("sha256").update(gz).digest("hex").slice(0, 16)
-    : "default";
-  const dest = join(tmpdir(), `bursa-research-snapshot-${cacheKey}.db`);
-  refuseLiveResearchDatabaseInTests(dest);
-  const stamp = join(tmpdir(), `bursa-research-snapshot-${cacheKey}.stamp`);
-  const gzStat = statSync(/*turbopackIgnore: true*/ gz);
-  const token = `${gzStat.size}:${gzStat.mtimeMs}`;
-  if (
-    existsSync(/*turbopackIgnore: true*/ dest) &&
-    existsSync(/*turbopackIgnore: true*/ stamp) &&
-    readFileSync(/*turbopackIgnore: true*/ stamp, "utf8") === token
-  ) {
-    return { path: dest, readonly: true };
+  const compressed = readFileSync(/*turbopackIgnore: true*/ gz);
+  const bytes = compressed.length >= 18 ? compressed.readUInt32LE(compressed.length - 4) : 0;
+  // Inflate into one chunk; SQLite makes a second full copy when it opens the buffer.
+  if (bytes < 100 || bytes > 800 * 1024 * 1024) {
+    throw new Error(`Snapshot size ${bytes} bytes is outside the in-memory SQLite budget.`);
   }
-  writeFileSync(/*turbopackIgnore: true*/ dest, gunzipSync(readFileSync(/*turbopackIgnore: true*/ gz)));
-  writeFileSync(/*turbopackIgnore: true*/ stamp, token);
-  return { path: dest, readonly: true };
+  const buffer = gunzipSync(compressed, { chunkSize: bytes + 1, maxOutputLength: bytes });
+  if (buffer.length !== bytes || buffer.toString("ascii", 0, 16) !== "SQLite format 3\0") {
+    throw new Error("Invalid SQLite snapshot image.");
+  }
+  // The backup contains all committed pages. SQLite cannot deserialize a WAL-mode image.
+  if (buffer[18] === 2 && buffer[19] === 2) buffer[18] = buffer[19] = 1;
+  return { buffer, readonly: true };
 }

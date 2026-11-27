@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/db/schema";
-import { refuseLiveResearchDatabase, resolveSqliteFile } from "@/db/snapshot-file";
+import { resolveSqliteSource } from "@/db/snapshot-file";
 
 const globalForDb = globalThis as unknown as {
   sqlite?: Database.Database;
@@ -277,7 +277,7 @@ function addColumn(sqlite: Database.Database, table: string, name: string, ddl: 
   }
 }
 
-/** Apply CREATE/ALTER migrations. Safe to run on a /tmp snapshot copy before read-only open. */
+/** Apply CREATE/ALTER migrations to a writable database or disposable snapshot copy. */
 export function migrateSqliteSchema(sqlite: Database.Database) {
   ensureSchema(sqlite);
 }
@@ -289,23 +289,16 @@ export function getSqlite() {
 
 export function getDb() {
   if (!globalForDb.sqlite) {
-    const resolved = resolveSqliteFile();
-    if (process.env.VITEST === "true") refuseLiveResearchDatabase(resolved.path);
-    // Snapshot DBs are packed from older schema tips. Migrate the /tmp copy in place
-    // (additive columns only) so Drizzle selects for new fields do not crash on Vercel.
-    if (resolved.readonly) {
-      const migrator = new Database(resolved.path);
-      migrator.pragma("foreign_keys = ON");
-      ensureSchema(migrator);
-      migrator.close();
-    }
-    const sqlite = resolved.readonly
-      ? new Database(resolved.path, { readonly: true, fileMustExist: true })
-      : new Database(resolved.path);
-    sqlite.pragma("foreign_keys = ON");
-    if (!resolved.readonly) {
-      sqlite.pragma("journal_mode = WAL");
+    const source = resolveSqliteSource();
+    const sqlite = source.readonly ? new Database(source.buffer) : new Database(source.path);
+    try {
+      sqlite.pragma("foreign_keys = ON");
+      if (!source.readonly) sqlite.pragma("journal_mode = WAL");
       ensureSchema(sqlite);
+      if (source.readonly) sqlite.pragma("query_only = ON");
+    } catch (error) {
+      sqlite.close();
+      throw error;
     }
     globalForDb.sqlite = sqlite;
   }

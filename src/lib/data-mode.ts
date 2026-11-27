@@ -1,6 +1,6 @@
 /**
  * Local: writable data/sqlite/research.db
- * Vercel / BURSA_SNAPSHOT_READONLY: gunzip bundled snapshot to /tmp, open read-only.
+ * Vercel / BURSA_SNAPSHOT_READONLY: open the bundled snapshot in memory for queries only.
  * Vercel’s filesystem is ephemeral — a git-tracked .db would not persist writes anyway.
  */
 export function isSnapshotReadOnly(): boolean {
