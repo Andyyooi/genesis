@@ -118,7 +118,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     listed.filter((row) => rowMatchesFilters(row, flagFilters)),
     sortId,
   );
-  const workspaceRows = rows.map(toWorkspaceRow);
+  const workspaceRows = rows.map((row) => toWorkspaceRow(row, fairRanges[row.ticker]));
   const marketPulse = loadMarketPricePulse();
   const latestDate = marketPulse.date;
   const { higher, lower, unchanged: flat } = marketPulse;

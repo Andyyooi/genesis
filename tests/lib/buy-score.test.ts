@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buyScore, buyScoreVerdict, researchRank } from "@/lib/buy-score";
+import { buyScore, buyScoreVerdict, formatBuyRank, researchRank } from "@/lib/buy-score";
 
 const pool = Array.from({ length: 101 }, (_, i) => i);
 
@@ -24,5 +24,15 @@ describe("buy score", () => {
 
   it("has no Buy score without a research score", () => {
     expect(buyScore({ researchScore: null, allResearchScores: pool, eligible: true, needsVerification: false }).available).toBe(false);
+  });
+
+  it("reads as a rank, not a score", () => {
+    expect(formatBuyRank(96)).toBe("Top 4%");
+    expect(formatBuyRank(100)).toBe("Top 1%");
+    expect(formatBuyRank(69)).toBe("Top 31%");
+    expect(formatBuyRank(50)).toBe("Top 50%");
+    expect(formatBuyRank(30)).toBe("Bottom 30%");
+    expect(formatBuyRank(0)).toBe("Bottom 1%");
+    expect(formatBuyRank(null)).toBe("—");
   });
 });

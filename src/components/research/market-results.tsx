@@ -6,6 +6,7 @@ import { ArrowUpRight, ChevronDown, Search } from "lucide-react";
 import { StatusLabel } from "./status-label";
 import { dataConfidenceLabel, formatScore100 } from "@/lib/research-copy";
 import { FairRangePill } from "./fair-range-pill";
+import { formatBuyRank } from "@/lib/buy-score";
 import type { ListFairRange } from "@/lib/fair-range-summary";
 import { STRONG_RESEARCH_SCORE } from "@/market/filters";
 import type { MarketResultRow } from "@/market/result-props";
@@ -125,19 +126,19 @@ export function MarketResults({
       </form>
       <p className="scan-list-note">
         Your held stocks appear first within the current filters. {" "}
-        Scores are out of 100. The Buy score ranks the research score against all stocks and is held below 70 when a safety check fails; it is not a guarantee. Open a company for research;
+        Scores are out of 100. The Buy rank shows where the research score ranks among all stocks (top 4% means it beats 96 in 100) and is held back when a safety check fails; it is a rank, not a buy signal. The coloured label shows today&apos;s price against the fair range, the main guide to a good entry. Open a company for research;
         expand its review for coverage and exclusions.
       </p>
       {visible.length ? (
         <table className="scan-table" role="table">
           <caption className="sr-only">
-            Market scan companies with Buy, research and valuation scores, data
+            Market scan companies with price against fair range, Buy rank, research and valuation scores, data
             confidence, coverage and eligibility review
           </caption>
           <thead role="rowgroup">
             <tr role="row">
               <th scope="col">Company</th>
-              <th scope="col">Buy score</th>
+              <th scope="col">Research · Buy rank</th>
               <th scope="col">Valuation</th>
               <th scope="col">Confidence</th>
               <th scope="col">Coverage</th>
@@ -181,14 +182,14 @@ export function MarketResults({
                   </td>
                   <td role="cell">
                     <span className="scan-mobile-label" aria-hidden="true">
-                      Buy score
+                      Research
                     </span>
                     <ScanScore
-                      value={row.buyScore}
+                      value={row.researchScore}
                       muted={needsVerification}
                     />
                     <span className="block text-xs text-muted-foreground">
-                      Research {typeof row.researchScore === "number" && Number.isFinite(row.researchScore) ? row.researchScore.toFixed(0) : "—"}
+                      Buy rank {formatBuyRank(typeof row.buyScore === "number" ? row.buyScore : null).toLowerCase()}
                     </span>
                   </td>
                   <td role="cell">

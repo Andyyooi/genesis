@@ -24,7 +24,7 @@ export function loadListFairRanges(tickers: string[]): Record<string, ListFairRa
   return Object.fromEntries(rows.map(row => {
     const range = fairRangeHeadline(stored.get(row.id) ?? null, row.lastClose);
     return [row.ticker, range.available
-      ? { available: true, position: range.position, positionText: range.positionText, low: range.low, high: range.high }
+      ? { available: true, position: range.position, positionText: range.positionText, low: range.low, high: range.high, price: range.price }
       : { available: false }];
   }));
 }

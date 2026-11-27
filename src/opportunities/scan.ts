@@ -15,6 +15,7 @@ import {
 import { scoreTicker } from "@/scoring/run-ticker";
 import { getSqlite } from "@/db/client";
 import { seedUniverseFromYaml } from "@/db/seed";
+import type { ListFairRange } from "@/lib/fair-range-summary";
 
 function metric(metrics: MetricValue[], id: string): MetricValue | undefined {
   return metrics.find((m) => m.id === id);
@@ -95,7 +96,7 @@ export function loadOpportunity(ticker: string, watchlistReason: WatchlistReason
     };
 }
 
-export function toWorkspaceRow(row: OpportunityRow): WorkspaceRow {
+export function toWorkspaceRow(row: OpportunityRow, fairRange?: ListFairRange): WorkspaceRow {
   return {
     ticker: row.ticker,
     name: row.name,
@@ -113,6 +114,7 @@ export function toWorkspaceRow(row: OpportunityRow): WorkspaceRow {
     pn17: row.pn17,
     watchlistReason: row.watchlistReason ?? null,
     prices: loadSavedPrices(row.ticker, 30),
+    fairRange,
   };
 }
 

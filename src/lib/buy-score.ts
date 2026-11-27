@@ -1,4 +1,4 @@
-/** Stocks that fail the safety checks (too small or thinly traded, PN17, listing warning) or whose key figures are missing or old never show a high Buy score. */
+/** Stocks that fail the safety checks (too small or thinly traded, PN17, listing warning) or whose key figures are missing or old never rank in the top 30%. */
 export const BUY_SCORE_CAUTION_CAP = 69;
 
 export type BuyScore =
@@ -20,7 +20,7 @@ export function researchRank(score: number, allScores: readonly number[]): numbe
 }
 
 /**
- * Buy score: where the research score ranks among all scored stocks, capped
+ * Buy rank (stored as a 0-100 score): where the research score ranks among all scored stocks, capped
  * when the safety checks fail. The fair range is shown beside it as an entry
  * price guide and does not change the score: in the backtest, stocks below
  * their fair range did not do better than stocks above it.
@@ -33,7 +33,7 @@ export function buyScore(args: {
 }): BuyScore {
   const { researchScore } = args;
   if (researchScore === null || !Number.isFinite(researchScore)) {
-    return { available: false, reason: "No research score, so there is no Buy score." };
+    return { available: false, reason: "No research score, so there is no Buy rank." };
   }
   const raw = researchRank(researchScore, args.allResearchScores);
   const capped = (!args.eligible || args.needsVerification) && raw > BUY_SCORE_CAUTION_CAP;
@@ -44,11 +44,18 @@ export function buyScoreValue(score: BuyScore): number | null {
   return score.available ? score.score : null;
 }
 
+/** The Buy rank in plain words: 96 reads "Top 4%", 30 reads "Bottom 30%". */
+export function formatBuyRank(score: number | null): string {
+  if (score === null || !Number.isFinite(score)) return "—";
+  const rounded = Math.round(score);
+  return rounded >= 50 ? `Top ${Math.max(1, 100 - rounded)}%` : `Bottom ${Math.max(1, rounded)}%`;
+}
+
 export function buyScoreVerdict(score: BuyScore): { label: string; tone: string; why: string } {
-  if (!score.available) return { label: "No Buy score", tone: "UNKNOWN", why: score.reason };
+  if (!score.available) return { label: "No Buy rank", tone: "UNKNOWN", why: score.reason };
   if (score.capped) return {
     label: "Held back", tone: "LOW",
-    why: "The research compares well, but the stock fails a safety check (too small or thinly traded, a warning flag, or missing or old figures), so the Buy score is held below 70.",
+    why: "The research compares well, but the stock fails a safety check (too small or thinly traded, a warning flag, or missing or old figures), so its Buy rank is held out of the top 30%.",
   };
   if (score.score >= 90) return { label: "Top 10% of stocks", tone: "HIGH", why: "Its research compares better than at least 9 in 10 stocks and it passes the safety checks." };
   if (score.score >= 75) return { label: "Better than most", tone: "HIGH", why: "Its research compares better than about three-quarters of stocks and it passes the safety checks." };
@@ -57,4 +64,4 @@ export function buyScoreVerdict(score: BuyScore): { label: string; tone: string;
 }
 
 export const BUY_SCORE_BACKTEST_NOTE =
-  "Backtest (Jul 2025 to Jul 2026, mostly a falling market): stocks scoring 90+ made money 50% of the time after 3 months, 52% after 6 months and 57% after 12 months, against about 46% for any stock that passed the safety checks and 39-40% for all stocks. It tilts the odds a little; it does not make a gain likely. Check the company and aim to buy inside or below the fair range.";
+  "Backtest (Jul 2025 to Jul 2026, mostly a falling market): stocks ranked in the top 10% made money 50% of the time after 3 months, 52% after 6 months and 57% after 12 months, against about 46% for any stock that passed the safety checks and 39-40% for all stocks. It tilts the odds a little; it does not make a gain likely. A high rank is not a buy signal: check the company and use the price against the fair range to judge the entry.";
