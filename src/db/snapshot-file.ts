@@ -4,6 +4,8 @@ import { gunzipSync } from "node:zlib";
 import { isSnapshotReadOnly } from "@/lib/data-mode";
 
 export const SNAPSHOT_GZ_REL = join("data", "snapshots", "research.db.gz");
+export const RUNTIME_SNAPSHOT_GZ_REL = join("data", "snapshots", "research.runtime.db.gz");
+export const RUNTIME_SNAPSHOT_MAX_BYTES = 350 * 1024 * 1024;
 
 export function snapshotGzPath() {
   const configured = process.env.BURSA_SNAPSHOT_GZ_PATH?.trim();
@@ -11,7 +13,17 @@ export function snapshotGzPath() {
     // Candidate preview paths are absolute temp files, not the committed snapshot.
     return resolve(/*turbopackIgnore: true*/ configured);
   }
-  return join(process.cwd(), "data", "snapshots", "research.db.gz");
+  return join(process.cwd(), SNAPSHOT_GZ_REL);
+}
+
+function usesBundledRuntimeSnapshot() {
+  return process.env.NODE_ENV === "production" && !process.env.BURSA_SNAPSHOT_GZ_PATH?.trim();
+}
+
+export function servedSnapshotPath() {
+  return usesBundledRuntimeSnapshot()
+    ? join(process.cwd(), RUNTIME_SNAPSHOT_GZ_REL)
+    : snapshotGzPath();
 }
 
 export function defaultLiveSqlitePath() {
@@ -59,16 +71,17 @@ export function resolveSqliteSource(): { path: string; readonly: false } | { buf
     mkdirSync(join(path, ".."), { recursive: true });
     return { path, readonly: false };
   }
-  const gz = snapshotGzPath();
+  const gz = servedSnapshotPath();
   if (!existsSync(/*turbopackIgnore: true*/ gz)) {
     throw new Error(
-      `Read-only snapshot missing at ${gz}. Run npm run snapshot:fetch before starting the app.`,
+      `Read-only snapshot missing at ${gz}. Run npm run build for production or npm run snapshot:fetch for development.`,
     );
   }
   const compressed = readFileSync(/*turbopackIgnore: true*/ gz);
   const bytes = compressed.length >= 18 ? compressed.readUInt32LE(compressed.length - 4) : 0;
   // Inflate into one chunk; SQLite makes a second full copy when it opens the buffer.
-  if (bytes < 100 || bytes > 800 * 1024 * 1024) {
+  const limit = usesBundledRuntimeSnapshot() ? RUNTIME_SNAPSHOT_MAX_BYTES : 800 * 1024 * 1024;
+  if (bytes < 100 || bytes > limit) {
     throw new Error(`Snapshot size ${bytes} bytes is outside the in-memory SQLite budget.`);
   }
   const buffer = gunzipSync(compressed, { chunkSize: bytes + 1, maxOutputLength: bytes });

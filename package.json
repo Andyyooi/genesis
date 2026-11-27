@@ -6,7 +6,7 @@
     "predev": "tsx scripts/fetch-snapshot.ts --if-missing",
     "dev": "next dev --hostname 0.0.0.0 --port 43147",
     "dev:persist": "bash scripts/dev-persist.sh",
-    "prebuild": "npm run snapshot:fetch",
+    "prebuild": "npm run snapshot:fetch && tsx scripts/prepare-runtime-snapshot.ts",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port 43147",
     "lint": "eslint",

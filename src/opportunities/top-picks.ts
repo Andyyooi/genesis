@@ -36,9 +36,16 @@ export function pickReasons(result: ScoreResult): string[] {
     .map((factor) => `${factor.score! >= 50 ? descriptions[factor.metricId] ?? factor.label : factor.label}: blended peer percentile ${factor.score!.toFixed(0)} (top ${Math.max(1, Math.ceil(100 - factor.score!))}%).`);
 }
 
+/** Newest saved closing date among the candidates; a pick must have a close for this day. */
+export function freshPriceDate(rows: PickCandidate[]): string | null {
+  return rows.reduce<string | null>((latest, row) => (row.lastTrade && (!latest || row.lastTrade > latest) ? row.lastTrade : latest), null);
+}
+
 export function selectTopPicks(rows: PickCandidate[], limit = 15, options: TopPicksOptions = {}, settings = loadScoringConfig().top_picks) {
   const budget = options.lotBudget !== undefined && Number.isFinite(options.lotBudget) && options.lotBudget > 0 ? options.lotBudget : null;
-  return rows.filter((row) => row.result.methodology === "cross-sectional-v2" && row.result.eligibility?.eligible === true && row.result.researchScore !== null && Number.isFinite(row.result.researchScore))
+  const priceDate = freshPriceDate(rows);
+  return rows.filter((row) => priceDate !== null && row.lastTrade === priceDate)
+    .filter((row) => row.result.methodology === "cross-sectional-v2" && row.result.eligibility?.eligible === true && row.result.researchScore !== null && Number.isFinite(row.result.researchScore))
     .filter((row) => {
       const tradedValue = row.result.eligibility?.medianTradedValue;
       return row.marketCap !== null && Number.isFinite(row.marketCap) && row.marketCap >= settings.min_market_cap && tradedValue != null && Number.isFinite(tradedValue) && tradedValue >= settings.min_median_traded_value;
@@ -90,5 +97,7 @@ export function loadTopPicks(options: TopPicksOptions = {}) {
   const { summary, candidates, excluded, exclusions } = isSnapshotReadOnly()
     ? (snapshotTopPicksInputs ??= loadTopPicksInputs())
     : loadTopPicksInputs();
-  return { summary, picks: selectTopPicks(candidates, 15, options, settings), excluded, exclusions, settings };
+  const priceDate = freshPriceDate(candidates);
+  const stalePrices = candidates.filter((row) => row.lastTrade !== priceDate).map((row) => row.ticker).sort();
+  return { summary, picks: selectTopPicks(candidates, 15, options, settings), excluded, exclusions, settings, priceDate, stalePrices };
 }

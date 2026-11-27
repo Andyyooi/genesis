@@ -22,6 +22,21 @@ export type PriceCheckReport = {
   stale: (PriceCheckStock & { lastDate: string })[];
   jumps: (PriceCheckStock & { date: string; from: number; to: number; changePercent: number })[];
   failedThisRun: string[];
+  /** The trading day before newestDate among saved prices. */
+  previousDate?: string | null;
+  /** Stocks with saved closes for both newestDate and previousDate. */
+  freshCount?: number;
+  /** Stocks that failed the first download pass and were tried again. */
+  retried?: string[];
+  recoveredOnRetry?: string[];
+};
+
+export type PriceCheckOptions = {
+  checkedAt: string;
+  marketDate?: string | null;
+  failedThisRun?: string[];
+  retried?: string[];
+  recoveredOnRetry?: string[];
 };
 
 function daysBetween(from: string, to: string): number {
@@ -34,12 +49,18 @@ const usable = (close: number | null): close is number => typeof close === "numb
 /** Flags missing, stale and implausibly moving saved prices. Never changes the prices themselves. */
 export function findPriceIssues(
   stocks: PriceCheckInput[],
-  options: { checkedAt: string; marketDate?: string | null; failedThisRun?: string[] },
+  options: PriceCheckOptions,
 ): PriceCheckReport {
   const newestDate = stocks.flatMap((s) => (s.latestDate ? [s.latestDate] : [])).sort().at(-1) ?? null;
   const recentDates = [...new Set(stocks.flatMap((s) => s.bars.map((b) => b.date)))].sort().slice(-RECENT_MARKET_DAYS);
   const windowStart = recentDates[0] ?? null;
   const listedTickers = new Set(stocks.map((s) => s.ticker));
+  const closeDates = (stock: PriceCheckInput) =>
+    stock.bars.filter((bar) => usable(bar.close)).map((bar) => bar.date).sort();
+  const previousDate = newestDate
+    ? [...new Set(stocks.flatMap(closeDates))].filter((date) => date < newestDate).sort().at(-1) ?? null
+    : null;
+  const listed = (tickers?: string[]) => [...new Set(tickers ?? [])].filter((t) => listedTickers.has(t)).sort();
   const report: PriceCheckReport = {
     kind: "price-check",
     checkedAt: options.checkedAt,
@@ -50,7 +71,16 @@ export function findPriceIssues(
     noPrice: [],
     stale: [],
     jumps: [],
-    failedThisRun: [...new Set(options.failedThisRun ?? [])].filter((t) => listedTickers.has(t)).sort(),
+    failedThisRun: listed(options.failedThisRun),
+    previousDate,
+    freshCount: previousDate
+      ? stocks.filter((stock) => {
+          const dates = closeDates(stock);
+          return dates.at(-1) === newestDate && dates.at(-2) === previousDate;
+        }).length
+      : 0,
+    retried: listed(options.retried),
+    recoveredOnRetry: listed(options.recoveredOnRetry),
   };
   for (const stock of stocks) {
     const who = { ticker: stock.ticker, name: stock.name };
@@ -131,15 +161,33 @@ export function priceCheckSummary(report: PriceCheckReport): string | null {
   return parts.length ? `Price check: ${parts.join("; ")}.` : null;
 }
 
+/** Plain-English coverage report printed after every refresh. */
+export function priceCoverageLines(report: PriceCheckReport): string[] {
+  const percent = report.listed ? Math.round(((report.freshCount ?? 0) / report.listed) * 1000) / 10 : 0;
+  const lines = [
+    report.newestDate && report.previousDate
+      ? `${report.freshCount ?? 0} of ${report.listed} listed stocks (${percent}%) have closes for both ${report.newestDate} and ${report.previousDate}.`
+      : `${report.listed} listed stocks; not enough saved closing days to measure coverage.`,
+  ];
+  const names = (list: string[]) => list.slice(0, 20).join(", ") + (list.length > 20 ? `, and ${list.length - 20} more` : "");
+  if (report.retried?.length) {
+    lines.push(`Retried ${report.retried.length} after a failed download; ${report.recoveredOnRetry?.length ?? 0} recovered.`);
+  }
+  if (report.failedThisRun.length) lines.push(`Still not downloaded: ${names(report.failedThisRun)}.`);
+  if (report.stale.length) lines.push(`Last price older than ${report.newestDate}: ${names(report.stale.map((s) => `${s.ticker} (${s.lastDate})`))}.`);
+  if (report.noPrice.length) lines.push(`No saved price: ${names(report.noPrice.map((s) => s.ticker))}.`);
+  return lines;
+}
+
 /** Runs in the daily refresh right after prices are downloaded and stores its findings. */
 export function runPriceCheck(
   runId: string,
   marketDate: string,
-  options: { now?: () => Date; failedThisRun?: string[] } = {},
+  options: Omit<PriceCheckOptions, "checkedAt" | "marketDate"> & { now?: () => Date } = {},
 ): DatasetRefreshResult {
-  const now = options.now ?? (() => new Date());
+  const { now = () => new Date(), ...downloads } = options;
   const startedAt = now().toISOString();
-  const report = findPriceIssues(loadPriceCheckInputs(), { checkedAt: startedAt, marketDate, failedThisRun: options.failedThisRun });
+  const report = findPriceIssues(loadPriceCheckInputs(), { ...downloads, checkedAt: startedAt, marketDate });
   const flagged = priceCheckIssueCount(report);
   const summary = priceCheckSummary(report);
   return persistDatasetRefresh(runId, {
@@ -170,6 +218,8 @@ export function loadPriceCheck(): { report: PriceCheckReport; fromRefresh: boole
       checkedAt: stored.checkedAt,
       marketDate: stored.marketDate,
       failedThisRun: stored.failedThisRun,
+      retried: stored.retried,
+      recoveredOnRetry: stored.recoveredOnRetry,
     });
     return { report, fromRefresh: true };
   }

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { inProgressSessionDate } from "@/ingest/price-bar";
 import { fetchYahooDailyBars, usableYahooDailyBar, type YahooBar } from "@/ingest/providers/yahoo-prices";
 
 function bar(overrides: Partial<YahooBar> = {}): YahooBar {
@@ -104,5 +105,52 @@ describe("Yahoo daily bar validation", () => {
     }));
     const bars = await fetchYahooDailyBars("MAYBANK.KL", "5d");
     expect(bars.map(({ split }) => split)).toEqual([undefined, true, undefined]);
+  });
+});
+
+describe("Yahoo retries and unfinished sessions", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+  const day = (date: string) => Date.parse(`${date}T01:00:00Z`) / 1000;
+  const body = (dates: string[]) => ({
+    chart: { result: [{ timestamp: dates.map(day), indicators: { quote: [{ open: dates.map(() => 10), high: dates.map(() => 10), low: dates.map(() => 10), close: dates.map(() => 10), volume: dates.map(() => 100) }] } }] },
+  });
+
+  it("knows when Bursa's session for today has not settled (before 5:30 PM Malaysia time)", () => {
+    expect(inProgressSessionDate(new Date("2026-11-27T01:16:00Z"))).toBe("2026-11-27");
+    expect(inProgressSessionDate(new Date("2026-11-27T09:29:00Z"))).toBe("2026-11-27");
+    expect(inProgressSessionDate(new Date("2026-11-27T09:30:00Z"))).toBeNull();
+    expect(inProgressSessionDate(new Date("2026-11-26T17:00:00Z"))).toBe("2026-11-27");
+  });
+
+  it("drops the bar for a session still trading but keeps finished closes", async () => {
+    vi.stubGlobal("fetch", chart(body(["2026-11-26", "2026-11-27"])));
+    const midSession = await fetchYahooDailyBars("MAYBANK.KL", "5d", { now: () => new Date("2026-11-27T02:00:00Z") });
+    expect(midSession.map((b) => b.barDate)).toEqual(["2026-11-26"]);
+    const afterClose = await fetchYahooDailyBars("MAYBANK.KL", "5d", { now: () => new Date("2026-11-27T10:00:00Z") });
+    expect(afterClose.map((b) => b.barDate)).toEqual(["2026-11-26", "2026-11-27"]);
+  });
+
+  it("retries rate limits, server errors and network failures, then gives up", async () => {
+    const ok = () => new Response(JSON.stringify(body(["2026-11-26"])), { status: 200 });
+    const flaky = vi.fn()
+      .mockResolvedValueOnce(new Response("busy", { status: 429 }))
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockImplementation(async () => ok());
+    vi.stubGlobal("fetch", flaky);
+    const bars = await fetchYahooDailyBars("MAYBANK.KL", "5d", { retryDelaysMs: [0, 0], now: () => new Date("2026-11-27T10:00:00Z") });
+    expect(bars).toHaveLength(1);
+    expect(flaky).toHaveBeenCalledTimes(3);
+
+    const down = chart({}, 503);
+    vi.stubGlobal("fetch", down);
+    await expect(fetchYahooDailyBars("MAYBANK.KL", "5d", { retryDelaysMs: [0, 0] })).rejects.toThrow(/503/);
+    expect(down).toHaveBeenCalledTimes(3);
+
+    const missing = chart({ chart: { error: { description: "Not Found" } } }, 404);
+    vi.stubGlobal("fetch", missing);
+    await expect(fetchYahooDailyBars("MISSING.KL", "5d", { retryDelaysMs: [0, 0] })).rejects.toThrow();
+    expect(missing).toHaveBeenCalledTimes(1);
   });
 });

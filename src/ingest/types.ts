@@ -74,4 +74,12 @@ export type PricesImportReport = {
   barsReimported?: number;
   /** Older sessions whose incoming close differed. The stored close was kept. */
   conflicts?: PriceBarConflict[];
+  /** Stocks that failed the first pass and were tried once more. */
+  retried?: string[];
+  /** Stocks the extra pass downloaded. */
+  recoveredOnRetry?: string[];
+  /** Intraday bars removed because Bursa's session had not closed. */
+  partialBarsRemoved?: number;
+  /** Malaysia date skipped as still trading, or null after the close. */
+  inProgressSession?: string | null;
 };
