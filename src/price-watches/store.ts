@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { join } from "node:path";
 import { isProduction, type AuthEnvironment } from "@/auth/session";
+import { redisCommand, redisCredentials } from "@/lib/redis-rest";
 import { savedWatch, type PriceWatch } from "./watch";
 
 interface PriceWatchStore {
@@ -18,20 +19,7 @@ function decode(value: unknown): PriceWatch {
 }
 
 export function redisPriceWatchStore(url: string, token: string, request = fetch): PriceWatchStore {
-  async function command(...args: string[]): Promise<unknown> {
-    const response = await request(url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(args),
-      cache: "no-store",
-      redirect: "error",
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!response.ok) throw new Error("Price watch storage request failed");
-    const body = await response.json();
-    if (!body || body.error || !Object.hasOwn(body, "result")) throw new Error("Price watch storage command failed");
-    return body.result;
-  }
+  const command = redisCommand(url, token, request, "Price watch storage");
   return {
     async get(ticker) {
       const value = await command("HGET", REDIS_KEY, ticker);
@@ -81,16 +69,9 @@ export function localPriceWatchStore(path: string): PriceWatchStore {
   };
 }
 
-type PriceWatchEnvironment = AuthEnvironment & {
-  KV_REST_API_URL?: string;
-  KV_REST_API_TOKEN?: string;
-  UPSTASH_REDIS_REST_URL?: string;
-  UPSTASH_REDIS_REST_TOKEN?: string;
-};
-
-export function getPriceWatchStore(env: PriceWatchEnvironment = process.env): PriceWatchStore | null {
-  if (env.KV_REST_API_URL && env.KV_REST_API_TOKEN) return redisPriceWatchStore(env.KV_REST_API_URL, env.KV_REST_API_TOKEN);
-  if (env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN) return redisPriceWatchStore(env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_REST_TOKEN);
+export function getPriceWatchStore(env: AuthEnvironment & Parameters<typeof redisCredentials>[0] = process.env): PriceWatchStore | null {
+  const credentials = redisCredentials(env);
+  if (credentials) return redisPriceWatchStore(credentials.url, credentials.token);
   if (isProduction(env)) return null;
   return localPriceWatchStore(join(process.cwd(), "data/sqlite/price-watches.db"));
 }

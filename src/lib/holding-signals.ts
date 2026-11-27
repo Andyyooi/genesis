@@ -4,11 +4,15 @@ import { latestQuarterlyResultAlert } from "@/lib/quarterly-results";
 import type { StatementSnapshot } from "@/metrics/types";
 
 export type HoldingSignal = {
-  kind: "new-results" | "below-fair-range" | "price-down";
+  kind: "new-results" | "below-fair-range" | "price-down" | "score-changed" | "range-moved" | "watch-triggered";
   title: string;
   why: string;
   date: string | null;
 };
+
+export function isOwnedStockSignal(kind: HoldingSignal["kind"]) {
+  return kind === "score-changed" || kind === "range-moved" || kind === "watch-triggered";
+}
 
 /** Current saved conditions, not claims that a threshold was crossed today. */
 export function holdingSignals({ range, priceDown, priceDate, periods = [], inactive = false }: {

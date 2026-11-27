@@ -2,57 +2,51 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { backupJson, HOLDINGS_KEY, holdingValue, mergeHolding, parseBackup, totalYearlyDividends, validateHolding, yearlyHoldingDividends, type Holding } from "@/lib/holdings";
+import { backupJson, holdingValue, mergeHolding, parseBackup, totalYearlyDividends, validateHolding, yearlyHoldingDividends, type Holding } from "@/lib/holdings";
+import { refreshPortfolio, savePortfolio, usePortfolio } from "@/components/holdings-store";
 import type { DividendBasis } from "@/lib/dividend-yield";
 import { formatMyr } from "@/lib/format-myr";
 import { formatScore100 } from "@/lib/research-copy";
 import { FairRangePill } from "@/components/research/fair-range-pill";
 import type { ListFairRange } from "@/lib/fair-range-summary";
+import { isOwnedStockSignal, type HoldingSignal } from "@/lib/holding-signals";
 
-type Quote = { ticker: string; fairRange?: ListFairRange; price: number | null; priceDate: string | null; score: number | null; annualDividend: DividendBasis | null; warnings: string[] };
-type Data = { universe: { ticker: string; name: string }[]; quotes: Quote[] };
+type Quote = { ticker: string; fairRange?: ListFairRange; price: number | null; priceDate: string | null; score: number | null; annualDividend: DividendBasis | null; warnings: string[]; signals: HoldingSignal[] };
+type Data = { universe: { ticker: string; name: string }[]; quotes: Quote[]; watchesUnavailable: boolean };
 const priceText = (n: number | null) => n === null ? "Unavailable" : `RM ${n.toLocaleString("en-MY", { minimumFractionDigits: 3, maximumFractionDigits: 5 })}`;
 const button = "rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted";
 
+function downloadBackup(rows: Holding[], filename: string) {
+  const url = URL.createObjectURL(new Blob([backupJson(rows)], { type: "application/json" }));
+  const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+}
+
 export function Holdings() {
-  const [rows, setRows] = useState<Holding[] | null>(null);
+  const saved = usePortfolio();
+  const rows = saved.mode === "loading" || saved.mode === "error" ? null : saved.portfolio.holdings;
+  const canSave = rows !== null && !saved.busy;
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
+  const [editRevision, setEditRevision] = useState<number | null>(null);
   const [stock, setStock] = useState("");
   const [shares, setShares] = useState("");
   const [average, setAverage] = useState("");
-  useEffect(() => {
-    const read = () => {
-      try {
-        const raw = localStorage.getItem(HOLDINGS_KEY);
-        setRows(raw ? parseBackup(raw) : []);
-      } catch { setError("Could not read saved holdings. Restore a backup or enable browser storage. Existing data has not been overwritten."); }
-    };
-    const timer = window.setTimeout(read, 0);
-    window.addEventListener("storage", read);
-    return () => { window.clearTimeout(timer); window.removeEventListener("storage", read); };
-  }, []);
-  const tickers = rows?.map(h => h.ticker).join(",") ?? "";
+  const tickers = rows?.map(h => encodeURIComponent(h.ticker)).join(",") ?? "";
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/holdings?tickers=${encodeURIComponent(tickers)}`, { signal: controller.signal }).then(r => {
+    fetch(`/api/holdings?tickers=${tickers}`, { signal: controller.signal }).then(r => {
       if (!r.ok) throw new Error("Could not load market data. Reload to try again.");
       return r.json();
     }).then(setData).catch(e => { if (e.name !== "AbortError") setError(e.message); });
     return () => controller.abort();
   }, [tickers]);
-  function save(next: Holding[]) {
-    try {
-      localStorage.setItem(HOLDINGS_KEY, backupJson(next));
-      setRows(next);
-      window.dispatchEvent(new Event("holdings-change"));
-      setError("");
-      return true;
-    } catch { setError("Could not save. Browser storage may be disabled or full. Your previous holdings are unchanged."); return false; }
+  async function save(next: Holding[]) {
+    await savePortfolio({ kind: "holdings", holdings: next }, saved.portfolio.revision);
+    setError("");
   }
-  function reset() { setEditing(null); setStock(""); setShares(""); setAverage(""); }
+  function reset() { setEditing(null); setEditRevision(null); setStock(""); setShares(""); setAverage(""); }
   const holdings = (rows ?? []).map(h => {
     const quote = data?.quotes.find(q => q.ticker === h.ticker);
     return {
@@ -68,11 +62,16 @@ export function Holdings() {
   const dividendsLoaded = holdings.every(h => h.quote);
   return <>
     <section className="market-card p-5 flex flex-wrap items-center justify-between gap-4">
-      <p className="max-w-2xl text-sm text-muted-foreground">Holdings stay in this browser, not on the server. Clearing browser data removes them. Download a backup to move devices or keep a safe copy.</p>
-      <div className="flex gap-2"><button className={button} disabled={rows === null} onClick={() => {
-        const url = URL.createObjectURL(new Blob([backupJson(rows ?? [])], { type: "application/json" }));
-        const a = document.createElement("a"); a.href = url; a.download = "genesis-holdings.json"; a.click(); URL.revokeObjectURL(url);
-      }}>Backup</button><label className={`${button} cursor-pointer`}>Restore<input className="sr-only" type="file" accept="application/json,.json" onChange={async e => {
+      <p className="max-w-2xl text-sm text-muted-foreground">{saved.mode === "server"
+        ? "Holdings and stars are shared across devices signed in with the site password. Download a backup to keep a copy of your holdings."
+        : saved.mode === "browser" ? "Sync isn’t set up. Holdings and stars stay in this browser. Download a backup to keep a copy of your holdings."
+          : saved.mode === "loading" ? "Loading saved holdings…" : "Holdings are unavailable right now."}</p>
+      <div className="flex flex-wrap gap-2">
+        <button className={button} disabled={rows === null} onClick={() => downloadBackup(rows ?? [], "genesis-holdings.json")}>
+          {saved.unimportedHoldings?.length ? "Backup synced holdings" : "Backup"}
+        </button>
+        {saved.unimportedHoldings?.length ? <button className={button} onClick={() => downloadBackup(saved.unimportedHoldings ?? [], "genesis-browser-holdings.json")}>Backup browser holdings</button> : null}
+        <label className={`${button} cursor-pointer`}>Restore<input className="sr-only" disabled={!canSave} type="file" accept="application/json,.json" onChange={async e => {
         const file = e.target.files?.[0]; e.target.value = "";
         if (!file) return;
         try {
@@ -81,33 +80,39 @@ export function Holdings() {
           if (!data) throw new Error("Wait for the stock list before restoring.");
           const unknown = restored.find(h => !data.universe.some(s => s.ticker === h.ticker));
           if (unknown) throw new Error(`Unknown ticker in backup: ${unknown.ticker}. Nothing was changed.`);
-          if (window.confirm(`Replace this browser's holdings with ${restored.length} backed-up holdings?`)) {
-            if (save(restored)) { reset(); setNotice("Backup restored."); }
+          if (window.confirm(`Replace ${saved.mode === "server" ? "your synced holdings" : "this browser's holdings"} with ${restored.length} backed-up holdings?`)) {
+            await save(restored);
+            reset();
+            setNotice("Backup restored.");
           }
         } catch (e) { setError(e instanceof Error ? e.message : "Invalid backup"); }
       }} /></label></div>
     </section>
+    {saved.error && <p role="alert" className="text-sm">{saved.error} {saved.mode === "error" && <button type="button" className="underline" onClick={() => void refreshPortfolio()}>Retry</button>}</p>}
     {error && <p role="alert" className="rounded-lg border border-red-400 p-4 text-red-700 dark:text-red-300">{error}</p>}
     {notice && <p role="status" className="text-sm">{notice}</p>}
-    <form className="market-card grid min-w-0 grid-cols-1 items-end gap-4 p-5 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={e => {
+    <form className="market-card grid min-w-0 grid-cols-1 items-end gap-4 p-5 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto]" onSubmit={async e => {
       e.preventDefault();
       try {
+        if (editing && editRevision !== saved.portfolio.revision) throw new Error("Your saved stocks changed. Cancel and reopen this holding before editing.");
         const match = data?.universe.find(s => s.ticker.toUpperCase() === stock.trim().toUpperCase() || s.name.toUpperCase() === stock.trim().toUpperCase());
         if (!match) throw new Error("Choose a ticker or exact company name from the stock list.");
         const h = validateHolding({ ticker: match.ticker, shares: Number(shares), averagePrice: Number(average) });
         if (editing && h.ticker !== editing && rows?.some(r => r.ticker === h.ticker)) throw new Error("You already own this ticker. Edit that holding instead.");
         const next = editing ? (rows ?? []).map(r => r.ticker === editing ? h : r) : mergeHolding(rows ?? [], h);
-        if (save(next)) { reset(); setNotice(editing ? "Holding updated." : "Holding saved. Repeat tickers are merged using a weighted average."); }
+        await save(next);
+        reset();
+        setNotice(editing ? "Holding updated." : "Holding saved. Repeat tickers are merged using a weighted average.");
       } catch (e) { setError(e instanceof Error ? e.message : "Invalid holding"); }
     }}>
       <label className="flex min-w-0 flex-col gap-2 text-sm">Stock ticker or name<input className="min-w-0 w-full rounded border bg-background p-2 text-base" list="stock-universe" required value={stock} onChange={e => setStock(e.target.value)} placeholder="e.g. MAYBANK" /></label>
       <datalist id="stock-universe">{data?.universe.map(s => <option key={s.ticker} value={s.ticker}>{s.name}</option>)}</datalist>
       <label className="flex min-w-0 flex-col gap-2 text-sm">Number of shares<input className="min-w-0 w-full rounded border bg-background p-2 text-base" type="number" step="any" min="0" required value={shares} onChange={e => setShares(e.target.value)} /></label>
       <label className="flex min-w-0 flex-col gap-2 text-sm">Average price paid (RM per share)<input className="min-w-0 w-full rounded border bg-background p-2 text-base" type="number" step="any" min="0" required value={average} onChange={e => setAverage(e.target.value)} placeholder="0.245" /></label>
-      <button className={`${button} bg-primary text-primary-foreground`} disabled={!data || rows === null}>{editing ? "Save changes" : "Add holding"}</button>
+      <button className={`${button} bg-primary text-primary-foreground`} disabled={!data || !canSave}>{editing ? "Save changes" : "Add holding"}</button>
       {editing && <button type="button" className={button} onClick={reset}>Cancel</button>}
     </form>
-    {rows?.length === 0 ? <section className="market-card p-8"><h2 className="text-xl font-semibold">Start with a stock you own</h2><p className="mt-2 text-muted-foreground">Enter your shares and average price above. Your holdings stay in this browser. No account or server changes needed.</p></section> : rows === null ? <p>Waiting for browser storage. If it cannot be read, restore a backup above.</p> : <section aria-label="Your holdings" className="min-w-0 space-y-4">
+    {rows?.length === 0 ? <section className="market-card p-8"><h2 className="text-xl font-semibold">Start with a stock you own</h2><p className="mt-2 text-muted-foreground">Enter your shares and average price above.</p></section> : rows === null ? null : <section aria-label="Your holdings" className="min-w-0 space-y-4">
       <div className="market-card border-emerald-300 p-5 [overflow-wrap:anywhere] dark:border-emerald-800">
         <h2 className="font-semibold">Estimated yearly dividends — total</h2>
         <p className="mt-1 text-2xl font-semibold text-emerald-700 dark:text-emerald-300">{dividends.total === null
@@ -122,16 +127,25 @@ export function Holdings() {
         </details>
       </div>
       <p className="text-sm text-muted-foreground">Stored prices, not live quotes. Gains exclude fees and dividends. Genesis scores are research scores out of 100, not buy signals.</p>
+      {data?.watchesUnavailable && <p role="status" className="text-sm">Price watches couldn’t be checked right now.</p>}
       <ul className="space-y-4">{holdings.map(({ h, quote: q, value: v, dividend }) => {
+          const flags = q?.signals.filter(signal => isOwnedStockSignal(signal.kind)) ?? [];
           const yieldPct = q?.annualDividend && q.price !== null && Number.isFinite(q.price) && q.price > 0
             ? 100 * q.annualDividend.perShare / q.price
             : null;
           return <li key={h.ticker} className="market-card min-w-0 p-5 text-sm [overflow-wrap:anywhere]">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0 flex-1"><Link className="font-semibold underline" href={`/stock/${encodeURIComponent(h.ticker)}`}>{h.ticker}</Link><p className="mt-1 text-muted-foreground">{data?.universe.find(s => s.ticker === h.ticker)?.name}</p></div>
-              <div className="flex flex-wrap gap-2"><button className={button} aria-label={`Edit ${h.ticker}`} onClick={() => { setEditing(h.ticker); setStock(h.ticker); setShares(String(h.shares)); setAverage(String(h.averagePrice)); }}>Edit</button><button className={button} aria-label={`Remove ${h.ticker}`} onClick={() => { if (window.confirm(`Remove ${h.ticker}?`)) { if (save(rows.filter(r => r.ticker !== h.ticker))) reset(); } }}>Remove</button></div>
+              <div className="flex flex-wrap gap-2"><button className={button} disabled={!canSave} aria-label={`Edit ${h.ticker}`} onClick={() => { setEditing(h.ticker); setEditRevision(saved.portfolio.revision); setStock(h.ticker); setShares(String(h.shares)); setAverage(String(h.averagePrice)); }}>Edit</button><button className={button} disabled={!canSave} aria-label={`Remove ${h.ticker}`} onClick={async () => {
+                if (!window.confirm(`Remove ${h.ticker}?`)) return;
+                try { await save(rows.filter(r => r.ticker !== h.ticker)); reset(); setNotice("Holding removed."); }
+                catch (e) { setError(e instanceof Error ? e.message : "Could not remove holding."); }
+              }}>Remove</button></div>
             </div>
             {q ? <FairRangePill range={q.fairRange} /> : <p className="mt-2 text-xs text-muted-foreground">Loading fair range…</p>}
+            {flags.length > 0 && <ul aria-label="Stock changes" className="mt-3 space-y-2 border-l-2 border-primary pl-3">
+              {flags.map(flag => <li key={flag.kind}><strong>{flag.title}</strong>{flag.date && <span className="ml-2 text-xs text-muted-foreground">{flag.date}</span>}<p>{flag.why}</p></li>)}
+            </ul>}
             <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4 xl:grid-cols-8">
               <div className="min-w-0"><dt className="text-xs text-muted-foreground">Estimated yearly dividends</dt>
                 <dd className="mt-1 font-medium">

@@ -6,7 +6,7 @@
 - **Buy score:** ranks a company's research score against other scored stocks, with a cap when safety or data checks fail. It isn't an instruction to buy today.
 - **Fair-value range:** a separate estimate for judging whether the last saved price is below, inside or above the range. It does not change the Buy score and may be unavailable if the evidence is too thin.
 
-The site also has a market scan, alerts, a calendar and a track record for past top picks. Holdings and starred stocks are saved in your current browser, not synced across devices.
+The site also has a market scan, alerts, a calendar and a track record for past top picks. Holdings and starred stocks [sync across signed-in devices when server storage is configured](docs/price-watches.md#holdings-and-starred-stocks).
 
 You can [record or import analyst 12-month targets](docs/analyst-targets.md) from a stock page and compare them with the Genesis fair range.
 

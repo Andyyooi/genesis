@@ -35,7 +35,7 @@ export function InstallApp() {
       {notice && <p role="status">{notice}</p>}
       <p><strong className="text-foreground">iPhone or iPad:</strong> Open in Safari, tap Share, then Add to Home Screen. If asked, turn on Open as Web App, then tap Add.</p>
       <p><strong className="text-foreground">Android:</strong> Open in Chrome, tap the three-dot menu, then Add to Home screen or Install app.</p>
-      <p>Save a backup from My holdings before installing or changing browsers. If the app opens with no holdings, restore that backup.</p>
+      <p>If sync isn’t set up, download a backup from My holdings before installing or changing browsers.</p>
     </div>
   </details>;
 }

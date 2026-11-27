@@ -13,3 +13,11 @@ On a stock page, save a price watch for either a target in RM per share or entry
 3. Deploy again so the production deployment receives the variables. Keep the existing site password configured. Every device signed in with that password sees the same watches; there are no individual accounts.
 
 No new refresh job or change to the research snapshot is needed. Without Redis credentials, production shows that price watches aren't set up. In local development without Redis credentials, the app saves watches in the separate, ignored `data/sqlite/price-watches.db` file, including when using the read-only research snapshot.
+
+## Holdings and starred stocks
+
+These use the same Redis connection as price watches. If price watches already use Redis, there are no new settings or environment variables. Otherwise, follow the Redis setup above to enable sync; without it, holdings and stars stay in the current browser. A temporary server outage shows an error instead of saving to a separate browser list.
+
+After sync is enabled, open Genesis in each browser that has saved holdings or stars. Genesis imports them once, keeping the server version of any ticker already saved or removed. If the combined lists exceed 1,000 holdings or 500 stars, the browser originals are kept and the synced portfolio is still usable. Use **My holdings → Backup** to keep a copy. If an import didn’t finish, **Backup browser holdings** downloads the original holdings separately from the synced list. **Restore** replaces holdings only, not stars, and asks for confirmation. Every device signed in with the shared password sees the same portfolio.
+
+**My holdings** and **Alerts** flag changes to the displayed research score or fair range for stocks you own, comparing the two latest comparable published runs when both have values. They also flag saved price watches that have triggered. These are research notes, not buy or sell instructions.
