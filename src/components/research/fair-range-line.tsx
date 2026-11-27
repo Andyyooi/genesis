@@ -1,10 +1,5 @@
-import { formatSharePrice } from "@/lib/format-myr";
+import { formatFairEstimate, formatFairRangeBounds, formatSharePrice } from "@/lib/format-myr";
 import type { FairRangeHeadline } from "@/lib/fair-range";
-
-/** Estimates to the nearest half sen; more digits would suggest false precision. */
-function estimate(value: number): string {
-  return formatSharePrice(Math.max(0.005, Math.round(value * 200) / 200));
-}
 
 export function FairRangeLine({ range, compact = false }: { range: FairRangeHeadline; compact?: boolean }) {
   if (!range.available) {
@@ -18,13 +13,13 @@ export function FairRangeLine({ range, compact = false }: { range: FairRangeHead
   return (
     <div className={compact ? "flex flex-col gap-1 text-sm" : "flex flex-col gap-1 rounded-lg border px-4 py-3 text-sm"}>
       <p className="text-lg font-semibold tabular-nums">
-        {compact ? "" : "Fair range "}{estimate(range.low)} to {estimate(range.high)}
+        {compact ? "" : "Fair range "}{formatFairRangeBounds(range)}
         {compact || range.price == null ? "" : `, now ${formatSharePrice(range.price)}`}
       </p>
       {range.positionText ? <p>{range.positionText}</p> : null}
       {range.peerNote ? <p className="text-muted-foreground">{range.peerNote}</p> : null}
       <p className="text-muted-foreground">
-        Middle estimate {estimate(range.middle)}. {compact ? "An estimate, not a price target." : `Based on ${range.methodCount} valuation methods; see “Fair value” below for details. An estimate to compare against, not a promise the price will get there.`}
+        Middle estimate {formatFairEstimate(range.middle)}. {compact ? "An estimate, not a price target." : `Based on ${range.methodCount} valuation methods; see “Fair value” below for details. An estimate to compare against, not a promise the price will get there.`}
       </p>
       {range.wideSpread ? (
         <p className="text-amber-800 dark:text-amber-300">

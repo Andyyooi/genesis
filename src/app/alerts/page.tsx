@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { AlertsList } from "@/components/alerts/alerts-list";
 import { HoldingsAlerts } from "@/components/alerts/holdings-alerts";
+import { PriceWatchAlerts } from "@/components/alerts/price-watch-alerts";
 import { DataLagBanner } from "@/components/research/data-lag-banner";
 import { storedSnapshotDates } from "@/lib/stored-snapshot-dates";
 import { loadRecentAlerts } from "@/alerts/refresh";
@@ -30,11 +32,14 @@ export default function AlertsPage() {
         <h1 className="text-3xl font-semibold tracking-tight">Alerts</h1>
         {refresh ? <p className="text-sm font-medium">Alerts from refresh of {refresh.asOf.slice(0, 10)}</p> : null}
         <p className="text-muted-foreground">
-          Check your holdings and starred stocks first, then see changes from the latest published refresh. Open a stock for its full research.
+          Check your price watches, holdings and starred stocks, then see changes from the latest published refresh. Open a stock for its full research.
         </p>
       </header>
       <p className="text-sm text-muted-foreground">Universe-wide latest stored dates; individual companies can have older accounts.</p>
       {dates ? <DataLagBanner dates={dates} /> : <p>No published research run is available.</p>}
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading price watches…</p>}>
+        <PriceWatchAlerts />
+      </Suspense>
       <HoldingsAlerts />
       <h2 className="text-xl font-semibold">Latest refresh changes</h2>
       <p className="text-sm text-muted-foreground">Changes since the previous published run. Only the latest refresh is retained.</p>

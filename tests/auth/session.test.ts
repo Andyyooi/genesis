@@ -96,6 +96,8 @@ describe("gate decisions", () => {
     }
     expect(await gateDecision("/api/dividends?ticker=MAYBANK", "GET", undefined, env)).toBe("unauthorized");
     expect(await gateDecision("/api/holdings", "GET", undefined, env)).toBe("unauthorized");
+    expect(await gateDecision("/api/price-watches/MAYBANK", "PUT", undefined, env)).toBe("unauthorized");
+    expect(await gateDecision("/api/price-watches/MAYBANK", "DELETE", undefined, env)).toBe("unauthorized");
   });
   it("allows valid sessions and dev requests, never missing production credentials", async () => {
     const token = await signSession(env);

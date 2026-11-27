@@ -127,7 +127,7 @@ export async function importYahooPrices(
       }
       const applied = getSqlite().transaction(() => {
         if (openSession) partialBarsRemoved += removeInProgressBar(instrument.id, openSession);
-        const plan = planYahooPriceWrites(instrument.ticker, accepted, storedYahooBars(instrument.id), startDate !== undefined, splitWindowStart);
+        const plan = planYahooPriceWrites(instrument.ticker, accepted, storedYahooBars(instrument.id), retrievedAt, startDate !== undefined, splitWindowStart);
         for (const bar of plan.write) writePriceBar(instrument.id, bar, retrievedAt);
         return plan;
       })();
@@ -208,7 +208,7 @@ export async function importYahooPrices(
 
 const CLOSE_MATCH = 1e-6;
 
-type StoredYahooBar = YahooBar & { utc: number };
+type StoredYahooBar = YahooBar & { utc: number; retrievedAt: string };
 
 type PriceWritePlan = {
   write: YahooBar[];
@@ -227,7 +227,7 @@ function recentYahooWindowStart(instrumentId: number): string | undefined {
 
 function storedYahooBars(instrumentId: number): StoredYahooBar[] {
   const rows = getDb()
-    .select({ barDate: priceBars.barDate, close: priceBars.close, open: priceBars.open, high: priceBars.high, low: priceBars.low, volume: priceBars.volume, adjClose: priceBars.adjClose })
+    .select({ barDate: priceBars.barDate, close: priceBars.close, open: priceBars.open, high: priceBars.high, low: priceBars.low, volume: priceBars.volume, adjClose: priceBars.adjClose, retrievedAt: priceBars.retrievedAt })
     .from(priceBars)
     .where(and(eq(priceBars.instrumentId, instrumentId), eq(priceBars.source, "yahoo")))
     .all();
@@ -243,10 +243,11 @@ function storedYahooBars(instrumentId: number): StoredYahooBar[] {
 /**
  * New sessions are inserted even when they are older than the latest bar.
  * Matching closes accept volume/adjustment revisions without losing stored fields; the latest session also takes the day's final open/high/low.
+ * A matching after-close bar confirms a legacy intraday observation.
  * An older session with a different close is kept and reported.
  * The latest stored session may still be revised when its close changes.
  */
-function planYahooPriceWrites(ticker: string, accepted: YahooBar[], stored: StoredYahooBar[], refreshAdjustments = false, splitWindowStart?: string): PriceWritePlan {
+function planYahooPriceWrites(ticker: string, accepted: YahooBar[], stored: StoredYahooBar[], retrievedAt: string, refreshAdjustments = false, splitWindowStart?: string): PriceWritePlan {
   const byUtc = new Map<number, StoredYahooBar>();
   let latestUtc: number | null = null;
   for (const row of stored) {
@@ -267,6 +268,7 @@ function planYahooPriceWrites(ticker: string, accepted: YahooBar[], stored: Stor
   const conflicts: PriceBarConflict[] = [];
   let inserted = 0;
   let reimported = 0;
+  const importTime = Date.parse(retrievedAt);
   for (const [utc, bar] of incoming) {
     const close = bar.close;
     if (typeof close !== "number" || !Number.isFinite(close)) continue;
@@ -282,11 +284,14 @@ function planYahooPriceWrites(ticker: string, accepted: YahooBar[], stored: Stor
       reimported += 1;
       const volume = bar.volume ?? existing!.volume;
       const adjClose = bar.adjClose != null && bar.adjClose > 0 ? bar.adjClose : existing!.adjClose;
+      const initialRetrieval = Date.parse(existing!.retrievedAt);
+      const bursaClose = utc + 9 * 60 * 60 * 1000; // 17:00 in Malaysia.
+      const confirmsClose = initialRetrieval >= utc && initialRetrieval < bursaClose && importTime >= bursaClose;
       const latestSession = latestUtc == null || utc >= latestUtc;
       const open = latestSession ? bar.open ?? existing!.open : existing!.open;
       const high = latestSession ? bar.high ?? existing!.high : existing!.high;
       const low = latestSession ? bar.low ?? existing!.low : existing!.low;
-      if (volume !== existing!.volume || adjClose !== existing!.adjClose || open !== existing!.open || high !== existing!.high || low !== existing!.low) {
+      if (confirmsClose || volume !== existing!.volume || adjClose !== existing!.adjClose || open !== existing!.open || high !== existing!.high || low !== existing!.low) {
         write.push({ ...existing!, open, high, low, volume, adjClose });
       }
       continue;

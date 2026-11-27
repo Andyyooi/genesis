@@ -3,6 +3,8 @@ import { FinancialTerm } from "@/components/research/financial-term";
 import { plainConcern } from "@/lib/financial-terms";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { StockPriceWatch } from "@/components/alerts/stock-price-watch";
 import { CategoryDisclosure } from "@/components/research/category-disclosure";
 import { StatusLabel } from "@/components/research/status-label";
 import {
@@ -335,6 +337,10 @@ export default async function ResearchPage({
       </div>
 
       <PriceChart ticker={instrument.ticker} points={prices} />
+
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading price watch…</p>}>
+        <StockPriceWatch ticker={instrument.ticker} fairRange={fairRange} />
+      </Suspense>
 
       <div className="stock-details-grid grid items-start gap-3 md:grid-cols-2">
       <Disclosure title="Saved data & latest results" hint={`Research run: ${formatDateSafe(result.asOf)}`}>

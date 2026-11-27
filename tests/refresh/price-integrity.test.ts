@@ -9,6 +9,7 @@ import { importYahooPrices } from "@/ingest/import-prices";
 import { fetchYahooDailyBars, type YahooBar } from "@/ingest/providers/yahoo-prices";
 import type { YahooFundamentalsReport } from "@/market/ingest-fundamentals-yahoo";
 import type { FairValueRefreshReport } from "@/refresh/fair-value";
+import { loadWatchCloses } from "@/price-watches/snapshot";
 import { runRefreshAndResearch } from "@/refresh/on-demand";
 import { resetWatchlistRefreshForTests, runWatchlistRefreshAndResearch } from "@/refresh/watchlist";
 
@@ -58,7 +59,7 @@ function seed(ticker: string, watchlist = true) {
     .run();
 }
 
-function seedBar(ticker: string, barDate: string, close: number) {
+function seedBar(ticker: string, barDate: string, close: number, retrievedAt = "2026-09-18T00:00:00.000Z") {
   const instrument = getDb().select().from(instruments).where(eq(instruments.ticker, ticker)).get();
   if (!instrument) throw new Error(`missing ${ticker}`);
   getDb()
@@ -75,7 +76,7 @@ function seedBar(ticker: string, barDate: string, close: number) {
       asOf: `${barDate}T16:00:00+08:00`,
       source: "yahoo",
       adjusted: true,
-      retrievedAt: "2026-09-18T00:00:00.000Z",
+      retrievedAt,
     })
     .run();
 }
@@ -143,6 +144,25 @@ function scored(researchScore: number | null, date = "2026-10-12", close = 11) {
 }
 
 describe("refresh price integrity", () => {
+  it("makes a matching legacy intraday bar usable by watches once Yahoo confirms it after close", async () => {
+    const instrument = getDb().select().from(instruments).where(eq(instruments.ticker, "MAYBANK")).get()!;
+    const options = { onlyTicker: "MAYBANK", skipAlerts: true, skipUniverseSeed: true, rateLimitMs: 0 };
+    seedBar("MAYBANK", "2026-10-12", 12, "2026-10-12T08:30:00Z");
+    vi.mocked(fetchYahooDailyBars).mockResolvedValue([yahooBar("2026-10-12", 12)]);
+    try {
+      expect(loadWatchCloses(instrument.id)).toEqual([]);
+
+      vi.setSystemTime(new Date("2026-10-12T09:30:00Z"));
+      expect((await importYahooPrices(options)).barsUpserted).toBe(1);
+      expect(loadWatchCloses(instrument.id)).toEqual([{ date: "2026-10-12", close: 12 }]);
+
+      vi.setSystemTime(new Date("2026-10-12T10:30:00Z"));
+      expect((await importYahooPrices(options)).barsUpserted).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("accepts revised volume and adjusted closes on old matching bars without erasing better fields", async () => {
     const revisedBar = () => getDb().select().from(priceBars).where(eq(priceBars.barDate, "2026-09-16")).get();
     seedBar("MAYBANK", "2026-09-16", 10);
