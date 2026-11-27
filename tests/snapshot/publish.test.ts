@@ -15,6 +15,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import Database from "better-sqlite3";
 import { getDb, getSqlite, migrateSqliteSchema } from "@/db/client";
 import { snapshotGzPath, targetsLiveResearchDatabase } from "@/db/snapshot-file";
+import { loadFairValueForPage } from "@/fair-value/load-for-page";
 import { runRefreshAndResearch } from "@/refresh/on-demand";
 import {
   formatSnapshotReport,
@@ -272,6 +273,8 @@ describe("snapshot packaging", () => {
 
     getDb();
     const sqlite = getSqlite();
+    expect(sqlite.memory).toBe(true);
+    expect(() => sqlite.exec("DELETE FROM price_bars")).toThrow(/readonly database/);
     const instruments = sqlite.prepare("SELECT ticker, watchlist FROM instruments ORDER BY ticker").all() as {
       ticker: string;
       watchlist: number;
@@ -280,6 +283,7 @@ describe("snapshot packaging", () => {
     expect(instruments.find((row) => row.ticker === "MAYBANK")?.watchlist).toBe(1);
     expect(instruments.find((row) => row.ticker === "ORPHAN")?.watchlist).toBe(1);
     expect(instruments.find((row) => row.ticker === "CIMB")?.watchlist).toBe(0);
+    expect(loadFairValueForPage("ORPHAN")).not.toBeNull();
     expect(sqlite.prepare("SELECT COUNT(*) AS n FROM price_bars").get()).toEqual({ n: 3 });
     expect(sqlite.prepare("SELECT COUNT(*) AS n FROM financial_periods").get()).toEqual({ n: 1 });
     expect(realpathSync(snapshotGzPath())).toBe(realpathSync(dest));

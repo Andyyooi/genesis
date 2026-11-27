@@ -8,7 +8,7 @@ import { getDb, getSqlite, migrateSqliteSchema } from "@/db/client";
 import {
   defaultLiveSqlitePath,
   liveSqlitePath,
-  resolveSqliteFile,
+  resolveSqliteSource,
   targetsLiveResearchDatabase,
 } from "@/db/snapshot-file";
 import { isCliEntrypoint } from "@/cli/entrypoint";
@@ -61,10 +61,8 @@ describe("sqlite test isolation", () => {
     delete process.env.BURSA_SNAPSHOT_READONLY;
     closeSingleton();
 
-    const resolved = resolveSqliteFile();
-    expect(resolved.readonly).toBe(false);
-    expect(resolve(resolved.path)).toBe(resolve(dbPath));
-    expect(targetsLiveResearchDatabase(resolved.path)).toBe(false);
+    expect(resolveSqliteSource()).toEqual({ path: dbPath, readonly: false });
+    expect(targetsLiveResearchDatabase(dbPath)).toBe(false);
 
     getDb();
     const opened = getSqlite()
@@ -102,7 +100,7 @@ describe("sqlite test isolation", () => {
 
     expect(targetsLiveResearchDatabase(liveSqlitePath())).toBe(true);
     expect(targetsLiveResearchDatabase(defaultLiveSqlitePath())).toBe(true);
-    expect(() => resolveSqliteFile()).toThrow(/live research database/);
+    expect(() => resolveSqliteSource()).toThrow(/live research database/);
     expect(() => getDb()).toThrow(/live research database/);
     expect(() => loadFairValueForPage("MAYBANK")).toThrow(/live research database/);
     expect(() => new Database(defaultLiveSqlitePath())).toThrow(/live research database/);
@@ -110,7 +108,7 @@ describe("sqlite test isolation", () => {
 
     process.env.BURSA_SQLITE_PATH = defaultLiveSqlitePath();
     closeSingleton();
-    expect(() => resolveSqliteFile()).toThrow(/live research database/);
+    expect(() => resolveSqliteSource()).toThrow(/live research database/);
     expect(() => getDb()).toThrow(/live research database/);
     expect(() => new Database(process.env.BURSA_SQLITE_PATH)).toThrow(/live research database/);
   });
