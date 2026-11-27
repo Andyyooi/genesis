@@ -4,7 +4,7 @@ import { StatusLabel } from "./status-label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ScoreResult } from "@/scoring/types";
-import { dataConfidenceLabel, formatFreshnessBand, formatScore100, scoreEmphasisMuted } from "@/lib/research-copy";
+import { dataConfidenceLabel, formatFreshnessBand, formatScore100, scoreEmphasisMuted, warningPenaltySummary } from "@/lib/research-copy";
 import { researchScoreBlurb } from "@/lib/research-presentation";
 import { cn } from "cn";
 
@@ -42,6 +42,7 @@ export function ScoreWithConfidence({
 
 export function ResearchScoreCard({ result }: { result: ScoreResult }) {
   const c = result.dataCoverage;
+  const warningDeduction = warningPenaltySummary(result);
   return (
     <Card className={result.dataConfidence.needsVerification ? "border-destructive/40" : undefined}>
       <CardHeader>
@@ -50,6 +51,7 @@ export function ResearchScoreCard({ result }: { result: ScoreResult }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <ScoreWithConfidence result={result} kind="research" />
+        {warningDeduction ? <p className="text-sm text-amber-800">{warningDeduction}</p> : null}
         <dl className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-muted-foreground"><FinancialTerm id="data_confidence" /></dt>

@@ -17,6 +17,12 @@ export function buildTablesCsv(payload: ExportPayload): string {
   lines.push(row(["table", "instrument_type", "profile", "ticker"]));
   lines.push(row(["meta", payload.instrument.instrument_type, payload.score.profile, payload.instrument.ticker]));
   lines.push(row(["dates", payload.dates.fundamentals_period, payload.dates.last_trade_date, payload.dates.score_as_of]));
+  const penalty = payload.score.warningPenalty;
+  if (penalty) {
+    lines.push(row(["table", "score_before", "penalty_points_before_floor", "research_score", "warning_ids"]));
+    lines.push(row(["warning_penalty", penalty.scoreBefore, penalty.points, payload.score.researchScore,
+      payload.score.concerns.filter((concern) => concern.penaltyPoints).map((concern) => concern.id).join("; ")]));
+  }
   lines.push(
     row([
       "data_confidence",

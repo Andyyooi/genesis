@@ -2,7 +2,7 @@ import { CATEGORY_KEYS, getFactorProfile, profileName, resolveResearchProfile, t
 import type { MetricValue, PriceBarSnapshot } from "@/metrics/types";
 import { isInsuranceIndustry, type ResearchProfile } from "@/research/profiles";
 import { assessDataQuality } from "@/scoring/confidence";
-import { evaluateConcerns } from "@/scoring/concerns";
+import { evaluateConcerns, warningPenaltyPoints } from "@/scoring/concerns";
 import { assessEligibility } from "@/scoring/eligibility";
 import { hashScoringConfig } from "@/scoring/hash";
 import { scoreFactor } from "@/scoring/map-factor";
@@ -45,14 +45,18 @@ export function scoreFromMetrics(args: ScoreInput, ranks: Map<string, Percentile
   const live = categories.filter((c) => c.score !== null && c.configuredWeight > 0);
   const liveWeight = live.reduce((sum, c) => sum + c.configuredWeight, 0);
   for (const category of live) { category.inThisRun = true; category.liveWeight = category.configuredWeight / liveWeight; }
-  const researchScore = liveWeight ? live.reduce((sum, c) => sum + c.score! * c.liveWeight!, 0) : null;
+  const scoreBefore = liveWeight ? live.reduce((sum, c) => sum + c.score! * c.liveWeight!, 0) : null;
+  const concerns = evaluateConcerns({ config: args.config, metrics: args.metrics, pn17: args.pn17 ?? false, researchProfile: classified.profile });
+  const points = warningPenaltyPoints(concerns);
+  const researchScore = scoreBefore === null ? null : Math.max(0, scoreBefore - points);
   const valuationScore = categories.find((c) => c.id === "valuation")?.score ?? null;
   const quality = assessDataQuality({ asOf, researchProfile: classified.profile, categories, researchScore, valuationScore, latestAnnual: args.latestAnnual, config: args.config });
   return {
     methodology: "cross-sectional-v2", asOf, configHash: hashScoringConfig(args.config), profile: profileName(args.instrumentType, args.ticker, hints, args.config),
     researchProfile: classified.profile, researchProfileReason: classified.reason, researchScore, valuationScore, categories,
     ...quality, eligibility: assessEligibility({ pn17: args.pn17 ?? false, warning: args.warning, coverage: quality.dataCoverage.coverageRatio, bars: args.bars ?? [], config: args.config, asOf }),
-    concerns: evaluateConcerns({ config: args.config, metrics: args.metrics, pn17: args.pn17 ?? false }),
+    concerns,
+    ...(scoreBefore !== null && points > 0 ? { warningPenalty: { scoreBefore, points } } : {}),
     notes: ["Percentiles computed together across the stored listed universe; banks and REITs have separate rank groups.", `Sector blend ${(args.config.ranking.sector_blend * 100).toFixed(0)}%; fallback to profile-wide below ${args.config.ranking.sector_min_names} available names. Ties use average ranks; singleton 50.`, `Accounts usable at known available_at, else FY end plus ${args.config.reporting_lag_months} months. News and generic technicals never affect scores.`, "Missing factors/categories are omitted and remaining weights renormalized. Eligibility is separate from score."],
     valuationContext: emptyValuationContext("Historical and peer valuation context is separate from cross-sectional scores."),
   };

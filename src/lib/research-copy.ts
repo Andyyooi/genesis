@@ -12,7 +12,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
 export const CATEGORY_EXPLANATIONS: Record<string, string> = {
   valuation: "What the company earns, owns or distributes relative to its market price. Higher percentiles mean more accounting value per ringgit paid, not an intrinsic-value guarantee.",
   quality: "Profitability and financial-statement strength. Higher percentiles indicate stronger available profitability and accounting evidence than peers.",
-  financial_health: "Balance-sheet and earnings resilience. Insurers use equity and earnings through weaker years, REITs use gearing, and banks omit the industrial debt checks.",
+  financial_health: "Balance-sheet and earnings resilience. Banks and insurers use the equity cushion and earnings through weaker years instead of industrial debt checks. REITs use gearing.",
   growth: "Annualised changes over the configured fixed fiscal-year window. Both annual endpoints must be present and usable; a shorter window is never substituted.",
   momentum: "The preceding year's price performance with the latest trading month skipped. Captures persistent price trends, not a forecast.",
   low_volatility: "How variable daily returns were over 252 sessions. Lower historical volatility ranks better, but does not guarantee lower future losses.",
@@ -25,6 +25,15 @@ export function dataConfidenceLabel(level: string | null | undefined): string {
 export function formatScore100(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "Unavailable";
   return `${value.toFixed(0)}/100`;
+}
+
+export function warningPenaltySummary(result: ScoreResult): string | null {
+  const penalty = result.warningPenalty;
+  if (!penalty || result.researchScore === null) return null;
+  const reasons = result.concerns.filter((concern) => concern.penaltyPoints).map(
+    (concern) => `${concern.label} (${concern.penaltyPoints} points)`,
+  );
+  return `Warning deduction: ${Number((penalty.scoreBefore - result.researchScore).toFixed(2))} points from ${formatScore100(penalty.scoreBefore)} before warnings. Rules triggered: ${reasons.join("; ")}. Scores cannot go below zero.`;
 }
 
 export function formatFreshnessBand(band: string | null | undefined): string {

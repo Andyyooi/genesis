@@ -18,7 +18,7 @@ export function topPickScore(row: PickCandidate, options: TopPicksOptions, setti
   const weights: Record<string, number> = settings.quality_tilt_weights;
   const live = row.result.categories.filter((category) => category.score !== null && Number.isFinite(category.score) && weights[category.id] > 0);
   const weight = live.reduce((sum, category) => sum + weights[category.id], 0);
-  return weight ? live.reduce((sum, category) => sum + category.score! * weights[category.id], 0) / weight : null;
+  return weight ? Math.max(0, live.reduce((sum, category) => sum + category.score! * weights[category.id], 0) / weight - (row.result.warningPenalty?.points ?? 0)) : null;
 }
 
 const descriptions: Record<string, string> = {

@@ -2,7 +2,7 @@
 
 [Genesis Research](https://genesisresearch.vercel.app/) is a personal research dashboard for Bursa Malaysia stocks and REITs. Use it to shortlist companies and assess entry prices. **Research only, not a buy or sell instruction.**
 
-- **Research score:** compares financial and price measures with other companies using percentile ranks. Ordinary companies, banks, REITs and other financial firms are assessed using measures that fit their business. Missing inputs are not filled in.
+- **Research score:** compares financial and price measures with other companies using percentile ranks. Ordinary companies, banks, REITs and other financial firms are assessed using measures that fit their business. Banks are compared with other banks on their equity cushion and weakest annual return on assets over three years, not industrial debt ratios. Missing inputs are not filled in. A stored PN17 flag deducts 20 points; negative annual free cash flow deducts 5 where that measure applies (not for banks or REITs). The score cannot fall below zero, and eligibility checks are separate. The stock page explains any deduction after the next successful refresh and publication.
 - **Buy score:** ranks a company's research score against other scored stocks, with a cap when safety or data checks fail. It isn't an instruction to buy today.
 - **Fair-value range:** a separate estimate for judging whether the last saved price is below, inside or above the range. It does not change the Buy score and may be unavailable if the evidence is too thin.
 

@@ -132,6 +132,19 @@ describe("ChatGPT export", () => {
     expect(md.length).toBeLessThan(buildFullMarkdown(common).length);
   });
 
+  it("explains warning deductions alongside the score in Markdown and CSV", () => {
+    const payload = {
+      ...common, score: {
+        ...common.score, researchScore: 2, warningPenalty: { scoreBefore: 22, points: 20 },
+        concerns: [{ id: "pn17", label: "PN17 warning", message: "Stored flag", metricId: null, value: null, period: null, penaltyPoints: 20 }],
+      },
+    };
+    for (const markdown of [buildQuickMarkdown(payload), buildFullMarkdown(payload)]) {
+      expect(markdown).toContain("Warning deduction: 20 points from 22/100 before warnings. Rules triggered: PN17 warning (20 points).");
+    }
+    expect(buildTablesCsv(payload)).toContain("warning_penalty,22,20,2,pn17");
+  });
+
   it("REIT export uses the REIT profile, not industrial FCF factors", () => {
     const reit = wrap("REIT", "KLCC", [m("dividend_yield", 0.06), m("revenue_cagr", 0.04)]);
     expect(reit.score.profile).toBe("reit");

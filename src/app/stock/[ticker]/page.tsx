@@ -120,6 +120,8 @@ function profileMetricIds(profile: string, isReit: boolean): string[] {
       "price_to_book",
       "dividend_yield",
       "roe",
+      "equity_to_assets",
+      "three_year_min_roa",
       "nim",
       "cost_to_income",
       "impaired_loans_ratio",
@@ -429,8 +431,7 @@ export default async function ResearchPage({
         <Disclosure title="Flagged observations" hint="See which saved checks raised a concern.">
           <div>
             <p className="text-sm text-muted-foreground">
-              Rule-based notices from stored data. They do not change Research Score unless scoring
-              config enables a penalty (currently off).
+              Rule-based notices from stored data. Any deductions are explained in the Score breakdown.
             </p>
           </div>
           <ul className="list-disc space-y-2 pl-5 text-sm">
@@ -445,7 +446,7 @@ export default async function ResearchPage({
             ))}
             {instrument.pn17 ? (
               <li className="text-destructive">
-                PN17 listing status is stored on this name (status warning, not a score deduction).
+                PN17 listing status is stored on this name.
               </li>
             ) : null}
             {instrument.warningFlag && !instrument.pn17 ? <li>A listing warning is stored for this company.</li> : null}

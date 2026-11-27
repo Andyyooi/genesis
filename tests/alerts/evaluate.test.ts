@@ -139,8 +139,23 @@ describe("alert rules", () => {
       },
     );
     expect(drafts.some((d) => d.ruleId === "new_concern")).toBe(true);
+    expect(drafts.find((d) => d.ruleId === "new_concern")?.why).toContain("No score deduction was applied");
     expect(drafts.some((d) => d.ruleId === "earnings_announcement")).toBe(true);
     expect(isEarningsHeadline("Notice of annual general meeting")).toBe(false);
+  });
+
+  it("explains when a new concern can lower the score", () => {
+    const drafts = evaluateAlertDrafts(config, input({
+      result: result({
+        researchScore: 65,
+        warningPenalty: { scoreBefore: 70, points: 5 },
+        concerns: [{
+          id: "negative_fcf", label: "Negative free cash flow", message: "Spending exceeded operating cash.",
+          metricId: "fcf", value: -10, period: "2025-12-31", penaltyPoints: 5,
+        }],
+      }),
+    }), null);
+    expect(drafts.find((d) => d.ruleId === "new_concern")?.why).toContain("can deduct up to 5 points");
   });
 
   it("skips health deterioration when health is unavailable", () => {

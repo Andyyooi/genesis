@@ -1,4 +1,4 @@
-import { CATEGORY_LABELS, formatContextHeadline, formatScore100, scoreNarrative, strongestPositives } from "@/lib/research-copy";
+import { CATEGORY_LABELS, formatContextHeadline, formatScore100, scoreNarrative, strongestPositives, warningPenaltySummary } from "@/lib/research-copy";
 import { unavailableLabel, type ExportPayload } from "@/export/payload";
 
 function num(value: number | null | undefined): string {
@@ -9,6 +9,7 @@ function num(value: number | null | undefined): string {
 export function buildFullMarkdown(payload: ExportPayload): string {
   const { instrument, score, metrics, financial_periods } = payload;
   const positives = strongestPositives(score, 8);
+  const warningDeduction = warningPenaltySummary(score);
   const sections: string[] = [
     `# Full research report — ${instrument.ticker}`,
     "",
@@ -26,7 +27,7 @@ export function buildFullMarkdown(payload: ExportPayload): string {
     `| Bursa code | ${unavailableLabel(instrument.bursa_code)} |`,
     `| Sector | ${unavailableLabel(instrument.sector)} |`,
     `| Currency | ${instrument.currency} |`,
-    `| PN17 status | ${instrument.pn17 ? "Yes — higher-risk warning, not a silent score penalty" : "No"} |`,
+    `| PN17 status | ${instrument.pn17 ? "Yes — higher-risk warning" : "No"} |`,
     `| asOf | ${score.asOf} |`,
     `| fundamentals period | ${unavailableLabel(payload.dates.fundamentals_period)} |`,
     `| price as-of / last trade | ${unavailableLabel(payload.dates.last_trade_date)} |`,
@@ -43,7 +44,7 @@ export function buildFullMarkdown(payload: ExportPayload): string {
     );
   } else if (score.profile === "bank") {
     sections.push(
-      "This export uses the **bank** overlay (P/B and ROE). Industrial FCF, net debt/EBITDA, and EV/EBITDA are not scoring factors.",
+      "This export uses the **bank** factor profile. Check the live weights below for the factors used in this run. Industrial FCF, net debt/EBITDA, and EV/EBITDA are not scoring factors.",
       "",
     );
   }
@@ -52,6 +53,7 @@ export function buildFullMarkdown(payload: ExportPayload): string {
     "## Scores",
     "",
     `- Research Score: ${formatScore100(score.researchScore)}`,
+    ...(warningDeduction ? [`- ${warningDeduction}`] : []),
     `- Valuation Score: ${formatScore100(score.valuationScore)} (valuation factors only)`,
     `- Historical Context: ${formatContextHeadline(score.valuationContext.historical.label)} (${score.valuationContext.historical.historicalValuationStatus}) (not blended into Valuation Score)`,
     `- Peer Context: ${formatContextHeadline(score.valuationContext.peer.label)} (not blended into Valuation Score)`,
@@ -99,7 +101,7 @@ export function buildFullMarkdown(payload: ExportPayload): string {
     "",
     "## Potential Concerns",
     "",
-    "These factors triggered a warning. This is not a value-trap stamp and does not change the Research Score.",
+    "These are warnings from stored evidence, not sell instructions. Any deductions are shown in the Scores section.",
     "",
     score.concerns.length
       ? score.concerns

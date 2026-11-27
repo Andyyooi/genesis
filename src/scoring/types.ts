@@ -39,6 +39,7 @@ export type ConcernHit = {
   metricId: string | null;
   value: number | null;
   period: string | null;
+  penaltyPoints?: number;
 };
 
 export type FreshnessBand = "FRESH" | "AGING" | "STALE" | "VERY_STALE" | "UNKNOWN";
@@ -78,6 +79,7 @@ export type ScoreResult = {
   researchProfile: ResearchProfile;
   researchProfileReason: string;
   researchScore: number | null;
+  warningPenalty?: { scoreBefore: number; points: number };
   valuationScore: number | null;
   categories: CategoryScore[];
   concerns: ConcernHit[];

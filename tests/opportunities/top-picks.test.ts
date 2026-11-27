@@ -106,6 +106,13 @@ describe("published picks and market filtering", () => {
     }
     expect(parseTopPicksOptions({}).qualityTilt).toBe(false);
   });
+  it("keeps the warning deduction when tilting a general company's score", () => {
+    const general = candidate("GENERAL", 35);
+    general.result.categories.forEach(c => { c.score = c.id === "quality" ? 80 : c.id === "valuation" ? 20 : null; });
+    general.result.warningPenalty = { scoreBefore: 40, points: 5 };
+    expect(selectTopPicks([general], 15, { qualityTilt: true })[0]?.selectionScore).toBe(57);
+    expect(general.result.researchScore).toBe(35);
+  });
   it("searches ticker, name and sector without a cap and filters eligibility", () => {
     const rows = Array.from({ length: 225 }, (_, i) => ({ ticker: `T${i}`, name: "Example Company", sector: "Technology", eligible: i % 2 === 0 }));
     expect(filterMarketRows(rows)).toHaveLength(225);

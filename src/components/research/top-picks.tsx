@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, Telescope } from "lucide-react";
 import { loadTopPicks, pickReasons, type TopPicksOptions } from "@/opportunities/top-picks";
-import { formatScore100 } from "@/lib/research-copy";
+import { formatScore100, warningPenaltySummary } from "@/lib/research-copy";
 import { loadListFairRanges } from "@/fair-value/load-list-ranges";
 import { FairRangePill } from "./fair-range-pill";
 
@@ -72,6 +72,13 @@ export function TopPicks({ options = {}, preservedParams = {} }: { options?: Top
                     {pick.qualityTilted ? "Quality-tilted score" : "Published score"} {formatScore100(pick.selectionScore)} ·{" "}
                     {pick.result.researchProfile}
                   </p>
+                  {pick.result.warningPenalty ? (
+                    <p className="mt-2 text-amber-800">
+                      {pick.qualityTilted
+                        ? `Warning deductions also apply to the quality-tilted score (up to ${pick.result.warningPenalty.points} points).`
+                        : warningPenaltySummary(pick.result)}
+                    </p>
+                  ) : null}
                   <ul className="mt-2 list-disc space-y-1 pl-4">
                     {reasons.length ? (
                       reasons.map((reason) => <li key={reason}>{reason}</li>)

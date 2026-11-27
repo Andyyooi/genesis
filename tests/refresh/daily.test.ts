@@ -298,9 +298,9 @@ describe("Phase 18B daily refresh", () => {
     expect(summary.datasets.find((d) => d.dataset === "events")?.status).toBe("SOURCE_FAILED");
   });
 
-  it("keeps scoring concern penalty off and overall SUCCESS when prices/fundamentals ok", () => {
+  it("keeps scoring concern penalties enabled and overall SUCCESS when prices/fundamentals ok", () => {
     const config = loadScoringConfig();
-    expect(config.concerns.apply_score_penalty).toBe(false);
+    expect(config.concerns.apply_score_penalty).toBe(true);
     expect(
       combineOverallStatus([
         {
