@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { backupJson, HOLDINGS_KEY, parseBackup } from "@/lib/holdings";
+import { backupJson, HOLDINGS_KEY, parseBackup, type Holding } from "@/lib/holdings";
 import { emptyPortfolio, parseStars, portfolioEdit, portfolioView, STARRED_KEY, type PortfolioEdit, type PortfolioView } from "@/lib/portfolio";
 
 type Snapshot = {
@@ -9,6 +9,7 @@ type Snapshot = {
   portfolio: PortfolioView;
   busy: boolean;
   error?: string;
+  unimportedHoldings?: Holding[];
 };
 
 const initial: Snapshot = { mode: "loading", portfolio: emptyPortfolio, busy: false };
@@ -92,9 +93,10 @@ async function load() {
       return;
     }
     let error = legacy.error;
+    let unimportedHoldings: Holding[] | undefined;
     if (legacy.holdings.length || legacy.starred.length) {
       if (importWasRejected(portfolio.revision)) {
-        publish({ mode: "server", portfolio, busy: false, error: importWarning });
+        publish({ mode: "server", portfolio, busy: false, error: importWarning, unimportedHoldings: legacy.holdings });
         return;
       }
       const edit: PortfolioEdit = { kind: "migrate", holdings: legacy.holdings, starred: legacy.starred };
@@ -121,9 +123,10 @@ async function load() {
       } catch (failure) {
         if (failure instanceof PortfolioError && (failure.status === 400 || failure.status === 413)) rememberRejection(portfolio.revision);
         error = importWarning;
+        unimportedHoldings = legacy.holdings;
       }
     }
-    publish({ mode: "server", portfolio, busy: false, error });
+    publish({ mode: "server", portfolio, busy: false, error, unimportedHoldings });
   } catch {
     publish({ ...snapshot, mode: "error", busy: false, error: "Could not sync your saved stocks. Try again." });
   }

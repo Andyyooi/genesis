@@ -16,6 +16,11 @@ type Data = { universe: { ticker: string; name: string }[]; quotes: Quote[]; wat
 const priceText = (n: number | null) => n === null ? "Unavailable" : `RM ${n.toLocaleString("en-MY", { minimumFractionDigits: 3, maximumFractionDigits: 5 })}`;
 const button = "rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted";
 
+function downloadBackup(rows: Holding[], filename: string) {
+  const url = URL.createObjectURL(new Blob([backupJson(rows)], { type: "application/json" }));
+  const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+}
+
 export function Holdings() {
   const saved = usePortfolio();
   const rows = saved.mode === "loading" || saved.mode === "error" ? null : saved.portfolio.holdings;
@@ -61,10 +66,12 @@ export function Holdings() {
         ? "Holdings and stars are shared across devices signed in with the site password. Download a backup to keep a copy of your holdings."
         : saved.mode === "browser" ? "Sync isn’t set up. Holdings and stars stay in this browser. Download a backup to keep a copy of your holdings."
           : saved.mode === "loading" ? "Loading saved holdings…" : "Holdings are unavailable right now."}</p>
-      <div className="flex gap-2"><button className={button} disabled={rows === null} onClick={() => {
-        const url = URL.createObjectURL(new Blob([backupJson(rows ?? [])], { type: "application/json" }));
-        const a = document.createElement("a"); a.href = url; a.download = "genesis-holdings.json"; a.click(); URL.revokeObjectURL(url);
-      }}>Backup</button><label className={`${button} cursor-pointer`}>Restore<input className="sr-only" disabled={!canSave} type="file" accept="application/json,.json" onChange={async e => {
+      <div className="flex flex-wrap gap-2">
+        <button className={button} disabled={rows === null} onClick={() => downloadBackup(rows ?? [], "genesis-holdings.json")}>
+          {saved.unimportedHoldings?.length ? "Backup synced holdings" : "Backup"}
+        </button>
+        {saved.unimportedHoldings?.length ? <button className={button} onClick={() => downloadBackup(saved.unimportedHoldings ?? [], "genesis-browser-holdings.json")}>Backup browser holdings</button> : null}
+        <label className={`${button} cursor-pointer`}>Restore<input className="sr-only" disabled={!canSave} type="file" accept="application/json,.json" onChange={async e => {
         const file = e.target.files?.[0]; e.target.value = "";
         if (!file) return;
         try {
