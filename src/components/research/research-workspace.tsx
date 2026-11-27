@@ -46,10 +46,12 @@ export type WorkspaceRow = {
 };
 
 /** Sort key for "Cheapest against fair range": higher is further under the low end. */
-function entrySortValue(row: WorkspaceRow): number | null {
-  const range = row.fairRange;
-  if (!range?.available || !fairRangeGap(range) || typeof range.price !== "number") return null;
-  return ((range.low - range.price) / range.low) * 100;
+export function entrySortValue(row: WorkspaceRow): number | null {
+  const gap = fairRangeGap(row.fairRange);
+  if (!gap) return null;
+  if (gap.position === "below") return 1000 + gap.percent;
+  if (gap.position === "inside") return 500 - gap.percent;
+  return -gap.percent;
 }
 
 const SAVED_KEY = "genesis:saved-companies:v1";
