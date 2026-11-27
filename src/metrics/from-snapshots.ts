@@ -2,8 +2,10 @@ import type { LineItems } from "@/ingest/types";
 import { computeMetrics } from "@/metrics/compute";
 import type { EventSnapshot, PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
 import type { ScoringConfig } from "@/config/load-scoring";
+import type { DividendCoverage } from "@/lib/dividend-yield";
 
 type PeriodRow = {
+  fiscalYear?: number | null;
   actualOrEstimate?: string;
   periodEnd: string;
   availableAt: string | null;
@@ -61,6 +63,7 @@ export function toStatementSnapshots(rows: PeriodRow[]): StatementSnapshot[] {
       }
     }
     return {
+      fiscalYear: row.fiscalYear,
       periodEnd: row.periodEnd,
       availableAt: row.availableAt,
       statementType: row.statementType,
@@ -80,6 +83,7 @@ export function snapshotsToMetrics(args: {
   periods: PeriodRow[];
   bars: BarRow[];
   events?: EventSnapshot[];
+  dividendCoverage?: DividendCoverage | null;
   asOf?: string;
   config?: ScoringConfig;
 }) {
@@ -108,6 +112,7 @@ export function snapshotsToMetrics(args: {
     periods,
     bars,
     events,
+    dividendCoverage: args.dividendCoverage,
     asOf,
     config: args.config,
   });

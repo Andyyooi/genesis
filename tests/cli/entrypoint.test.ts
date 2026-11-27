@@ -71,6 +71,7 @@ vi.mock("@/market/fundamentals-quality", () => ({
 vi.mock("@/alerts/refresh", () => ({ refreshAlertsForUniverse: jobs.refreshAlertsForUniverse }));
 vi.mock("@/scoring/run-ticker", () => ({ scoreTicker: jobs.scoreTicker }));
 vi.mock("@/db/queries", () => ({ loadInstrumentSnapshots: jobs.loadInstrumentSnapshots }));
+vi.mock("@/db/dividends", () => ({ loadDividendCoverage: () => null }));
 vi.mock("@/events/ingest", () => ({
   ingestPhase16Events: jobs.ingestPhase16Events,
   PHASE16_EVENT_TICKERS: ["MAYBANK"],

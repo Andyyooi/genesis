@@ -1,4 +1,5 @@
 import { getSqlite } from "@/db/client";
+import { reportedDividend } from "@/lib/dividend-yield";
 import { historicalValuationStatus, type HistoricalValuationStatus } from "@/db/point-in-time";
 import type { LineItems } from "@/ingest/types";
 import type { MetricValue, PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
@@ -36,6 +37,7 @@ export type ContextMetricStats = {
   direction: ContextDirection;
   inVote: boolean;
   current: number | null;
+  dividendBasis?: string;
   median: number | null;
   average: number | null;
   min: number | null;
@@ -335,7 +337,7 @@ export function buildHistoricalPoints(
       priceDate: px.barDate,
       close: px.close,
       eps: row.eps,
-      dividendPerShare: row.dividendPerShare,
+      dividendPerShare: reportedDividend(row).dividendPerShare,
       equity: row.equity,
       shares: row.shares,
       revenue: row.revenue,
@@ -359,7 +361,7 @@ function currentFromHeadline(
   latest: StatementSnapshot | null,
 ): { value: number | null; reason: string | null } {
   const fromMetrics = currentFromMetrics(metrics, spec.id);
-  if (fromMetrics.value !== null) return fromMetrics;
+  if (fromMetrics.value !== null || spec.id === "dividend_yield") return fromMetrics;
   if (!latest) return { value: null, reason: fromMetrics.reason ?? "No latest annual period" };
   return metricFromInputs(spec.id, lastClose, latest);
 }
@@ -407,6 +409,11 @@ export function buildValuationContext(args: {
   const specs = profileSpecs(args.researchProfile);
   const lastCloseMetric = args.metrics.find((m) => m.id === "last_close");
   const lastClose = lastCloseMetric?.available ? lastCloseMetric.value : null;
+  const dividendBasis = args.metrics.find((m) => m.id === "dividend_yield" && m.available)?.period;
+  const withDividendBasis = (stats: ContextMetricStats, comparison: string): ContextMetricStats =>
+    stats.metricId === "dividend_yield" && dividendBasis
+      ? { ...stats, dividendBasis, fact: `${stats.fact} This stock: ${dividendBasis}. Comparison: ${comparison}.` }
+      : stats;
   const latestAnnual = [...args.periods]
     .filter((row) => row.statementType === "annual")
     .sort((a, b) => b.periodEnd.localeCompare(a.periodEnd))[0] ?? null;
@@ -417,7 +424,7 @@ export function buildValuationContext(args: {
       .map((p) => metricFromInputs(spec.id, p.close, p).value)
       .filter((n): n is number => n !== null);
     const current = currentFromHeadline(args.metrics, spec, lastClose, latestAnnual);
-    return statsFromSample(spec, current, sample, MIN_HISTORICAL_POINTS, "this name’s period-end");
+    return withDividendBasis(statsFromSample(spec, current, sample, MIN_HISTORICAL_POINTS, "this name’s period-end"), "full financial years");
   });
   const histVote = historicalMetrics.filter((m) => m.inVote).map((m) => m.labelForMetric);
   const histLabel = combineLabels(histVote);
@@ -465,7 +472,7 @@ export function buildValuationContext(args: {
       .map((row) => metricFromInputs(spec.id, row.lastClose, row).value)
       .filter((n): n is number => n !== null);
     const current = currentFromHeadline(args.metrics, spec, lastClose, latestAnnual);
-    return statsFromSample(spec, current, sample, MIN_USABLE_PEERS, "peer");
+    return withDividendBasis(statsFromSample(spec, current, sample, MIN_USABLE_PEERS, "peer"), "last 12 months or full year, according to each peer’s coverage");
   });
   let peerLabel: ContextLabel = "UNAVAILABLE";
   const peerFacts: string[] = [];
@@ -558,6 +565,8 @@ function parseLineItems(json: string | null): Partial<LineItems> {
 
 export function periodsToSnapshots(
   rows: {
+    fiscalYear?: number | null;
+    actualOrEstimate?: string;
     periodEnd: string;
     availableAt: string | null;
     statementType: string;
@@ -569,6 +578,8 @@ export function periodsToSnapshots(
   return rows.map((row) => {
     const items = parseLineItems(row.lineItemsJson);
     return {
+      fiscalYear: row.fiscalYear,
+      actualOrEstimate: row.actualOrEstimate,
       periodEnd: row.periodEnd,
       availableAt: row.availableAt,
       statementType: row.statementType,

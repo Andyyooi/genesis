@@ -1,4 +1,5 @@
 import { inProgressSessionDate, usableYahooDailyBar } from "@/ingest/price-bar";
+import type { YahooDividendCoverage } from "@/db/dividends";
 
 export type YahooBar = {
   barDate: string;
@@ -14,8 +15,9 @@ export type YahooBar = {
 type ChartResponse = {
   chart?: {
     result?: Array<{
+      meta?: { symbol?: string; currency?: string };
       timestamp?: number[];
-      events?: { splits?: Record<string, { date?: number }> };
+      events?: { splits?: Record<string, { date?: number }>; dividends?: Record<string, { date?: number; amount?: number }> };
       indicators?: {
         quote?: Array<{
           open?: Array<number | null>;
@@ -40,6 +42,30 @@ export { usableYahooDailyBar };
 function utcDate(epochSec: number): string {
   const d = new Date(epochSec * 1000);
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}
+
+function cashDividendCoverage(
+  result: NonNullable<NonNullable<ChartResponse["chart"]>["result"]>[number],
+  requestedSymbol: string,
+  bars: YahooBar[],
+): YahooDividendCoverage | undefined {
+  const symbol = typeof result.meta?.symbol === "string" ? result.meta.symbol.toUpperCase() : null;
+  const currency = result.meta?.currency;
+  if (symbol !== requestedSymbol.toUpperCase() || !currency || !/^[A-Z]{3}$/.test(currency)) return;
+  if (result.events !== undefined && (result.events === null || typeof result.events !== "object" || Array.isArray(result.events))) return;
+  const from = bars[0].barDate;
+  const through = bars[bars.length - 1].barDate;
+  const raw = result.events?.dividends;
+  if (raw !== undefined && (raw === null || typeof raw !== "object" || Array.isArray(raw))) return;
+  const events: YahooDividendCoverage["events"] = [];
+  for (const [sourceId, row] of Object.entries(raw ?? {})) {
+    if (typeof row?.date !== "number" || !Number.isFinite(new Date(row.date * 1000).getTime())) return;
+    const exDate = utcDate(row.date);
+    if (exDate < from || exDate > through) continue;
+    if (typeof row.amount !== "number" || !Number.isFinite(row.amount) || row.amount <= 0) return;
+    events.push({ sourceId, exDate, amount: row.amount });
+  }
+  return { symbol, currency, from, through, events };
 }
 
 /** Waits before the 2nd and 3rd attempt when Yahoo times out, rate-limits or has a server error. */
@@ -71,7 +97,7 @@ export async function fetchYahooDailyBars(
   yahooTicker: string,
   range: string | { startDate: string } = "5y",
   options: YahooFetchOptions = {},
-): Promise<YahooBar[]> {
+): Promise<YahooBar[] & { dividendCoverage?: YahooDividendCoverage }> {
   const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}`);
   url.searchParams.set("interval", "1d");
   if (typeof range === "string") {
@@ -151,5 +177,6 @@ export async function fetchYahooDailyBars(
     throw new Error(`Yahoo missed ${yahooTicker}: bars had no closes`);
   }
 
-  return bars;
+  const dividendCoverage = result && cashDividendCoverage(result, yahooTicker, bars);
+  return dividendCoverage ? Object.assign(bars, { dividendCoverage }) : bars;
 }

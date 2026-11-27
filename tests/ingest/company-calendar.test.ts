@@ -69,12 +69,13 @@ describe("company calendar", () => {
     const stocks: CalendarStock[] = db.select().from(instruments).all().map((stock) => ({
       ...stock,
       dates: db.select().from(companyCalendar).all().find((row) => row.instrumentId === stock.id) ?? null,
+      yield: stock.ticker === "MAYBANK" ? { percent: 6, basis: "FY2025 full year" } : null,
     }));
     const all = calendarAgenda(stocks, "all", new Set(), today);
     expect(all.results.map((row) => row.ticker)).toEqual(["MAYBANK"]);
     expect(all.dividends).toMatchObject([
-      { ticker: "OTHER", sortDate: resultsDate, paymentDate: null, dividendAmount: null, annualYieldPercent: null },
-      { ticker: "MAYBANK", sortDate: paymentDate, paymentDate, dividendAmount: 0.12, annualYieldPercent: 6.28 },
+      { ticker: "OTHER", sortDate: resultsDate, paymentDate: null, dividendAmount: null, yield: null },
+      { ticker: "MAYBANK", sortDate: paymentDate, paymentDate, dividendAmount: 0.12, yield: { percent: 6, basis: "FY2025 full year" } },
     ]);
     expect(calendarAgenda(stocks, "holdings", new Set(["OTHER"]), today)).toEqual({ results: [], dividends: [all.dividends[0]] });
     expect(calendarAgenda(stocks, "watchlist", new Set(["OTHER"]), today)).toEqual({ results: all.results, dividends: [all.dividends[1]] });

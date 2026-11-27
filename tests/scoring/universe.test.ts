@@ -3,6 +3,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getDb, getSqlite } from "@/db/client";
+import { saveDividendCoverage } from "@/db/dividends";
+import { buildExportPayload } from "@/export/payload";
+import { buildQuickMarkdown } from "@/export/quick";
 import { alerts, financialPeriods, instruments, marketScanRuns, priceBars, scoreRuns } from "@/db/schema";
 import { emptyLineItems } from "@/ingest/merge-line-items";
 import { loadLatestMarketScan, rescoreListedMarket } from "@/market/scan";
@@ -41,6 +44,22 @@ beforeEach(() => {
 afterEach(() => { close(); vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); rmSync(directory, { recursive: true, force: true }); });
 
 describe("published universe scores", () => {
+  it("persists the dividend yield basis in the score run and exports it", () => {
+    const db = getDb();
+    const maybank = db.select().from(instruments).all().find((row) => row.ticker === "MAYBANK")!;
+    saveDividendCoverage(maybank.id, {
+      symbol: "MAYBANK.KL", currency: "MYR", from: "2024-08-01", through: "2025-09-10",
+      events: [{ sourceId: "event", exDate: "2025-06-01", amount: 0.4 }],
+    }, asOf);
+    rescoreListedMarket();
+    const payload = buildExportPayload("MAYBANK")!;
+    expect(payload.metrics.find((metric) => metric.id === "dividend_yield")).toMatchObject({
+      value: 0.04, period: "Last 12 months (by ex-dividend date)",
+    });
+    expect(payload.score.categories.flatMap((category) => category.factors).find((factor) => factor.id === "dividend_yield")?.period)
+      .toBe("Last 12 months (by ex-dividend date)");
+    expect(buildQuickMarkdown(payload)).toContain("Dividend yield: 4.0% · Last 12 months (by ex-dividend date)");
+  });
   it("hides old-method alerts until a publication regenerates them", () => {
     expect(loadRecentAlerts()).toEqual([]);
     const db = getDb();

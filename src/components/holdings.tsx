@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { backupJson, HOLDINGS_KEY, holdingValue, mergeHolding, parseBackup, totalYearlyDividends, validateHolding, yearlyHoldingDividends, type Holding } from "@/lib/holdings";
-import type { AnnualDividend } from "@/lib/holding-dividends";
+import type { DividendBasis } from "@/lib/dividend-yield";
 import { formatMyr } from "@/lib/format-myr";
 import { formatScore100 } from "@/lib/research-copy";
 import { FairRangePill } from "@/components/research/fair-range-pill";
 import type { ListFairRange } from "@/lib/fair-range-summary";
 
-type Quote = { ticker: string; fairRange?: ListFairRange; price: number | null; priceDate: string | null; score: number | null; annualDividend: AnnualDividend | null; warnings: string[] };
+type Quote = { ticker: string; fairRange?: ListFairRange; price: number | null; priceDate: string | null; score: number | null; annualDividend: DividendBasis | null; warnings: string[] };
 type Data = { universe: { ticker: string; name: string }[]; quotes: Quote[] };
 const priceText = (n: number | null) => n === null ? "Unavailable" : `RM ${n.toLocaleString("en-MY", { minimumFractionDigits: 3, maximumFractionDigits: 5 })}`;
 const button = "rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted";
@@ -118,11 +118,14 @@ export function Holdings() {
         </p>}
         <details className="mt-3 text-sm text-muted-foreground">
           <summary className="cursor-pointer font-medium">How this is estimated</summary>
-          <p className="mt-2">We multiply your shares by the estimated yearly cash per share, using the stored price and annual dividend yield or the latest annual accounts with dividend data. We leave out stocks without usable data. Payments can change; this is not a promise of what you’ll receive.</p>
+          <p className="mt-2">We multiply your shares by cash dividends per share over the last 12 months by ex-dividend date, or the latest full financial year with reported dividends. We leave out stocks without usable data. Payments can change; this is not a promise of what you’ll receive.</p>
         </details>
       </div>
       <p className="text-sm text-muted-foreground">Stored prices, not live quotes. Gains exclude fees and dividends. Genesis scores are research scores out of 100, not buy signals.</p>
       <ul className="space-y-4">{holdings.map(({ h, quote: q, value: v, dividend }) => {
+          const yieldPct = q?.annualDividend && q.price !== null && Number.isFinite(q.price) && q.price > 0
+            ? 100 * q.annualDividend.perShare / q.price
+            : null;
           return <li key={h.ticker} className="market-card min-w-0 p-5 text-sm [overflow-wrap:anywhere]">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0 flex-1"><Link className="font-semibold underline" href={`/stock/${encodeURIComponent(h.ticker)}`}>{h.ticker}</Link><p className="mt-1 text-muted-foreground">{data?.universe.find(s => s.ticker === h.ticker)?.name}</p></div>
@@ -134,9 +137,8 @@ export function Holdings() {
                 <dd className="mt-1 font-medium">
                   {dividend !== null && q?.annualDividend ? <details>
                     <summary className="cursor-pointer text-emerald-700 dark:text-emerald-300">{formatMyr(dividend)}</summary>
-                    <p className="mt-1 text-xs font-normal text-muted-foreground">{priceText(q.annualDividend.perShare)} per share. {q.annualDividend.basis === "annual-accounts"
-                      ? `From accounts for the year ended ${q.annualDividend.date}.`
-                      : `From the stored price and Yahoo Finance’s annual dividend yield, checked ${q.annualDividend.date}.`}</p>
+                    <p className="mt-1 text-xs font-normal text-muted-foreground">{priceText(q.annualDividend.perShare)} per share. {q.annualDividend.label} · {q.annualDividend.date}.</p>
+                    {yieldPct !== null ? <p className="mt-1 text-xs font-normal text-muted-foreground">Dividend yield: {yieldPct.toFixed(1)}% at the last close.</p> : null}
                   </details> : q ? "No dividend data" : "Dividend data not loaded"}
                 </dd>
               </div>

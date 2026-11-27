@@ -21,6 +21,7 @@ export type MetricValue = {
 };
 
 export type StatementSnapshot = {
+  fiscalYear?: number | null;
   actualOrEstimate?: string;
   periodEnd: string;
   availableAt: string | null;

@@ -24,6 +24,33 @@ describe("Yahoo daily bar validation", () => {
     vi.unstubAllGlobals();
   });
 
+  it("reads ex-date and amount from the same chart, without certifying malformed history", async () => {
+    const timestamp = ["2025-10-01", "2026-09-01", "2026-11-27"].map(day => Date.parse(day) / 1000);
+    const result = {
+      meta: { symbol: "5012.KL", currency: "MYR" },
+      timestamp,
+      indicators: { quote: [{ close: [5, 5, 5] }] },
+      events: { dividends: { abc: { date: timestamp[1], amount: 0.15 }, def: { date: timestamp[1], amount: 0.15 } } },
+    };
+    const request = chart({ chart: { result: [result] } });
+    vi.stubGlobal("fetch", request);
+    const options = { now: () => new Date("2026-11-27T10:00:00Z") };
+    const fetched = await fetchYahooDailyBars("5012.KL", "2y", options);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(new URL(String((request.mock.calls as unknown[][])[0][0])).searchParams.get("events")).toBe("div,splits");
+    expect(fetched.dividendCoverage).toEqual({
+      symbol: "5012.KL", currency: "MYR", from: "2025-10-01", through: "2026-11-27",
+      events: [
+        { sourceId: "abc", exDate: "2026-09-01", amount: 0.15 },
+        { sourceId: "def", exDate: "2026-09-01", amount: 0.15 },
+      ],
+    });
+    vi.stubGlobal("fetch", chart({ chart: { result: [{ ...result, events: { dividends: { abc: { date: timestamp[1] } } } }] } }));
+    expect((await fetchYahooDailyBars("5012.KL", "2y", options)).dividendCoverage).toBeUndefined();
+    vi.stubGlobal("fetch", chart({ chart: { result: [{ ...result, events: undefined }] } }));
+    expect((await fetchYahooDailyBars("5012.KL", "2y", options)).dividendCoverage?.events).toEqual([]);
+  });
+
   it("accepts a finite positive close on a real trading date", () => {
     expect(usableYahooDailyBar(bar(), new Date("2026-10-13T00:00:00.000Z"))).toBe(true);
   });

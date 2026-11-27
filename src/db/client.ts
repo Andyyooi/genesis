@@ -43,6 +43,23 @@ function ensureSchema(sqlite: Database.Database) {
     CREATE UNIQUE INDEX IF NOT EXISTS price_bars_instrument_date_source
       ON price_bars (instrument_id, bar_date, source);
 
+    CREATE TABLE IF NOT EXISTS dividend_coverage (
+      instrument_id INTEGER PRIMARY KEY REFERENCES instruments(id),
+      yahoo_symbol TEXT NOT NULL,
+      covered_from TEXT NOT NULL,
+      covered_through TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS cash_dividends (
+      instrument_id INTEGER NOT NULL REFERENCES instruments(id),
+      source TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      ex_date TEXT NOT NULL,
+      amount REAL NOT NULL,
+      retrieved_at TEXT NOT NULL,
+      PRIMARY KEY (instrument_id, source, source_id)
+    ) WITHOUT ROWID;
+
     CREATE TABLE IF NOT EXISTS company_calendar (
       instrument_id INTEGER PRIMARY KEY REFERENCES instruments(id),
       yahoo_symbol TEXT NOT NULL,

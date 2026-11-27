@@ -127,9 +127,8 @@ export function assessFairValueQuality(
   annuals: readonly FairValueQualityAnnual[],
 ): FairValueQuality {
   const inspection = inspectEarnings(annuals);
-  const latestDividend = latestDividendPerShare(annuals);
   const methods = result.methods.map((method) =>
-    assessMethod(method, result.currentPrice, latestDividend, inspection),
+    assessMethod(method, result.currentPrice, inspection),
   );
   const decision = decideStatus(result, methods);
   const notes: FairValueQualityNote[] = [];
@@ -147,7 +146,6 @@ export function assessFairValueQuality(
 function assessMethod(
   method: FairValueMethodEvidence,
   currentPrice: number | null,
-  latestDividend: number | null,
   inspection: EpsInspection,
 ): FairValueMethodQuality {
   const calculated = isCalculated(method);
@@ -169,7 +167,7 @@ function assessMethod(
   if (
     calculated &&
     isDividendMethod(method) &&
-    extraordinaryDividendYield(latestDividend, currentPrice)
+    extraordinaryDividendYield(method.currentInput, currentPrice)
   ) {
     notes.push("EXTRAORDINARY_DIVIDEND_YIELD");
   }
@@ -289,13 +287,6 @@ function extraordinaryVersusPrice(methodValue: number | null, currentPrice: numb
 function extraordinaryDividendYield(dividendPerShare: number | null, currentPrice: number | null): boolean {
   if (dividendPerShare == null || currentPrice == null || !(currentPrice > 0) || !(dividendPerShare > 0)) return false;
   return dividendPerShare / currentPrice >= EXTRAORDINARY_YIELD;
-}
-
-function latestDividendPerShare(annuals: readonly FairValueQualityAnnual[]): number | null {
-  if (annuals.length === 0) return null;
-  const ordered = [...annuals].sort((a, b) => a.periodEnd.localeCompare(b.periodEnd));
-  const latest = ordered[ordered.length - 1];
-  return latest ? finite(latest.dividendPerShare) : null;
 }
 
 function isCalculated(method: FairValueMethodEvidence): boolean {

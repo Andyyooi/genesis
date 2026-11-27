@@ -23,6 +23,8 @@ import {
   type FairValueResult,
 } from "@/fair-value/types";
 
+import { reportedDividend, selectDividend, type DividendBasis } from "@/lib/dividend-yield";
+
 const FILING_ALIGNED_LIMITATION =
   "Historical series uses price on or before each filing’s available_at with that period’s line items.";
 
@@ -35,6 +37,7 @@ type CurrentFundamentals = {
   equity: number | null;
   shares: number | null;
   dividendPerShare: number | null;
+  dividendBasis?: string;
   bookValuePerShare: number | null;
   bookUnavailableReason: string | null;
 };
@@ -94,8 +97,9 @@ function bookValuePerShare(
   return { value: book, reason: null };
 }
 
-function currentFundamentals(periods: StatementSnapshot[]): CurrentFundamentals {
+function currentFundamentals(periods: StatementSnapshot[], dividend: DividendBasis | null | undefined): CurrentFundamentals {
   const row = latestAnnual(periods);
+  const income = dividend === undefined ? selectDividend(null, null, row ? [reportedDividend(row)] : []) : dividend;
   if (!row) {
     return {
       periodEnd: null,
@@ -103,7 +107,8 @@ function currentFundamentals(periods: StatementSnapshot[]): CurrentFundamentals 
       eps: null,
       equity: null,
       shares: null,
-      dividendPerShare: null,
+      dividendPerShare: income?.perShare ?? null,
+      dividendBasis: income?.label,
       bookValuePerShare: null,
       bookUnavailableReason: "No latest annual period",
     };
@@ -115,7 +120,8 @@ function currentFundamentals(periods: StatementSnapshot[]): CurrentFundamentals 
     eps: finiteOrNull(row.eps),
     equity: finiteOrNull(row.equity),
     shares: finiteOrNull(row.shares),
-    dividendPerShare: finiteOrNull(row.dividendPerShare),
+    dividendPerShare: income?.perShare ?? (dividend === undefined ? finiteOrNull(reportedDividend(row).dividendPerShare) : null),
+    dividendBasis: income?.label,
     bookValuePerShare: book.value,
     bookUnavailableReason: book.reason,
   };
@@ -174,7 +180,9 @@ function methodShell(args: {
     kind: args.kind,
     available: false,
     methodValue: null,
-    formula: args.formula,
+    formula: args.currentInputName === "dividend_per_share" && args.fundamentals.dividendBasis
+      ? `${args.formula} · ${args.fundamentals.dividendBasis}; ${args.kind === "history" ? "full-year historical yields" : "peer yields use trailing or full-year data"}`
+      : args.formula,
     currentInput: null,
     currentInputName: args.currentInputName,
     medianMultiple: null,
@@ -336,13 +344,14 @@ type RelativeFairValueInput = {
   periods: StatementSnapshot[];
   bars: PriceBarSnapshot[];
   peers: PeerUniverseRow[];
+  dividend?: DividendBasis | null;
   /** Clock for freshness. Filing age uses available_at, else period_end. Never retrieved_at. */
   asOf: string;
 };
 
 export function calculateGeneralFairValue(args: RelativeFairValueInput): FairValueResult {
   const price = latestClose(args.bars);
-  const fundamentals = currentFundamentals(args.periods);
+  const fundamentals = currentFundamentals(args.periods, args.dividend);
   const freshness = assessObservationFreshness({
     asOf: args.asOf,
     periodEnd: fundamentals.periodEnd,
@@ -654,7 +663,7 @@ function calculateFinancialRelatives(
   const shell = unclassified && /shell compan/i.test(args.industry ?? "");
   const price = latestClose(args.bars);
   const latestRow = latestAnnual(args.periods);
-  const baseFundamentals = currentFundamentals(args.periods);
+  const baseFundamentals = currentFundamentals(args.periods, args.dividend);
   const fundamentals: CurrentFundamentals = unclassified
     ? baseFundamentals
     : { ...baseFundamentals, eps: derivedEps(baseFundamentals.eps, latestRow?.pat, baseFundamentals.shares) };

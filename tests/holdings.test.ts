@@ -29,16 +29,17 @@ describe("holdings", () => {
 
 describe("yearly holding dividends", () => {
   const annual = (periodEnd: string, amount: number | null) => ({
-    periodEnd, statementType: "annual", actualOrEstimate: "actual", source: "annual report",
+    periodEnd, statementType: "annual", actualOrEstimate: "actual", source: "annual report", availableAt: periodEnd, fiscalQuarter: null,
     lineItemsJson: JSON.stringify({ dividendPerShare: amount }),
   });
 
-  it("uses the annual calendar yield with the stored price, not a one-off payout", () => {
-    const calendar = { annualYieldPercent: 5, dividendAmount: 0.1, checkedAt: "2026-11-20T14:00:00Z" };
-    const estimate = annualDividend("MYR", [annual("2025-12-31", 0.3)], 8, calendar);
-    expect(estimate).toEqual({ perShare: 0.4, date: "2026-11-20", basis: "calendar-yield" });
+  it("uses the full trailing cash history with its basis instead of the full-year report", () => {
+    const estimate = annualDividend([annual("2025-12-31", 0.3)], "2026-11-20", {
+      from: "2025-11-01", through: "2026-11-20",
+      events: [{ exDate: "2026-06-15", amount: 0.1 }, { exDate: "2026-09-15", amount: 0.3 }],
+    });
+    expect(estimate).toEqual({ perShare: 0.4, date: "2026-11-20", label: "Last 12 months (by ex-dividend date)" });
     expect(yearlyHoldingDividends(500, estimate?.perShare ?? null)).toBe(200);
-    expect(annualDividend("USD", [], 8, calendar)).toBeNull();
   });
 
   it("falls back to the latest usable annual accounts without treating single payments as annual", () => {
@@ -49,14 +50,13 @@ describe("yearly holding dividends", () => {
       { ...annual("2026-03-31", 3), statementType: "quarterly" },
       { ...annual("2026-12-31", 4), actualOrEstimate: "estimate" },
     ];
-    expect(annualDividend("MYR", excluded, 10)).toBeNull();
-    expect(annualDividend("MYR", [earlier, ...excluded, annual("2023-12-31", 0.58)], null, {
-      annualYieldPercent: 6, checkedAt: "2026-11-20",
-    })).toEqual({ perShare: 0.61, date: "2024-12-31", basis: "annual-accounts" });
+    expect(annualDividend(excluded, "2026-11-20", null)).toBeNull();
+    expect(annualDividend([earlier, ...excluded, annual("2023-12-31", 0.58)], null, null))
+      .toEqual({ perShare: 0.61, date: "2024-12-31", label: "FY2024 full year" });
   });
 
   it("sums only available estimates and distinguishes a known zero from missing data", () => {
-    const zero = annualDividend("MYR", [annual("2025-12-31", 0)], null);
+    const zero = annualDividend([annual("2025-12-31", 0)], null, null);
     expect(yearlyHoldingDividends(100, null)).toBeNull();
     expect(totalYearlyDividends([yearlyHoldingDividends(100, 0.61), yearlyHoldingDividends(100, zero?.perShare ?? null), null]))
       .toEqual({ total: 61, missing: 1 });

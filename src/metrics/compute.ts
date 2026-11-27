@@ -5,6 +5,7 @@ import { available, unavailable } from "@/metrics/types";
 import { safeDivide } from "@/metrics/ratio";
 import { loadScoringConfig, type ScoringConfig } from "@/config/load-scoring";
 import { annualAccounts, dailyPriceBars, evidenceMetrics, usableAccounts } from "@/metrics/evidence";
+import { reportedDividend, selectDividend, type DividendCoverage } from "@/lib/dividend-yield";
 import type { EventSnapshot, MetricValue, PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
 
 export function computeMetrics(args: {
@@ -15,12 +16,14 @@ export function computeMetrics(args: {
   periods: StatementSnapshot[];
   bars: PriceBarSnapshot[];
   events?: EventSnapshot[];
+  dividendCoverage?: DividendCoverage | null;
   asOf?: string;
   config?: ScoringConfig;
 }): MetricValue[] {
   const config = args.config ?? loadScoringConfig();
   const asOf = args.asOf ?? new Date().toISOString();
-  args = { ...args, periods: annualAccounts(usableAccounts(args.periods, asOf, config.reporting_lag_months)), bars: dailyPriceBars(args.bars, asOf) };
+  const usable = usableAccounts(args.periods, asOf, config.reporting_lag_months);
+  args = { ...args, periods: annualAccounts(usable), bars: dailyPriceBars(args.bars, asOf) };
   const fundamentals = fundamentalMetrics(args.periods, args.instrumentType, args.ticker, {
     sector: args.sector,
     industry: args.industry,
@@ -59,19 +62,20 @@ export function computeMetrics(args: {
     peReason,
   );
 
-  const dps = latestAnnual?.dividendPerShare ?? null;
+  const dividend = selectDividend(args.dividendCoverage, lastClose?.period, annualAccounts(usable.map(reportedDividend)));
+  const dps = dividend?.perShare ?? null;
   const lastCloseValue = lastClose?.available ? lastClose.value : null;
   const dividendYield = safeDivide(
     "dividend_yield",
     "Dividend yield",
     dps,
     lastCloseValue !== null && lastCloseValue > 0 ? lastCloseValue : lastCloseValue === 0 ? 0 : null,
-    "latest annual DPS / last close",
+    "cash dividend per share / last close",
     [
-      { name: "dividendPerShare", value: dps, period: latestAnnual?.periodEnd },
+      { name: "dividendPerShare", value: dps, period: dividend?.date },
       { name: "lastClose", value: lastCloseValue, period: lastClose?.period },
     ],
-    pePeriod,
+    dividend?.label ?? null,
   );
 
   const bookNav = fundamentals.find((m) => m.id === "book_nav_per_share");

@@ -13,7 +13,7 @@ export const FINANCIAL_TERMS: Record<string, FinancialTerm> = {
   price_to_earnings: term("Price compared with yearly profit", "P/E", "Price paid for each ringgit of annual profit per share. Lower may be cheaper, but can signal weak prospects."),
   price_to_book: term("Price compared with net assets", "P/B", "Price divided by accounting assets minus liabilities per share. Lower may be cheaper, not necessarily better."),
   price_to_revenue: term("Price compared with sales", "Price / sales", "Price for each ringgit of sales per share. Lower may be cheaper; sales alone do not show profit."),
-  dividend_yield: term("Yearly cash income relative to price", "Dividend / distribution yield", "Annual cash payment divided by share price. Higher means more income at that price, but payments can be cut."),
+  dividend_yield: term("Yearly cash income relative to price", "Dividend / distribution yield", "Cash dividends over the last 12 months by ex-dividend date, or the latest full financial year with reported dividends, divided by the saved share price. Payments can change."),
   payout_ratio: term("Share of profit paid to investors", "Payout ratio", "Dividends divided by profit. Very high payments may be hard to sustain; neither highest nor lowest is always best."),
   nim: term("Bank lending profit spread", "Net interest margin (NIM)", "Interest earned minus interest paid, relative to interest-earning assets. Higher is usually better for bank earnings."),
   casa: term("Share of lower-cost bank deposits", "CASA ratio", "Current and savings accounts as a share of deposits. Higher usually gives a bank cheaper funding."),
