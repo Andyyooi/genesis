@@ -4,13 +4,14 @@ export const EXPORT_PATH = "/api/export";
 export const EXPORT_CACHE_CONTROL = "private, no-store";
 
 export function exportAuthError(request: Request): Response | null {
-  const expected = process.env.EXPORT_API_TOKEN;
+  const expected = process.env.EXPORT_API_TOKEN?.trim();
   const headers = { "Cache-Control": EXPORT_CACHE_CONTROL };
-  if (!expected?.trim()) {
+  if (!expected) {
     return Response.json({ error: "The research export is not configured." }, { status: 503, headers });
   }
 
-  const provided = /^Bearer +([A-Za-z0-9._~+/-]+=*)$/i.exec(request.headers.get("Authorization") ?? "")?.[1];
+  const authorization = request.headers.get("Authorization") ?? "";
+  const provided = /^Bearer /i.test(authorization) ? authorization.slice("Bearer ".length).trim() : "";
   if (provided) {
     const digest = (token: string) => createHash("sha256").update(token).digest();
     if (timingSafeEqual(digest(provided), digest(expected))) return null;

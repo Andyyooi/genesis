@@ -39,7 +39,7 @@ describe("research export authentication", () => {
     },
   );
 
-  it.each([undefined, ""])("fails closed when the token is %s even without a dev site password", async (token) => {
+  it.each([undefined, "", "  "])("fails closed when the token is %s even without a dev site password", async (token) => {
     vi.stubEnv("EXPORT_API_TOKEN", token);
     vi.stubEnv("SITE_PASSWORD", "");
     vi.stubEnv("NODE_ENV", "development");
@@ -48,6 +48,15 @@ describe("research export authentication", () => {
     expect((await proxy(req)).status).toBe(503);
     expect(GET(req).status).toBe(503);
     expect(mocks.picks).not.toHaveBeenCalled();
+  });
+
+  it("accepts a configured token containing punctuation", async () => {
+    vi.stubEnv("EXPORT_API_TOKEN", "  export!#%&:@  ");
+    mocks.picks.mockReturnValue({ summary: null, priceDate: null, picks: [] });
+    mocks.ranges.mockReturnValue({});
+    const req = request("bEaReR   export!#%&:@");
+    expect((await proxy(req)).headers.get("x-middleware-next")).toBe("1");
+    expect(GET(req).status).toBe(200);
   });
 
   it("allows the token only for GET /api/export", async () => {
