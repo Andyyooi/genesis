@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { parse } from "yaml";
 import { z } from "zod";
 import {
+  RESEARCH_PROFILES,
   classifyResearchProfile,
   factorSetForProfile,
   type ResearchProfile,
@@ -57,6 +58,8 @@ const concernRuleSchema = z.object({
   metric: z.string().optional(),
   when: z.enum(["value_lt", "value_gt", "instrument_pn17"]),
   threshold: z.number().optional(),
+  excluded_profiles: z.array(z.enum(RESEARCH_PROFILES)).optional(),
+  penalty_points: z.number().int().positive().max(25).optional(),
 });
 
 const publicationAlertDefaults = {

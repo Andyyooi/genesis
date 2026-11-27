@@ -474,8 +474,8 @@ describe("daily refresh wires freshness gate without changing prices/scoring rul
     expect(getDb().select().from(priceBars).all()[0]!.close).toBe(10.32);
   });
 
-  it("keeps scoring methodology flags unchanged", () => {
+  it("keeps scoring concern penalties enabled", () => {
     const config = loadScoringConfig();
-    expect(config.concerns.apply_score_penalty).toBe(false);
+    expect(config.concerns.apply_score_penalty).toBe(true);
   });
 });

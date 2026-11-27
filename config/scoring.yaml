@@ -66,9 +66,10 @@ alerts:
       research_score_down: 5
       research_score_up: 5
 concerns:
-  apply_score_penalty: false
+  apply_score_penalty: true
   rules:
-    - {id: pn17, label: PN17 warning, message: Stored PN17 warning flag., when: instrument_pn17}
+    - {id: pn17, label: PN17 warning, message: Stored PN17 warning flag., when: instrument_pn17, penalty_points: 20}
+    - {id: negative_fcf, label: Negative free cash flow, message: Latest usable annual operating cash flow was lower than capital spending., metric: fcf, when: value_lt, threshold: 0, excluded_profiles: [BANK, REIT], penalty_points: 5}
     - {id: falling_revenue, label: Falling revenue, message: Fixed-window revenue CAGR is negative., metric: revenue_cagr, when: value_lt, threshold: 0}
     - {id: negative_ocf, label: Negative operating cash flow, message: Stored annual operating cash flow is negative., metric: ocf, when: value_lt, threshold: 0}
 instrument_profiles:
@@ -96,15 +97,15 @@ instrument_profiles:
       low_volatility:
         - {id: volatility_252, metric: volatility_252, label: "Annualised daily volatility", weight: 100, direction: lower_better, explanation: "Sample standard deviation of 252 daily returns multiplied by the square root of 252. Lower means a smoother historical price path, not guaranteed safety."}
   bank:
-    description: "Banks ranked only against banks; no industrial debt or cash-flow health model."
+    description: "Banks ranked only against banks, including balance-sheet and earnings resilience instead of industrial debt or cash-flow checks."
     # Editable profile-specific weights (must sum to 100).
     category_weights:
-      valuation: 35
+      valuation: 30
       quality: 25
-      financial_health: 0
+      financial_health: 10
       growth: 5
       momentum: 20
-      low_volatility: 15
+      low_volatility: 10
     factor_sets:
       valuation:
         - {id: book_to_price, metric: book_to_price, label: "Book-to-price", weight: 50, direction: higher_better, explanation: "Book equity per ringgit of market value. Compares bank equity valuation."}
@@ -112,7 +113,9 @@ instrument_profiles:
         - {id: dividend_yield, metric: dividend_yield, label: "Dividend yield", weight: 10, direction: higher_better, explanation: "Trailing or full-year cash dividend per share divided by the saved price."}
       quality:
         - {id: roe, metric: roe, label: "Return on equity", weight: 100, direction: higher_better, explanation: "Annual profit divided by equity. Measures the bank's profitability on shareholder capital."}
-      financial_health: []
+      financial_health:
+        - {id: equity_to_assets, metric: equity_to_assets, label: "Equity / assets", weight: 50, direction: higher_better, explanation: "Book equity divided by total assets. Higher means a larger accounting cushion against losses; this is not a regulatory capital ratio."}
+        - {id: three_year_min_roa, metric: three_year_min_roa, label: "Weakest return on assets in three years", weight: 50, direction: higher_better, explanation: "The lowest annual profit divided by assets over three consecutive years. A higher floor shows more resilient earnings in weaker years."}
       growth:
         - {id: revenue_cagr, metric: revenue_cagr, label: "Revenue CAGR", weight: 50, direction: higher_better, explanation: "Annualised revenue growth between the fixed-window annual endpoints."}
         - {id: eps_cagr, metric: eps_cagr, label: "EPS CAGR", weight: 50, direction: higher_better, explanation: "Annualised EPS growth between the fixed-window annual endpoints."}

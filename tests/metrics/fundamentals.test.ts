@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { loadScoringConfig } from "@/config/load-scoring";
+import { parseFundamentalsCsv } from "@/ingest/providers/csv-fundamentals";
 import { computeMetrics } from "@/metrics/compute";
+import { snapshotsToMetrics } from "@/metrics/from-snapshots";
 import type { StatementSnapshot } from "@/metrics/types";
+import { scoreUniverse } from "@/scoring/score";
 
 function annual(overrides: Partial<StatementSnapshot> = {}): StatementSnapshot {
   return {
@@ -37,6 +41,22 @@ function byId(metrics: ReturnType<typeof computeMetrics>, id: string) {
 }
 
 describe("fundamental metrics", () => {
+  it.each([20, -20])("deducts CSV capital spending reported as %i and triggers the negative FCF warning", (capex) => {
+    const parsed = parseFundamentalsCsv(`ticker,period_end,available_at,source,pat,equity,ocf,capex\nTEST,2024-12-31,2025-02-26,fixture,10,50,12,${capex}`);
+    expect(parsed.rejected).toEqual([]);
+    const [row] = parsed.accepted;
+    expect(row.lineItems.capex).toBe(capex);
+    const config = loadScoringConfig();
+    const asOf = "2026-09-25";
+    const instrumentType = "COMMON_STOCK" as const;
+    const periods = [{ ...row, lineItemsJson: JSON.stringify(row.lineItems) }];
+    const metrics = snapshotsToMetrics({ instrumentType, periods, bars: [], asOf, config });
+    expect(byId(metrics, "fcf")).toMatchObject({ value: -8, available: true });
+    const score = scoreUniverse([{ config, asOf, ticker: row.ticker, instrumentType, metrics }]).get(row.ticker)!;
+    expect(score.concerns).toContainEqual(expect.objectContaining({ id: "negative_fcf", value: -8, penaltyPoints: 5 }));
+    expect(score).toMatchObject({ researchScore: 45, warningPenalty: { scoreBefore: 50, points: 5 } });
+  });
+
   it("marks missing inputs unavailable instead of treating them as zero", () => {
     const metrics = computeMetrics({
       instrumentType: "COMMON_STOCK",

@@ -83,8 +83,8 @@ describe("universe scoring", () => {
   it("uses configured profile weights and omits bank industrial/REIT quality factors", () => {
     expect(config.category_weights).toEqual({ valuation: 30, quality: 25, financial_health: 10, growth: 5, momentum: 20, low_volatility: 10 });
     const bank = config.instrument_profiles.bank;
-    expect(bank.category_weights).toEqual({ valuation: 35, quality: 25, financial_health: 0, growth: 5, momentum: 20, low_volatility: 15 });
-    expect(bank.factor_sets.financial_health).toEqual([]);
+    expect(bank.category_weights).toEqual({ valuation: 30, quality: 25, financial_health: 10, growth: 5, momentum: 20, low_volatility: 10 });
+    expect(bank.factor_sets.financial_health.map((f) => f.metric)).toEqual(["equity_to_assets", "three_year_min_roa"]);
     expect(bank.factor_sets.quality.map((f) => f.metric)).toEqual(["roe"]);
     expect(config.instrument_profiles.reit.category_weights).toEqual({ valuation: 35, quality: 0, financial_health: 20, growth: 10, momentum: 20, low_volatility: 15 });
     expect(config.instrument_profiles.reit.factor_sets.quality).toEqual([]);
@@ -92,12 +92,31 @@ describe("universe scoring", () => {
     expect(results.get("CIMB")?.researchScore).toBe(100);
     expect(results.get("GENERAL")?.researchScore).toBe(50);
   });
-  it("keeps exclusions and concerns separate from score, and config edits affect weighted totals", () => {
+  it("ranks new health factors only against banks and renormalizes missing evidence", () => {
+    const equity = (value: number) => available("equity_to_assets", "Equity / assets", value, "ratio", "", [], null);
+    const roa = (value: number) => available("three_year_min_roa", "Weakest return on assets", value, "ratio", "", [], null);
+    const results = scoreUniverse([
+      input("MAYBANK", 0, { metrics: [equity(0.1), roa(0.01)] }),
+      input("CIMB", 0, { metrics: [equity(0.2)] }),
+      input("PBBANK", 0),
+      input("HLBANK", 0, { metrics: [equity(0.15), roa(0.02)] }),
+      input("INSURER", 0, { industry: "Insurance - Life", metrics: [equity(0.9), roa(0.9)] }),
+    ]);
+    const health = (ticker: string) => results.get(ticker)?.categories.find(({ id }) => id === "financial_health");
+    expect(health("CIMB")).toMatchObject({ score: 100, coverage: 0.5, inThisRun: true });
+    expect(health("CIMB")?.factors[0].percentile?.marketCount).toBe(3);
+    expect(health("CIMB")?.factors[1].score).toBeNull();
+    expect(health("HLBANK")).toMatchObject({ score: 75, coverage: 1 });
+    expect(health("PBBANK")).toMatchObject({ score: null, coverage: 0, inThisRun: false });
+  });
+  it("penalizes PN17 without changing valuation or replacing eligibility checks", () => {
     const a = input("A", 0.01, { metrics: [available("earnings_yield", "E/P", 0.01, "ratio", "", [], null), available("roe", "ROE", 0.2, "ratio", "", [], null)] });
     const b = input("B", 0.1, { metrics: [available("earnings_yield", "E/P", 0.1, "ratio", "", [], null), available("roe", "ROE", 0.1, "ratio", "", [], null)] });
     const base = scoreUniverse([a, b]).get("A")!;
     const flagged = scoreUniverse([{ ...a, pn17: true }, b]).get("A")!;
-    expect(flagged.researchScore).toBe(base.researchScore);
+    expect(flagged.researchScore).toBeCloseTo(base.researchScore! - 20);
+    expect(flagged.valuationScore).toBe(base.valuationScore);
+    expect(flagged.warningPenalty).toEqual({ scoreBefore: base.researchScore, points: 20 });
     expect(flagged.eligibility?.eligible).toBe(false);
     expect(flagged.concerns.some((c) => c.id === "pn17")).toBe(true);
     const tilted = structuredClone(config);
@@ -106,6 +125,46 @@ describe("universe scoring", () => {
     const changed = scoreUniverse([{ ...a, config: tilted }, { ...b, config: tilted }]).get("A")!;
     expect(changed.researchScore).toBeLessThan(base.researchScore!);
     expect(changed.configHash).not.toBe(base.configHash);
+  });
+  it("subtracts 5 for negative FCF where applicable and leaves other warnings advisory", () => {
+    const earnings = available("earnings_yield", "E/P", 0.1, "ratio", "", [], null);
+    const fcf = available("fcf", "Free cash flow", -10, "myr", "", [], "2025-12-31");
+    const falling = available("revenue_cagr", "Revenue CAGR", -0.1, "ratio", "", [], null);
+    const cases = [
+      input("GENERAL", 0, { metrics: [earnings, fcf, falling] }),
+      input("MAYBANK", 0, { metrics: [earnings, fcf] }),
+      input("REIT", 0, { instrumentType: "REIT", metrics: [fcf] }),
+      input("MISSING", 0, { metrics: [earnings, { ...fcf, available: false }] }),
+      input("ZERO", 0, { metrics: [earnings, { ...fcf, value: 0 }] }),
+    ];
+    const scores = scoreUniverse(cases);
+    expect(scores.get("GENERAL")?.researchScore).toBe(45);
+    expect(scores.get("GENERAL")?.concerns).toMatchObject([
+      { id: "negative_fcf", penaltyPoints: 5, period: "2025-12-31" }, { id: "falling_revenue" },
+    ]);
+    for (const ticker of ["MAYBANK", "REIT", "MISSING", "ZERO"]) {
+      expect(scores.get(ticker)?.concerns).toEqual([]);
+      expect(scores.get(ticker)?.warningPenalty).toBeUndefined();
+    }
+    const noPenalties = { ...config, concerns: { ...config.concerns, apply_score_penalty: false } };
+    const disabled = scoreUniverse(cases.map((row) => ({ ...row, config: noPenalties }))).get("GENERAL")!;
+    expect(disabled.researchScore).toBe(50);
+    expect(disabled.concerns.map((concern) => concern.id)).toEqual(["negative_fcf", "falling_revenue"]);
+    expect(disabled.warningPenalty).toBeUndefined();
+  });
+  it("caps combined deductions at 25, floors the score at zero and leaves unscored stocks null", () => {
+    const fcf = available("fcf", "Free cash flow", -10, "myr", "", [], null);
+    const extra = structuredClone(config);
+    extra.concerns.rules.push({ id: "additional", when: "instrument_pn17", label: "Additional warning", message: "Test", penalty_points: 5 });
+    const scores = scoreUniverse([
+      input("LOW", 0, { config: extra, pn17: true, metrics: [fcf, ...input("LOW", 0).metrics] }),
+      input("HIGH", 1, { config: extra, pn17: true, metrics: [fcf, ...input("HIGH", 1).metrics] }),
+      input("EMPTY", 0, { config: extra, pn17: true, metrics: [fcf] }),
+    ]);
+    expect(scores.get("HIGH")).toMatchObject({ researchScore: 75, warningPenalty: { scoreBefore: 100, points: 25 } });
+    expect(scores.get("LOW")).toMatchObject({ researchScore: 0, warningPenalty: { scoreBefore: 0, points: 25 } });
+    expect(scores.get("EMPTY")?.researchScore).toBeNull();
+    expect(scores.get("EMPTY")?.warningPenalty).toBeUndefined();
   });
   it("does not let NaN poison ranks", () => {
     const results = scoreUniverse([input("A", NaN), input("B", 0.1)]);

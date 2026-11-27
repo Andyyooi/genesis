@@ -130,7 +130,7 @@ export function evaluateAlertDrafts(
       title: `${ticker} new Potential Concern: ${concern.label}`,
       why: `${concern.label}. ${concern.message}${
         concern.value !== null ? ` Value ${concern.value}.` : ""
-      }${concern.period ? ` Period ${concern.period}.` : ""} This warning does not change the Research Score. Not a sell stamp.`,
+      }${concern.period ? ` Period ${concern.period}.` : ""} ${concern.penaltyPoints && input.result.warningPenalty ? `This warning can deduct up to ${concern.penaltyPoints} points from the Research Score.` : "No score deduction was applied for this warning."} Not a sell stamp.`,
       evidence: { concern },
       fingerprint: concern.id,
       href: href(ticker),

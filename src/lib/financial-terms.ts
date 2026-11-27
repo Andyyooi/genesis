@@ -10,6 +10,8 @@ export const FINANCIAL_TERMS: Record<string, FinancialTerm> = {
   dpu_cagr: growth("Cash payment per property-fund unit", "DPU CAGR"),
   roe: term("Profit earned on shareholders’ money", "Return on equity (ROE)", "Annual profit divided by shareholders’ accounting stake. Higher is usually better, but heavy borrowing can inflate it."),
   roa: term("Profit earned on company assets", "Return on assets (ROA)", "Profit for each ringgit of assets. Higher usually means assets are used more profitably."),
+  equity_to_assets: term("Share of assets backed by shareholders’ money", "Equity / assets", "A higher share gives a bigger accounting cushion against losses. This is not a regulatory capital or solvency ratio."),
+  three_year_min_roa: term("Weakest year for profit on assets", "Three-year minimum ROA", "The lowest annual profit per ringgit of assets over three consecutive years. Higher means earnings held up better in the weakest year."),
   price_to_earnings: term("Price compared with yearly profit", "P/E", "Price paid for each ringgit of annual profit per share. Lower may be cheaper, but can signal weak prospects."),
   price_to_book: term("Price compared with net assets", "P/B", "Price divided by accounting assets minus liabilities per share. Lower may be cheaper, not necessarily better."),
   price_to_revenue: term("Price compared with sales", "Price / sales", "Price for each ringgit of sales per share. Lower may be cheaper; sales alone do not show profit."),

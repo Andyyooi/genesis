@@ -1,5 +1,6 @@
 import { resolveScoringProfile, type ScoringProfileName } from "@/config/load-scoring";
 import { cagr } from "@/metrics/cagr";
+import { freeCashFlow } from "@/metrics/free-cash-flow";
 import { safeDivide } from "@/metrics/ratio";
 import { unavailable, type MetricValue, type StatementSnapshot } from "@/metrics/types";
 
@@ -203,14 +204,16 @@ export function fundamentalMetrics(
     { name: "ocf", value: row.ocf ?? null, period: p },
     { name: "capex", value: row.capex ?? null, period: p },
   ];
+  const fcfFormula = "OCF − |capex| (subtract cash spent regardless of the reported sign)";
+  const fcfValue = freeCashFlow(row.ocf, row.capex);
   const fcf =
     skipIndustrial && INDUSTRIAL_ONLY.has("fcf")
-      ? unavailable("fcf", "Free cash flow", "OCF − capex", skipIndustrial, fcfInputs, p, "myr")
-      : row.ocf === null || row.capex === null
+      ? unavailable("fcf", "Free cash flow", fcfFormula, skipIndustrial, fcfInputs, p, "myr")
+      : fcfValue === null
         ? unavailable(
             "fcf",
             "Free cash flow",
-            "OCF − capex",
+            fcfFormula,
             "OCF and capex are both required (missing capex is not treated as zero)",
             fcfInputs,
             p,
@@ -219,13 +222,13 @@ export function fundamentalMetrics(
         : {
             id: "fcf",
             label: "Free cash flow",
-            value: row.ocf - row.capex,
+            value: fcfValue,
             unit: "myr" as const,
             available: true,
             reason: null,
             period: p,
             inputs: fcfInputs,
-            formula: "OCF − capex (capex as positive cash spent)",
+            formula: fcfFormula,
           };
 
   const annual = annualSortedAsc(periods);

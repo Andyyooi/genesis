@@ -1,10 +1,11 @@
-import { CATEGORY_LABELS, formatContextHeadline, formatScore100, scoreNarrative, strongestPositives } from "@/lib/research-copy";
+import { CATEGORY_LABELS, formatContextHeadline, formatScore100, scoreNarrative, strongestPositives, warningPenaltySummary } from "@/lib/research-copy";
 import type { ExportPayload } from "@/export/payload";
 
 export function buildQuickMarkdown(payload: ExportPayload): string {
   const { instrument, score } = payload;
   const dividend = payload.metrics.find((metric) => metric.id === "dividend_yield" && metric.available);
   const positives = strongestPositives(score);
+  const warningDeduction = warningPenaltySummary(score);
   const lines = [
     `# ${instrument.ticker} — ${instrument.name}`,
     "",
@@ -21,6 +22,7 @@ export function buildQuickMarkdown(payload: ExportPayload): string {
     "",
     payload.dates.lag_note,
     `**Research Score:** ${formatScore100(score.researchScore)}`,
+    ...(warningDeduction ? [warningDeduction] : []),
     `**Valuation Score:** ${formatScore100(score.valuationScore)} (valuation factors only; not a copy of Research Score)`,
     `**Historical Context:** ${formatContextHeadline(score.valuationContext.historical.label)} (${score.valuationContext.historical.historicalValuationStatus.replaceAll("_", " ")}) — ${score.valuationContext.historical.limitation ?? score.valuationContext.historical.facts[0] ?? "Data unavailable"}`,
     `- Peer Context: ${formatContextHeadline(score.valuationContext.peer.label)} — ${score.valuationContext.peer.peerQuality ? `group ${score.valuationContext.peer.peerQuality.groupType}, ${score.valuationContext.peer.peerQuality.usableCount} usable peers` : score.valuationContext.peer.limitation ?? "Data unavailable"}`,

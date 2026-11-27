@@ -25,12 +25,12 @@ const base = {
 };
 
 describe("stock brief", () => {
-  it("puts cash, debt, and a weaker year in context without calling the stock a bargain", () => {
+  it.each([30e6, -30e6])("puts cash, debt, and a weaker year in context with capex %i without calling the stock a bargain", (capex) => {
     const brief = buildStockBrief({
       ...base,
       periods: [
         annual("2026-12-31", { pat: 500e6 }, "estimate"),
-        annual("2025-12-31", { pat: 40e6, eps: 8, equity: 300e6, shares: 100e6, revenue: 200e6, ocf: 20e6, capex: 30e6, totalDebt: 80e6, cash: 85e6 }),
+        annual("2025-12-31", { pat: 40e6, eps: 8, equity: 300e6, shares: 100e6, revenue: 200e6, ocf: 20e6, capex, totalDebt: 80e6, cash: 85e6 }),
         annual("2024-12-31", { pat: 50e6, revenue: 180e6, totalDebt: 40e6 }),
       ],
       dividend: { perShare: 0.0646, label: "Last 12 months (by ex-dividend date)", date: "2026-11-23" },

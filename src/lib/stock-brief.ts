@@ -1,6 +1,7 @@
 import type { FairRangeHeadline } from "@/lib/fair-range";
 import { formatDateSafe, isFiniteNumber } from "@/lib/display";
 import { parseLineItemsJson } from "@/ingest/merge-line-items";
+import { freeCashFlow } from "@/metrics/free-cash-flow";
 import { latestResultsComparison, SHARP_DROP, type PriceDrop } from "@/lib/price-drop-flag";
 import { isMixedIndustry, NO_COMPARABLE_PEERS } from "@/fair-value/comparable-peers";
 import { MIN_USABLE_PEERS, type PeerQuality } from "@/scoring/peer-group";
@@ -98,8 +99,8 @@ export function buildStockBrief(args: {
   if (!hasLoss && latestResults?.tone === "stronger") positives.push(latestResults.text);
   else if (positive(latest?.pat)) positives.push(`The business reported ${compactMyr.format(latest.pat)} in annual profit.`);
 
-  if (corporate && isFiniteNumber(latest?.ocf) && isFiniteNumber(latest.capex) && latest.capex >= 0) {
-    const leftover = latest.ocf - latest.capex;
+  const leftover = corporate ? freeCashFlow(latest?.ocf, latest?.capex) : null;
+  if (leftover !== null) {
     if (leftover < 0) {
       risks.push(`Operations and investment spending used ${compactMyr.format(-leftover)} more cash than they brought in.`);
       watch.push("See whether the next results show cash left after investment spending.");
