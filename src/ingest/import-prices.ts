@@ -3,12 +3,14 @@ import { dirname } from "node:path";
 import { and, eq, gt, lte, max } from "drizzle-orm";
 import { refreshAlertsForTicker } from "@/alerts/refresh";
 import { getDb, getSqlite } from "@/db/client";
+import { loadDividendDates, saveDividendCoverage } from "@/db/dividends";
 import { ingestReports, instruments, priceBars } from "@/db/schema";
 import { seedUniverseFromYaml } from "@/db/seed";
 import { inProgressSessionDate, usableYahooDailyBar, yahooBarDateUtc } from "@/ingest/price-bar";
 import { fetchYahooDailyBars, type YahooBar } from "@/ingest/providers/yahoo-prices";
 import type { PriceBarConflict, PriceImportFailure, PricesImportReport } from "@/ingest/types";
 import { PRICE_DROP_WINDOW_BARS } from "@/lib/price-drop-flag";
+import { offsetDays } from "@/lib/dividend-yield";
 import { recordIngestFailure } from "@/market/refresh-universe";
 
 function sleep(ms: number) {
@@ -105,14 +107,25 @@ export async function importYahooPrices(
     const yahooTicker =
       instrument.yahooTicker ??
       (instrument.bursaCode ? `${instrument.bursaCode}.KL` : `${instrument.ticker}.KL`);
-    const openSession = inProgressSessionDate(now());
+    const refreshTime = now();
+    const openSession = inProgressSessionDate(refreshTime);
     if (openSession) inProgressSession = openSession;
     try {
       const latest = range === "auto" ? db.select({ date: max(priceBars.barDate) }).from(priceBars)
         .where(and(eq(priceBars.instrumentId, instrument.id), gt(priceBars.close, 0), lte(priceBars.barDate, retrievedAt.slice(0, 10)))).get()?.date ?? null : null;
       const startDate = savedDates.get(instrument.ticker);
-      const fetched = await fetchYahooDailyBars(yahooTicker, startDate ? { startDate } : range === "auto" ? priceRangeSince(latest) : range);
+      const today = refreshTime.toISOString().slice(0, 10);
+      const latestClose = latest && latest <= today && yahooBarDateUtc(latest) !== null ? latest : null;
+      const dividendStart = offsetDays(latestClose ?? today, -380);
+      const incremental = priceRangeSince(latest, refreshTime);
+      const coverage = range === "auto" ? loadDividendDates(instrument.id) : undefined;
+      const needsBackfill = range === "auto" && (latestClose !== null || startDate !== undefined) &&
+        (!coverage || coverage.symbol !== yahooTicker.toUpperCase() || coverage.from > offsetDays(dividendStart, 10) ||
+          coverage.through < offsetDays(today, -3));
+      const requestStart = needsBackfill && (!startDate || startDate > dividendStart) ? dividendStart : startDate;
+      const fetched = await fetchYahooDailyBars(yahooTicker, requestStart ? { startDate: requestStart } : range === "auto" ? incremental : range);
       let accepted = fetched.filter((bar) => usableYahooDailyBar(bar) && bar.barDate !== openSession);
+      const dividendFetches = [fetched.dividendCoverage];
       const recentWindowStart = accepted.some((bar) => bar.split)
         ? recentYahooWindowStart(instrument.id)
         : undefined;
@@ -120,7 +133,9 @@ export async function importYahooPrices(
         ? recentWindowStart
         : undefined;
       if (splitWindowStart && !accepted.some((bar) => bar.barDate <= splitWindowStart)) {
-        accepted = (await fetchYahooDailyBars(yahooTicker, { startDate: splitWindowStart })).filter((bar) => usableYahooDailyBar(bar) && bar.barDate !== openSession);
+        const splitHistory = await fetchYahooDailyBars(yahooTicker, { startDate: splitWindowStart });
+        accepted = splitHistory.filter((bar) => usableYahooDailyBar(bar) && bar.barDate !== openSession);
+        dividendFetches.push(splitHistory.dividendCoverage);
       }
       if (accepted.length === 0) {
         throw new Error(`Yahoo missed ${yahooTicker}: no usable daily bars`);
@@ -129,6 +144,9 @@ export async function importYahooPrices(
         if (openSession) partialBarsRemoved += removeInProgressBar(instrument.id, openSession);
         const plan = planYahooPriceWrites(instrument.ticker, accepted, storedYahooBars(instrument.id), retrievedAt, startDate !== undefined, splitWindowStart);
         for (const bar of plan.write) writePriceBar(instrument.id, bar, retrievedAt);
+        for (const dividends of dividendFetches) {
+          if (dividends?.currency === instrument.currency) saveDividendCoverage(instrument.id, dividends, retrievedAt);
+        }
         return plan;
       })();
       barsUpserted += applied.write.length;

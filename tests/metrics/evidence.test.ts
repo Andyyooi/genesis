@@ -21,6 +21,25 @@ function bars(count = 253): PriceBarSnapshot[] {
 }
 
 describe("annual inputs and reporting lag", () => {
+  it("anchors cash dividends to the 365 days before the saved close and exposes their basis", () => {
+    const asOf = "2026-11-30";
+    const periods = [annual("2025-12-31", { dividendPerShare: 0.2 }), annual("2026-06-30", { statementType: "quarterly", dividendPerShare: 0.9 })];
+    const args = { instrumentType: "COMMON_STOCK" as const, periods, bars: [{ barDate: "2026-11-27", close: 5, high: 5, low: 5 }], asOf };
+    const coverage = { from: "2025-11-27", through: "2026-11-27", events: [
+      { exDate: "2025-11-26", amount: 1 },
+      { exDate: "2025-11-27", amount: 0.1 },
+      { exDate: "2026-11-26", amount: 0.3 },
+      { exDate: "2026-11-27", amount: 1 },
+      { exDate: "2026-11-28", amount: 1 },
+    ] };
+    const calculate = (dividendCoverage = coverage, annuals = periods) =>
+      metric(computeMetrics({ ...args, dividendCoverage, periods: annuals }), "dividend_yield");
+    expect(calculate()).toMatchObject({ value: 0.08, period: "Last 12 months (by ex-dividend date)" });
+    expect(calculate({ ...coverage, events: [] })).toMatchObject({ available: true, value: 0 });
+    expect(calculate({ ...coverage, from: "2025-11-28", events: [] })).toMatchObject({ value: 0.04, period: "FY2025 full year" });
+    expect(calculate({ ...coverage, through: "2026-11-25" }, [{ ...periods[0], source: "yahoo-quote-summary" }]))
+      .toMatchObject({ available: false, value: null, period: null });
+  });
   it("uses actual available_at or a clamped calendar-month lag, never retrieval time", () => {
     expect(accountsUsableFrom(annual(), 4)).toBe("2026-04-30");
     expect(accountsUsableFrom(annual("2024-10-31"), 4)).toBe("2025-02-28");

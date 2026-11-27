@@ -37,6 +37,7 @@ vi.mock("@/ingest/providers/yahoo-prices", () => ({
 }));
 
 import { fetchYahooDailyBars } from "@/ingest/providers/yahoo-prices";
+import { loadDividendCoverage } from "@/db/dividends";
 
 function resetDb() {
   const g = globalThis as { sqlite?: { close: () => void } };
@@ -179,6 +180,42 @@ describe("daily price range and throttle", () => {
   it("uses ordinary ranges without saved entries", async () => {
     await importYahooPrices({ listedOnly: true, skipUniverseSeed: true, skipAlerts: true, range: "auto", refreshTrackRecordHistory: true, rateLimitMs: 0 });
     expect(vi.mocked(fetchYahooDailyBars).mock.calls).toEqual([["MAYBANK.KL", "2y"]]);
+  });
+
+  it.each([
+    ["2026-10-28", "2025-10-13"],
+    ["2025-10-28", "2024-10-13"],
+  ])("backfills 380 days before the stored close on %s without a saved pick", async (closeDate, startDate) => {
+    seedBar(closeDate, 10);
+    await importYahooPrices({
+      now: () => new Date("2026-11-27T10:00:00Z"),
+      range: "auto", skipUniverseSeed: true, skipAlerts: true, rateLimitMs: 0,
+    });
+    expect(vi.mocked(fetchYahooDailyBars).mock.calls).toEqual([["MAYBANK.KL", { startDate }]]);
+  });
+
+  it("backfills and extends dividend coverage within the regular price refresh calls", async () => {
+    const now = () => new Date("2026-11-27T10:00:00Z");
+    seedBar("2026-11-26", 10);
+    const baseBar = { barDate: "2026-11-27", open: 10, high: 10, low: 10, close: 10, adjClose: 10, volume: 100 };
+    const dividend = { sourceId: "event", exDate: "2026-11-25", amount: 0.12 };
+    const coverage = { symbol: "MAYBANK.KL", currency: "MYR", from: "2025-11-13", through: "2026-11-27", events: [dividend] };
+    vi.mocked(fetchYahooDailyBars)
+      .mockResolvedValueOnce(Object.assign([baseBar], { dividendCoverage: coverage }))
+      .mockResolvedValueOnce(Object.assign([baseBar], {
+        dividendCoverage: { ...coverage, from: "2026-11-24", events: [{ ...dividend, amount: 0.15 }] },
+      }));
+    const options = { now, range: "auto", skipUniverseSeed: true, skipAlerts: true, rateLimitMs: 0 };
+    await importYahooPrices(options);
+    await importYahooPrices(options);
+    expect(vi.mocked(fetchYahooDailyBars).mock.calls).toEqual([
+      ["MAYBANK.KL", { startDate: "2025-11-11" }],
+      ["MAYBANK.KL", "5d"],
+    ]);
+    const id = getDb().select().from(instruments).get()!.id;
+    expect(loadDividendCoverage(id)).toMatchObject({
+      from: "2025-11-13", through: "2026-11-27", events: [{ exDate: dividend.exDate, amount: 0.15 }],
+    });
   });
 
   it("refreshes the comparison window's adjusted closes after a split without rewriting older closes", async () => {

@@ -3,6 +3,7 @@ import type { ExportPayload } from "@/export/payload";
 
 export function buildQuickMarkdown(payload: ExportPayload): string {
   const { instrument, score } = payload;
+  const dividend = payload.metrics.find((metric) => metric.id === "dividend_yield" && metric.available);
   const positives = strongestPositives(score);
   const lines = [
     `# ${instrument.ticker} — ${instrument.name}`,
@@ -16,6 +17,7 @@ export function buildQuickMarkdown(payload: ExportPayload): string {
     `- asOf: ${score.asOf}`,
     `- fundamentals period: ${payload.dates.fundamentals_period ?? "Data unavailable"}`,
     `- price as-of / last trade: ${payload.dates.last_trade_date ?? "Data unavailable"}`,
+    dividend?.value != null ? `- ${instrument.instrument_type === "REIT" ? "Distribution" : "Dividend"} yield: ${(dividend.value * 100).toFixed(1)}% · ${dividend.period ?? "Basis unavailable"}` : "",
     "",
     payload.dates.lag_note,
     `**Research Score:** ${formatScore100(score.researchScore)}`,

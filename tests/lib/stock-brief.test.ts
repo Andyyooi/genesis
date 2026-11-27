@@ -33,7 +33,7 @@ describe("stock brief", () => {
         annual("2025-12-31", { pat: 40e6, eps: 8, equity: 300e6, shares: 100e6, revenue: 200e6, ocf: 20e6, capex: 30e6, totalDebt: 80e6, cash: 85e6 }),
         annual("2024-12-31", { pat: 50e6, revenue: 180e6, totalDebt: 40e6 }),
       ],
-      dividendQuote: { annualYieldPercent: 3.23, checkedAt: "2026-11-23T15:02:00Z" },
+      dividend: { perShare: 0.0646, label: "Last 12 months (by ex-dividend date)", date: "2026-11-23" },
     });
     expect(brief.periodEnd).toBe("2025-12-31");
     expect(brief.verdict).toBe("Profitable, but debt rose");
@@ -41,7 +41,7 @@ describe("stock brief", () => {
     expect(brief.positives.join(" ")).toMatch(/annual profit.*exceeded debt/);
     expect(brief.risks.join(" ")).toMatch(/profit down 20%.*used RM.*Debt rose 100%/);
     expect(brief.pricing).toMatch(/5\.0× reported annual profit.*33% below reported net assets.*No reliable fair range/);
-    expect(brief.dividend).toContain("3.2% (provider estimate, 2026-11-23)");
+    expect(brief.dividend).toContain("3.2% at the last close. Last 12 months (by ex-dividend date)");
     expect(brief.watch).toContain("Check what the extra borrowing funded and whether debt keeps rising.");
     const markup = renderToStaticMarkup(createElement(StockBrief, { brief, ticker: base.ticker }));
     expect(markup).toMatch(/^<details class="[^"]*"><summary/);
@@ -63,14 +63,15 @@ describe("stock brief", () => {
     expect(brief.risks).toContain("The latest full-year accounts show a loss.");
   });
 
-  it("retains a saved zero yield instead of falling back to an older positive payment", () => {
+  it("shows a known zero yield with its basis", () => {
     const brief = buildStockBrief({
       ...base,
       periods: [annual("2025-12-31", { dividendPerShare: 0.08 })],
-      dividendQuote: { annualYieldPercent: 0, checkedAt: "2026-11-23T15:02:00Z" },
+      dividend: { perShare: 0, label: "Last 12 months (by ex-dividend date)", date: "2026-11-23" },
     });
-    expect(brief.dividend).toContain("0.0% (provider estimate, 2026-11-23)");
-    expect(buildStockBrief({ ...base, periods: [annual("2025-12-31", { dividendPerShare: 0 })] }).dividend).toContain("0.0% at the last close");
+    expect(brief.dividend).toContain("0.0% at the last close. Last 12 months (by ex-dividend date)");
+    expect(buildStockBrief({ ...base, dividend: { perShare: 0, label: "FY2025 full year", date: "2025-12-31" } }).dividend)
+      .toContain("0.0% at the last close. FY2025 full year");
   });
 
   it.each([[-2e6, "a loss again, smaller"], [-1e6, "the same loss"]])(

@@ -466,6 +466,11 @@ describe("assessFairValueQuality", () => {
       "EXTRAORDINARY_VERSUS_PRICE",
       "EXTRAORDINARY_DIVIDEND_YIELD",
     ]);
+    const differentAnnualDividend = assessFairValueQuality(built, [
+      annual("2025-12-31", 1.43, 13_033_555_000, 4_430_195_599, 0.01),
+    ]);
+    expect(codes(differentAnnualDividend.methods.find((row) => row.id === "dividend_peer_yield")?.notes ?? []))
+      .toContain("EXTRAORDINARY_DIVIDEND_YIELD");
     expect(codes(quality.notes)).toEqual(["SPREAD_AT_LEAST_10X"]);
     expect(built.confidence).toBe("HIGH");
   });

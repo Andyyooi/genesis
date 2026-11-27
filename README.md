@@ -27,6 +27,8 @@ Without `BURSA_SNAPSHOT_READONLY=1`, the app uses a separate, writable SQLite da
 
 Prices are saved **end-of-day closes**, not live quotes. Yahoo Finance supplies closes and available financial figures; CSV imports are also supported. **Data as of** is the latest saved price date, not a guarantee that all stocks have prices from that date.
 
+Dividend yield uses Yahoo cash dividend events from the 365 days before the saved close, by **ex-dividend date**, not cash payment date. Where the event history doesn't cover the full window, Genesis uses reported full-year dividends if available. The first refresh after this update backfills the history using the same Yahoo price requests.
+
 After signing in, use **Refresh data** to request an on-demand run. The same [Refresh data workflow](.github/workflows/refresh-data.yml) attempts a refresh on weekdays at 6:23, 8:23 and 11:23 pm Malaysia time. Scheduled checks skip refresh if that day's after-close snapshot has already been published. GitHub can delay scheduled runs. When the bar says **Done**, reload to see the new data.
 
 The workflow validates and packs a read-only SQLite snapshot. Main tracks [a pointer](data/snapshot.json) to the exact data commit, not the database itself. The `data-snapshot` branch holds the latest copy and `data-snapshot-previous` holds the previous published copy. The production build downloads the pinned snapshot and checks its size and checksum; Vercel opens it in memory for read-only queries. If the download or verification fails, the build fails rather than publishing an incomplete site.

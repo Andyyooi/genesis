@@ -64,7 +64,9 @@ export function CalendarAgenda({ stocks, today, checkedOn, incomplete }: {
                   <Metric label="Cash per share">{row.dividendAmount !== null && row.dividendCurrency
                     ? new Intl.NumberFormat("en-MY", { style: "currency", currency: row.dividendCurrency, maximumFractionDigits: 4 }).format(row.dividendAmount)
                     : "Not available"}</Metric>
-                  <Metric label="Annual yield">{row.annualYieldPercent !== null ? `${row.annualYieldPercent.toFixed(2)}%` : "Not available"}</Metric>
+                  <Metric label="Dividend yield">{row.yield
+                    ? <>{row.yield.percent.toFixed(2)}% <span className="block text-xs">{row.yield.basis}</span></>
+                    : "Not available"}</Metric>
                 </dl>
               </li>
             ))} />

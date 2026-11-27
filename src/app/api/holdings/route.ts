@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { companyCalendar, instruments } from "@/db/schema";
+import { loadDividendCoverage } from "@/db/dividends";
+import { instruments } from "@/db/schema";
 import { scoreTicker } from "@/scoring/run-ticker";
 import { loadRecentAlerts } from "@/alerts/refresh";
 import { plainConcern } from "@/lib/financial-terms";
@@ -24,9 +24,10 @@ export function GET(request: Request) {
     if (!data) return { ticker, signals: [], price: null, priceDate: null, score: null, annualDividend: null, warnings: ["Stock is no longer in the published universe."] };
     const { result, instrument } = data;
     const bar = [...data.bars].filter(b => b.close !== null).sort((a, b) => b.barDate.localeCompare(a.barDate))[0];
-    const calendar = db.select({ annualYieldPercent: companyCalendar.annualYieldPercent, checkedAt: companyCalendar.checkedAt })
-      .from(companyCalendar).where(eq(companyCalendar.instrumentId, instrument.id)).get();
     const price = bar?.close ?? null;
+    const dividend = instrument.currency === "MYR"
+      ? annualDividend(data.periods, bar?.barDate, loadDividendCoverage(instrument.id))
+      : null;
     const inactive = instrument.listingStatus === "inactive";
     const signals = holdingSignals({
       range: fairRanges[ticker],
@@ -48,7 +49,7 @@ export function GET(request: Request) {
       ...(!bar ? ["Price unavailable"] : Date.now() - Date.parse(bar.barDate) > 7 * 86400000 ? [`Stored price is over 7 days old (${bar.barDate}).`] : []),
       ...alerts.filter(a => a.ticker === ticker).map(a => `${a.title}: ${a.why}`),
     ];
-    return { ticker, signals, fairRange: fairRanges[ticker], price, priceDate: bar?.barDate ?? null, score: inactive ? null : result.researchScore, annualDividend: annualDividend(instrument.currency, data.periods, price, calendar), warnings: [...new Set(warnings)] };
+    return { ticker, signals, fairRange: fairRanges[ticker], price, priceDate: bar?.barDate ?? null, score: inactive ? null : result.researchScore, annualDividend: dividend, warnings: [...new Set(warnings)] };
   });
   return Response.json({ universe, quotes }, { headers: { "Cache-Control": "no-store" } });
 }
