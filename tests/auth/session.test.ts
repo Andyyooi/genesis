@@ -78,7 +78,7 @@ describe("gate decisions", () => {
     expect(await gateDecision(path, "POST", undefined, env)).toBe("unauthorized");
     expect(await gateDecision(path, "GET", "invalid", env)).toBe("unauthorized");
   });
-  it.each([["/login", "GET"], ["/login", "HEAD"], ["/login/submit", "POST"], ["/_next/static/chunk.js", "GET"], ["/favicon.ico", "GET"]])("allows public %s %s", async (path, method) => {
+  it.each([["/login", "GET"], ["/login", "HEAD"], ["/login/submit", "POST"], ["/_next/static/chunk.js", "GET"], ["/favicon.ico", "GET"], ["/api/cron/refresh", "GET"]])("allows public %s %s", async (path, method) => {
     expect(await gateDecision(path, method, undefined, env)).toBe("allow");
   });
   it("does not allow arbitrary login methods or lookalike asset paths", async () => {
@@ -86,6 +86,8 @@ describe("gate decisions", () => {
     expect(await gateDecision("/login", "POST", undefined, env)).toBe("redirect");
     expect(await gateDecision("/_next/static-secret", "GET", undefined, env)).toBe("redirect");
     expect(await gateDecision("/favicon.ico/private", "GET", undefined, env)).toBe("redirect");
+    expect(await gateDecision("/api/cron/refresh", "POST", undefined, env)).toBe("unauthorized");
+    expect(await gateDecision("/api/cron/refresh/other", "GET", undefined, env)).toBe("unauthorized");
   });
   it("exposes only the exact install identity assets, not app data or lookalike paths", async () => {
     for (const path of ["/manifest.webmanifest", "/app-icon-192.png", "/app-icon-512.png", "/apple-touch-icon.png"]) {

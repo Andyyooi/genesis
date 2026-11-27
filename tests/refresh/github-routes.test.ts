@@ -2,9 +2,10 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { parse } from "yaml";
+import { GET as CRON_GET } from "@/app/api/cron/refresh/route";
 import { POST } from "@/app/api/refresh/route";
 import { GET } from "@/app/api/refresh/status/route";
-import { mapRefreshStatus, resetGithubRefreshStateForTests, type WorkflowRun } from "@/refresh/github";
+import { isPublishedAfterMalaysiaEveningCutoff, mapRefreshStatus, resetGithubRefreshStateForTests, type WorkflowRun } from "@/refresh/github";
 import { proxy } from "@/proxy";
 
 const snapshot = vi.hoisted(() => ({ latestPriceDate: "2026-09-25", publishedAt: "2026-09-26T00:00:00Z" }));
@@ -129,16 +130,76 @@ describe("GitHub refresh API", () => {
     expect(mapRefreshStatus({ ...run, status: status!, conclusion }, step, snapshot).phase).toBe(phase);
   });
 
-  it("schedules three weekday evening attempts in Malaysia time alongside workflow_dispatch", () => {
+  it("schedules three weekday evening fallback attempts alongside workflow_dispatch source input", () => {
     const workflow = readFileSync(".github/workflows/refresh-data.yml", "utf8");
-    expect(parse(workflow).on).toEqual({
-      workflow_dispatch: null,
+    expect(parse(workflow).on).toMatchObject({
+      workflow_dispatch: {
+        inputs: {
+          source: { required: false, default: "manual", type: "choice", options: ["manual", "scheduled"] },
+        },
+      },
       schedule: [{ cron: "23 10 * * 1-5" }, { cron: "23 12 * * 1-5" }, { cron: "23 15 * * 1-5" }],
     });
   });
-  it("uses the snapshot check to decide whether to run the refresh", () => {
+  it("uses the snapshot check to decide whether to run scheduled refreshes", () => {
     const workflow = parse(readFileSync(".github/workflows/refresh-data.yml", "utf8"));
     expect(workflow.jobs.check.outputs.run).toBe("${{ steps.snapshot.outputs.run }}");
+    expect(workflow.jobs.check.steps[0].if).toBe("github.event_name == 'schedule' || inputs.source == 'scheduled'");
     expect(workflow.jobs.refresh).toMatchObject({ needs: "check", if: "needs.check.outputs.run == 'true'" });
+  });
+  it("configures weekday after-close Vercel cron jobs in vercel.json", () => {
+    const config = JSON.parse(readFileSync("vercel.json", "utf8"));
+    expect(config.crons).toEqual([
+      { path: "/api/cron/refresh", schedule: "15 10 * * 1-5" },
+      { path: "/api/cron/refresh", schedule: "15 12 * * 1-5" },
+    ]);
+  });
+  it("detects snapshots published at or after 6:00 PM Malaysia time on the same day", () => {
+    const now = Date.parse("2026-11-27T10:15:00Z"); // 18:15 MYT
+    expect(isPublishedAfterMalaysiaEveningCutoff("2026-11-27T10:00:00Z", now)).toBe(true); // 18:00 MYT
+    expect(isPublishedAfterMalaysiaEveningCutoff("2026-11-27T10:05:00Z", now)).toBe(true); // 18:05 MYT
+    expect(isPublishedAfterMalaysiaEveningCutoff("2026-11-27T09:59:59Z", now)).toBe(false); // 17:59:59 MYT
+    expect(isPublishedAfterMalaysiaEveningCutoff("2026-11-27T01:20:33Z", now)).toBe(false); // 09:20 MYT
+    expect(isPublishedAfterMalaysiaEveningCutoff("2026-11-26T11:00:00Z", now)).toBe(false); // yesterday 19:00 MYT
+    expect(isPublishedAfterMalaysiaEveningCutoff(null, now)).toBe(false);
+    expect(isPublishedAfterMalaysiaEveningCutoff("invalid", now)).toBe(false);
+  });
+  it("authenticates Vercel cron with CRON_SECRET and dispatches scheduled workflow runs", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-11-27T10:15:00Z"));
+    snapshot.publishedAt = "2026-11-27T01:20:33Z";
+    const cronReq = (auth?: string) => new NextRequest("https://research.test/api/cron/refresh", {
+      method: "GET", headers: auth ? { authorization: auth } : {},
+    });
+    const fetch = vi.fn(async (_url: string, options: RequestInit) => options.method === "POST" ? new Response(null, { status: 204 }) : json({ workflow_runs: [] }));
+    vi.stubGlobal("fetch", fetch);
+
+    vi.stubEnv("CRON_SECRET", "");
+    expect((await CRON_GET(cronReq("Bearer any"))).status).toBe(503);
+
+    vi.stubEnv("CRON_SECRET", "super-secret-cron-token");
+    expect((await CRON_GET(cronReq())).status).toBe(401);
+    expect((await CRON_GET(cronReq("Bearer wrong-token"))).status).toBe(401);
+    expect(fetch).not.toHaveBeenCalled();
+
+    const dispatched = await CRON_GET(cronReq("Bearer super-secret-cron-token"));
+    expect(dispatched.status).toBe(202);
+    const dispatch = fetch.mock.calls.find(([, o]) => o.method === "POST")!;
+    expect(JSON.parse(dispatch[1].body as string)).toEqual({ ref: "main", inputs: { source: "scheduled" } });
+
+    const alreadyRunning = await CRON_GET(cronReq("Bearer super-secret-cron-token"));
+    expect(alreadyRunning.status).toBe(200);
+    expect(await alreadyRunning.json()).toMatchObject({ skipped: true, reason: "already_running" });
+
+    resetGithubRefreshStateForTests();
+    fetch.mockClear();
+    snapshot.publishedAt = "2026-11-27T10:05:00Z"; // 18:05 MYT
+    const skipped = await CRON_GET(cronReq("Bearer super-secret-cron-token"));
+    expect(skipped.status).toBe(200);
+    expect(await skipped.json()).toMatchObject({ skipped: true, reason: "already_published_today" });
+    expect(fetch).not.toHaveBeenCalled();
+
+    vi.stubEnv("SITE_PASSWORD", "test-password");
+    expect((await proxy(new NextRequest("https://research.test/api/cron/refresh", { method: "GET" }))).status).toBe(200);
+    expect((await proxy(new NextRequest("https://research.test/api/cron/refresh", { method: "POST" }))).status).toBe(401);
   });
 });

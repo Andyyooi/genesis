@@ -98,7 +98,24 @@ export async function getRefreshStatus(snapshot: SnapshotState): Promise<Refresh
   return mapRefreshStatus(cache.run, cache.step, snapshot);
 }
 
-export async function dispatchRefresh(snapshot: SnapshotState): Promise<{ status: number; body: RefreshStatus & { error?: string } }> {
+const MALAYSIA_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+export function isPublishedAfterMalaysiaEveningCutoff(publishedAt: string | null, now = Date.now()): boolean {
+  if (!publishedAt) return false;
+  const publishedMs = Date.parse(publishedAt);
+  if (Number.isNaN(publishedMs)) return false;
+  const nowMyt = new Date(now + MALAYSIA_OFFSET_MS);
+  const pubMyt = new Date(publishedMs + MALAYSIA_OFFSET_MS);
+  return pubMyt.getUTCFullYear() === nowMyt.getUTCFullYear()
+    && pubMyt.getUTCMonth() === nowMyt.getUTCMonth()
+    && pubMyt.getUTCDate() === nowMyt.getUTCDate()
+    && pubMyt.getUTCHours() >= 18;
+}
+
+export async function dispatchRefresh(
+  snapshot: SnapshotState,
+  options?: { source?: "manual" | "scheduled" },
+): Promise<{ status: number; body: RefreshStatus & { error?: string } }> {
   const config = refreshConfiguration();
   if (config.missing.length) return { status: 503, body: { ...mapRefreshStatus(null, null, snapshot), configured: false, missing: config.missing, error: "Refresh isn't set up yet" } };
   const key = `${config.repo}:${config.token}`;
@@ -114,7 +131,10 @@ export async function dispatchRefresh(snapshot: SnapshotState): Promise<{ status
       dispatchLock = null;
       return { status: 409, body: { ...mapRefreshStatus(running, null, snapshot), error: "already running" } };
     }
-    await github(`/actions/workflows/${workflow}/dispatches`, "POST", { ref: config.ref });
+    const payload = options?.source === "scheduled"
+      ? { ref: config.ref, inputs: { source: "scheduled" } }
+      : { ref: config.ref };
+    await github(`/actions/workflows/${workflow}/dispatches`, "POST", payload);
     cache = null;
     return { status: 202, body: { ...mapRefreshStatus(null, null, snapshot), phase: "queued", status: "queued", startedAt: new Date().toISOString() } };
   } catch (error) {

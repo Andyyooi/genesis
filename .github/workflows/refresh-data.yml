@@ -2,10 +2,18 @@ name: Refresh data
 
 on:
   workflow_dispatch:
+    inputs:
+      source:
+        description: "Trigger source (manual always runs; scheduled skips if today's evening snapshot is already published)"
+        required: false
+        default: 'manual'
+        type: choice
+        options:
+          - manual
+          - scheduled
   schedule:
-    # GitHub may delay or drop runs at the top of the hour. Try at 6:23 PM, 8:23 PM,
-    # and 11:23 PM Malaysia time on weekdays. Skip if today's snapshot was published
-    # at 6:00 PM or later, so a manual refresh started before Bursa closed doesn't count.
+    # Fallback only: primary weekday schedule is triggered by Vercel Cron (/api/cron/refresh)
+    # via workflow_dispatch because GitHub's schedule trigger can delay or drop runs.
     - cron: '23 10 * * 1-5'
     - cron: '23 12 * * 1-5'
     - cron: '23 15 * * 1-5'
@@ -26,7 +34,7 @@ jobs:
       run: ${{ steps.snapshot.outputs.run }}
     steps:
       - name: Check out the current snapshot pointer from main
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || inputs.source == 'scheduled'
         uses: actions/checkout@v4
         with:
           ref: main
@@ -37,8 +45,9 @@ jobs:
         shell: bash
         env:
           TZ: Asia/Kuala_Lumpur
+          TRIGGER_SOURCE: ${{ inputs.source }}
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]] &&
+          if [[ "$GITHUB_EVENT_NAME" == 'schedule' || "$TRIGGER_SOURCE" == 'scheduled' ]] &&
              published_at=$(jq -er '.publishedAt | select(type == "string" and length > 0)' data/snapshot.json) &&
              published_epoch=$(date -d "$published_at" +%s) &&
              (( published_epoch >= $(date -d 'today 18:00' +%s) && published_epoch < $(date -d 'tomorrow 00:00' +%s) )); then
