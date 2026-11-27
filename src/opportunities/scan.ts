@@ -1,6 +1,6 @@
 import { buyScoreValue } from "@/lib/buy-score";
 import { publishedBuyScore } from "@/scoring/published-research-scores";
-import { loadScoreHistory, loadWatchlistMembership } from "@/db/queries";
+import { loadWatchlistMembership } from "@/db/queries";
 import { loadSavedPrices } from "@/db/price-history";
 import type { WorkspaceRow } from "@/components/research/research-workspace";
 import type { WatchlistReason } from "@/opportunities/watchlist-selection";
@@ -40,7 +40,11 @@ export function loadOpportunity(ticker: string, watchlistReason: WatchlistReason
     const lastClose = metric(scored.metrics, "last_close");
     const lastTrade = metric(scored.metrics, "last_trade_date");
     const dist = metric(scored.metrics, "distance_from_52w_high");
-    const history = loadScoreHistory(scored.instrument.id, 8);
+    const buyScore = buyScoreValue(publishedBuyScore({
+      researchScore: scored.result.researchScore,
+      eligible: scored.result.eligibility?.eligible === true,
+      needsVerification: scored.result.dataConfidence.needsVerification,
+    }));
     return {
       ticker: scored.instrument.ticker,
       watchlistReason,
@@ -55,6 +59,7 @@ export function loadOpportunity(ticker: string, watchlistReason: WatchlistReason
       sector: scored.instrument.sector ?? null,
       researchProfile: scored.result.researchProfile,
       price: lastClose?.available ? lastClose.value : null,
+      buyScore,
       lastTradeDate: lastTrade?.period ?? scored.bars[0]?.barDate ?? null,
       fundamentalsPeriod: latestAnnualPeriod(scored.periods),
       researchScore: scored.result.researchScore,
@@ -71,7 +76,6 @@ export function loadOpportunity(ticker: string, watchlistReason: WatchlistReason
       mainConcern: mainConcernLabel(scored.result),
       distanceFrom52wHigh: dist?.available ? dist.value : null,
       distanceFrom52wHighAvailable: Boolean(dist?.available && dist.value !== null),
-      persistedResearchScores: history.map((row) => row.researchScore),
       catalystWatch: scored.events.some((event) => {
         const c = event.classification;
         return c === "Positive catalyst" || c === "Negative" || c === "Uncertain";
@@ -97,7 +101,7 @@ export function toWorkspaceRow(row: OpportunityRow): WorkspaceRow {
     name: row.name,
     sector: row.sector,
     price: row.price,
-    buyScore: buyScoreValue(publishedBuyScore({ researchScore: row.researchScore, eligible: row.result.eligibility?.eligible === true, needsVerification: row.needsVerification })),
+    buyScore: row.buyScore,
     researchScore: row.researchScore,
     valuationScore: row.valuationScore,
     qualityScore: row.qualityScore,

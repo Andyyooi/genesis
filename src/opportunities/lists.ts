@@ -1,12 +1,14 @@
+import { isFiniteNumber } from "@/lib/display";
+import type { ListFairRange } from "@/lib/fair-range-summary";
 import type { ScoreResult } from "@/scoring/types";
 import type { WatchlistReason } from "@/opportunities/watchlist-selection";
 
 export const LIST_IDS = [
   "watchlist",
   "undervalued",
-  "quality",
+  "buy-score",
   "quality-value",
-  "improving",
+  "at-or-below-fair-range",
   "discounted",
 ] as const;
 
@@ -19,6 +21,7 @@ export type OpportunityList = {
   /** Empty until a later phase supplies the inputs. */
   disabled: boolean;
   disabledReason?: string;
+  showWhenEmpty?: boolean;
 };
 
 export const OPPORTUNITY_LISTS: OpportunityList[] = [
@@ -35,10 +38,11 @@ export const OPPORTUNITY_LISTS: OpportunityList[] = [
     disabled: false,
   },
   {
-    id: "quality",
-    label: "High Quality",
-    description: "Business Quality category at least 70/100.",
+    id: "buy-score",
+    label: "Buy score 90+",
+    description: "Buy score above 90 out of 100.",
     disabled: false,
+    showWhenEmpty: true,
   },
   {
     id: "quality-value",
@@ -47,11 +51,11 @@ export const OPPORTUNITY_LISTS: OpportunityList[] = [
     disabled: false,
   },
   {
-    id: "improving",
-    label: "Improving",
-    description:
-      "The latest saved Research Score is higher than the previous published score. Needs at least two saved research runs.",
+    id: "at-or-below-fair-range",
+    label: "At or below fair range",
+    description: "Saved share price within or below the fair range. Requires both a price and a fair range.",
     disabled: false,
+    showWhenEmpty: true,
   },
   {
     id: "discounted",
@@ -74,6 +78,7 @@ export type OpportunityRow = {
   sector: string | null;
   researchProfile: string;
   price: number | null;
+  buyScore: number | null;
   lastTradeDate: string | null;
   fundamentalsPeriod: string | null;
   researchScore: number | null;
@@ -91,8 +96,6 @@ export type OpportunityRow = {
   mainConcern: string | null;
   distanceFrom52wHigh: number | null;
   distanceFrom52wHighAvailable: boolean;
-  /** Newest persisted research scores first. Live run is not prepended. */
-  persistedResearchScores: (number | null)[];
   catalystWatch: boolean;
   catalystLabel: string | null;
   hasEvents: boolean;
@@ -263,41 +266,47 @@ export function mainConcernLabel(result: ScoreResult): string | null {
   return hit ? hit.label : null;
 }
 
-export function researchListIds(
-  row: Pick<
-    OpportunityRow,
-    | "valuationScore"
-    | "qualityScore"
-    | "persistedResearchScores"
-    | "distanceFrom52wHigh"
-    | "distanceFrom52wHighAvailable"
-    | "catalystWatch"
-    | "result"
-  >,
-): ListId[] {
-  const full = row as OpportunityRow;
-  return LIST_IDS.filter((id) => id !== "watchlist" && rowMatchesList(full, id));
-}
+const ALERT_RESEARCH_LIST_IDS = ["undervalued", "quality", "quality-value", "improving", "discounted"] as const;
 
-export function rowMatchesList(row: OpportunityRow, list: ListId): boolean {
-  if (list === "watchlist") return true;
-  if (!row.result.eligibility?.eligible) return false;
+export type AlertResearchListId = (typeof ALERT_RESEARCH_LIST_IDS)[number];
+
+type ScreeningRow = Pick<OpportunityRow, "valuationScore" | "qualityScore" | "distanceFrom52wHigh" | "distanceFrom52wHighAvailable">;
+type SharedListId = Extract<ListId, AlertResearchListId>;
+
+function rowMatchesSharedList(row: ScreeningRow, list: SharedListId): boolean {
   if (list === "undervalued") return (row.valuationScore ?? -1) >= 70;
-  if (list === "quality") return (row.qualityScore ?? -1) >= 70;
   if (list === "quality-value") {
     return (row.qualityScore ?? -1) >= 70 && (row.valuationScore ?? -1) >= 70;
   }
-  if (list === "improving") {
-    if (row.persistedResearchScores.length < 2) return false;
-    const latest = row.persistedResearchScores[0];
-    const previous = row.persistedResearchScores[1];
-    if (latest === null || previous === null) return false;
-    return latest > previous + 0.5;
+  if (!row.distanceFrom52wHighAvailable || row.distanceFrom52wHigh === null) return false;
+  if ((row.qualityScore ?? -1) < 50) return false;
+  return row.distanceFrom52wHigh >= 0.15;
+}
+
+export function researchListIds(
+  row: ScreeningRow & Pick<OpportunityRow, "result" | "catalystWatch"> & {
+    /** Newest persisted research scores first. Live run is not prepended. */
+    persistedResearchScores: (number | null)[];
+  },
+): AlertResearchListId[] {
+  if (!row.result.eligibility?.eligible) return [];
+  return ALERT_RESEARCH_LIST_IDS.filter((id) => {
+    if (id === "quality") return (row.qualityScore ?? -1) >= 70;
+    if (id === "improving") {
+      if (row.persistedResearchScores.length < 2) return false;
+      const [latest, previous] = row.persistedResearchScores;
+      return latest !== null && previous !== null && latest > previous + 0.5;
+    }
+    return rowMatchesSharedList(row, id);
+  });
+}
+
+export function rowMatchesList(row: OpportunityRow, list: ListId, fairRange?: ListFairRange): boolean {
+  if (list === "watchlist") return true;
+  if (!row.result.eligibility?.eligible) return false;
+  if (list === "buy-score") return row.buyScore !== null && row.buyScore > 90;
+  if (list === "at-or-below-fair-range") {
+    return fairRange?.available === true && isFiniteNumber(row.price) && row.price > 0 && row.price <= fairRange.high;
   }
-  if (list === "discounted") {
-    if (!row.distanceFrom52wHighAvailable || row.distanceFrom52wHigh === null) return false;
-    if ((row.qualityScore ?? -1) < 50) return false;
-    return row.distanceFrom52wHigh >= 0.15;
-  }
-  return false;
+  return rowMatchesSharedList(row, list);
 }

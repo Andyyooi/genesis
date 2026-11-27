@@ -1,6 +1,6 @@
 import type { ScoringConfig } from "@/config/load-scoring";
 import type { EventSnapshot } from "@/metrics/types";
-import { categoryScore, researchListIds, type ListId } from "@/opportunities/lists";
+import { categoryScore, researchListIds, type AlertResearchListId } from "@/opportunities/lists";
 import type { ScoreResult } from "@/scoring/types";
 
 export type AlertDraft = {
@@ -17,7 +17,7 @@ export type AlertSnapshot = {
   lastResearchScore: number | null;
   lastHealthScore: number | null;
   lastConcernIds: string[];
-  lastListIds: ListId[];
+  lastListIds: AlertResearchListId[];
   lastEventKeys: string[];
   lastClose: number | null;
   lastCloseDate: string | null;

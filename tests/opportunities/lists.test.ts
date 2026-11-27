@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import type { ListFairRange } from "@/lib/fair-range-summary";
 import type { ScoreResult } from "@/scoring/types";
 import { emptyValuationContext } from "@/scoring/valuation-context";
 import {
   liveCoverage,
+  parseListId,
+  researchListIds,
   rowMatchesFilters,
   rowMatchesList,
   sortOpportunityRows,
@@ -131,6 +134,7 @@ function row(over: Partial<OpportunityRow> = {}): OpportunityRow {
     sector: "Consumer Cyclical",
     researchProfile: scored.researchProfile,
     price: 10,
+    buyScore: null,
     lastTradeDate: "2026-09-18",
     fundamentalsPeriod: "2024-12-31",
     researchScore: scored.researchScore,
@@ -147,7 +151,6 @@ function row(over: Partial<OpportunityRow> = {}): OpportunityRow {
     mainConcern: null,
     distanceFrom52wHigh: 0.2,
     distanceFrom52wHighAvailable: true,
-    persistedResearchScores: [],
     catalystWatch: false,
     catalystLabel: null,
     hasEvents: false,
@@ -169,11 +172,35 @@ describe("opportunity lists", () => {
     expect(rowMatchesList(row({ qualityScore: 90, valuationScore: 40 }), "quality-value")).toBe(false);
   });
 
-  it("Improving only when two persisted score_runs show a higher latest Research Score", () => {
-    expect(rowMatchesList(row({ persistedResearchScores: [70] }), "improving")).toBe(false);
-    expect(rowMatchesList(row({ persistedResearchScores: [70, 70] }), "improving")).toBe(false);
-    expect(rowMatchesList(row({ persistedResearchScores: [74, 70] }), "improving")).toBe(true);
-    expect(rowMatchesList(row({ persistedResearchScores: [68, 70] }), "improving")).toBe(false);
+  it("uses the new tab IDs and falls back to the watchlist for the removed tabs", () => {
+    expect(parseListId("buy-score")).toBe("buy-score");
+    expect(parseListId("at-or-below-fair-range")).toBe("at-or-below-fair-range");
+    expect(parseListId("quality")).toBe("watchlist");
+    expect(parseListId("improving")).toBe("watchlist");
+  });
+
+  it("requires a Buy score strictly above 90, not a high Research Score", () => {
+    expect(rowMatchesList(row({ buyScore: 91 }), "buy-score")).toBe(true);
+    expect(rowMatchesList(row({ buyScore: 90 }), "buy-score")).toBe(false);
+    expect(rowMatchesList(row({ buyScore: null, researchScore: 99 }), "buy-score")).toBe(false);
+  });
+
+  it("includes prices inside or below the fair range, including the upper bound", () => {
+    const fairRange: ListFairRange = { available: true, low: 10, high: 12, position: null };
+    for (const price of [9, 10, 11, 12]) {
+      expect(rowMatchesList(row({ price }), "at-or-below-fair-range", fairRange)).toBe(true);
+    }
+    expect(rowMatchesList(row({ price: 12.01 }), "at-or-below-fair-range", fairRange)).toBe(false);
+    expect(rowMatchesList(row({ price: null }), "at-or-below-fair-range", fairRange)).toBe(false);
+    expect(rowMatchesList(row(), "at-or-below-fair-range", { available: false })).toBe(false);
+    expect(rowMatchesList(row(), "at-or-below-fair-range")).toBe(false);
+  });
+
+  it("keeps the alert-only Improving rule based on two persisted Research Scores", () => {
+    expect(researchListIds({ ...row(), persistedResearchScores: [70] })).not.toContain("improving");
+    expect(researchListIds({ ...row(), persistedResearchScores: [70, 70] })).not.toContain("improving");
+    expect(researchListIds({ ...row(), persistedResearchScores: [74, 70] })).toContain("improving");
+    expect(researchListIds({ ...row(), persistedResearchScores: [68, 70] })).not.toContain("improving");
   });
 
   it("Recently Discounted needs 52-week history and quality still ≥ 50", () => {
@@ -199,9 +226,11 @@ describe("opportunity lists", () => {
   });
 
   it("keeps excluded names visible in all, but out of recommendation lists", () => {
-    const excluded = row({ result: result({ eligibility: { eligible: false, reasons: ["PN17"], medianTradedValue: 200000, priceDays: 253 } }) });
+    const excluded = row({ buyScore: 95, result: result({ eligibility: { eligible: false, reasons: ["PN17"], medianTradedValue: 200000, priceDays: 253 } }) });
     expect(rowMatchesList(excluded, "watchlist")).toBe(true);
-    for (const list of ["undervalued", "quality", "quality-value", "improving", "discounted"] as const) expect(rowMatchesList(excluded, list)).toBe(false);
+    for (const list of ["undervalued", "buy-score", "quality-value", "discounted"] as const) expect(rowMatchesList(excluded, list)).toBe(false);
+    expect(rowMatchesList(excluded, "at-or-below-fair-range", { available: true, low: 10, high: 12, position: "inside" })).toBe(false);
+    expect(researchListIds({ ...excluded, persistedResearchScores: [74, 70] })).toEqual([]);
   });
 
   it("Shariah and cap-size filters are flags, not scored factors", () => {
