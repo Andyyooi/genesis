@@ -1,43 +1,155 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { HOLDINGS_KEY, parseBackup } from "@/lib/holdings";
+import { backupJson, HOLDINGS_KEY, parseBackup } from "@/lib/holdings";
+import { emptyPortfolio, parseStars, portfolioEdit, portfolioView, STARRED_KEY, type PortfolioEdit, type PortfolioView } from "@/lib/portfolio";
 
-export const STARRED_KEY = "genesis:saved-companies:v1";
+type Snapshot = {
+  mode: "loading" | "browser" | "server" | "error";
+  portfolio: PortfolioView;
+  busy: boolean;
+  error?: string;
+};
 
-function subscribeHoldings(callback: () => void) {
-  window.addEventListener("storage", callback);
-  window.addEventListener("holdings-change", callback);
-  return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener("holdings-change", callback);
-  };
-}
-function holdingsSnapshot() {
-  try { return localStorage.getItem(HOLDINGS_KEY); } catch { return null; }
-}
-export function useHeldTickers() {
-  const raw = useSyncExternalStore(subscribeHoldings, holdingsSnapshot, () => null);
-  try { return new Set(raw ? parseBackup(raw).map(h => h.ticker) : []); } catch { return new Set<string>(); }
+const initial: Snapshot = { mode: "loading", portfolio: emptyPortfolio, busy: false };
+let snapshot = initial;
+let loading: Promise<void> | undefined;
+const listeners = new Set<() => void>();
+
+function publish(next: Snapshot) {
+  snapshot = next;
+  for (const listener of listeners) listener();
 }
 
-function subscribeStarred(callback: () => void) {
-  window.addEventListener("storage", callback);
-  window.addEventListener("genesis-saved", callback);
-  return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener("genesis-saved", callback);
-  };
-}
-function starredSnapshot() {
-  try { return localStorage.getItem(STARRED_KEY); } catch { return null; }
-}
-export function useStarredTickers() {
-  const raw = useSyncExternalStore(subscribeStarred, starredSnapshot, () => null);
+function readLegacy() {
+  let holdingsRaw: string | null = null;
+  let starredRaw: string | null = null;
+  let holdings: PortfolioView["holdings"] = [];
+  let starred: string[] = [];
+  let error: string | undefined;
   try {
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string").slice(0, 500) : []);
+    const raw = localStorage.getItem(HOLDINGS_KEY);
+    holdings = raw ? parseBackup(raw) : [];
+    holdingsRaw = raw;
   } catch {
-    return new Set<string>();
+    error = "Could not read browser holdings. You can restore a backup on My holdings.";
+  }
+  try {
+    const raw = localStorage.getItem(STARRED_KEY);
+    starred = parseStars(raw);
+    starredRaw = raw;
+  } catch {
+    error ??= "Could not read browser stars.";
+  }
+  return { holdings, starred, holdingsRaw, starredRaw, error };
+}
+
+class PortfolioError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+
+async function requestPortfolio(update?: { revision: number; edit: PortfolioEdit }) {
+  const response = await fetch("/api/portfolio", {
+    cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
+    ...(update && { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(update) }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new PortfolioError(data.error ?? "Saved stocks are unavailable.", response.status);
+  return data.mode === "browser" ? null : portfolioView.parse(data.portfolio);
+}
+
+async function load() {
+  try {
+    let portfolio = await requestPortfolio();
+    const legacy = readLegacy();
+    if (!portfolio) {
+      const unchanged = snapshot.mode === "browser" && JSON.stringify(snapshot.portfolio.holdings) === JSON.stringify(legacy.holdings)
+        && JSON.stringify(snapshot.portfolio.starred) === JSON.stringify(legacy.starred);
+      const revision = unchanged ? snapshot.portfolio.revision : snapshot.portfolio.revision + 1;
+      publish({ mode: "browser", portfolio: { revision, holdings: legacy.holdings, starred: legacy.starred }, busy: false, error: legacy.error });
+      return;
+    }
+    if (legacy.holdings.length || legacy.starred.length) {
+      const edit: PortfolioEdit = { kind: "migrate", holdings: legacy.holdings, starred: legacy.starred };
+      try {
+        portfolio = await requestPortfolio({ revision: portfolio.revision, edit });
+      } catch (error) {
+        if (!(error instanceof PortfolioError) || error.status !== 409) throw error;
+        const latest = await requestPortfolio();
+        if (!latest) throw error;
+        portfolio = await requestPortfolio({ revision: latest.revision, edit });
+      }
+      if (!portfolio) throw new Error("Migration not saved");
+      try {
+        if (localStorage.getItem(HOLDINGS_KEY) === legacy.holdingsRaw) localStorage.removeItem(HOLDINGS_KEY);
+        if (localStorage.getItem(STARRED_KEY) === legacy.starredRaw) localStorage.removeItem(STARRED_KEY);
+      } catch {
+        // Migration does not overwrite server entries if the browser retries.
+      }
+    }
+    publish({ mode: "server", portfolio, busy: false, error: legacy.error });
+  } catch {
+    publish({ ...snapshot, mode: "error", busy: false, error: "Could not sync your saved stocks. Try again." });
+  }
+}
+
+export function refreshPortfolio() {
+  if (!snapshot.busy && !loading) loading = load().finally(() => { loading = undefined; });
+  return loading;
+}
+
+function storageChanged(event: StorageEvent) {
+  if (event.key === null || event.key === HOLDINGS_KEY || event.key === STARRED_KEY) void refreshPortfolio();
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  if (listeners.size === 1) {
+    window.addEventListener("focus", refreshPortfolio);
+    window.addEventListener("storage", storageChanged);
+    void refreshPortfolio();
+  }
+  return () => {
+    listeners.delete(listener);
+    if (!listeners.size) {
+      window.removeEventListener("focus", refreshPortfolio);
+      window.removeEventListener("storage", storageChanged);
+    }
+  };
+}
+
+export function usePortfolio() {
+  return useSyncExternalStore(subscribe, () => snapshot, () => initial);
+}
+
+export function useHeldTickers() {
+  return new Set(usePortfolio().portfolio.holdings.map(h => h.ticker));
+}
+
+export async function savePortfolio(edit: Exclude<PortfolioEdit, { kind: "migrate" }>, revision: number) {
+  if (loading || snapshot.busy || (snapshot.mode !== "server" && snapshot.mode !== "browser") ||
+    revision !== snapshot.portfolio.revision) throw new Error("Your saved stocks are updating. Try again.");
+  if (!portfolioEdit.safeParse(edit).success) throw new Error("Save up to 1,000 holdings and 500 stars.");
+  if (snapshot.mode === "browser") {
+    try {
+      if (edit.kind === "holdings") localStorage.setItem(HOLDINGS_KEY, backupJson(edit.holdings));
+      else localStorage.setItem(STARRED_KEY, JSON.stringify(edit.starred));
+    } catch {
+      throw new Error("Could not save in this browser. Your previous list is unchanged.");
+    }
+    const { holdings, starred, error } = readLegacy();
+    publish({ ...snapshot, portfolio: { revision: revision + 1, holdings, starred }, error });
+    return;
+  }
+  publish({ ...snapshot, busy: true });
+  try {
+    const portfolio = await requestPortfolio({ revision, edit });
+    if (!portfolio) throw new Error("Server storage isn’t set up.");
+    publish({ ...snapshot, portfolio, busy: false });
+  } catch (error) {
+    publish({ ...snapshot, busy: false });
+    if (error instanceof PortfolioError && error.status === 409) void refreshPortfolio();
+    throw error;
   }
 }

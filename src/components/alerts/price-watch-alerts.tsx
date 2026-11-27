@@ -1,18 +1,10 @@
 import Link from "next/link";
 import { formatFairRangeBounds, formatSharePrice } from "@/lib/format-myr";
-import { loadWatchCloses, loadWatchInstrument, loadWatchRange } from "@/price-watches/snapshot";
+import { evaluateSavedWatch } from "@/price-watches/evaluate-saved";
 import { getPriceWatchStore, WATCH_STORE_UNAVAILABLE, WATCH_STORE_UNCONFIGURED } from "@/price-watches/store";
-import { evaluatePriceWatch, type PriceWatch } from "@/price-watches/watch";
 import { StatusLabel } from "@/components/research/status-label";
 
-function watchRow(watch: PriceWatch) {
-  const instrument = loadWatchInstrument(watch.ticker);
-  const [latest, previous] = instrument ? loadWatchCloses(instrument.id) : [];
-  const range = instrument && watch.kind === "fair-range" ? loadWatchRange(instrument.id) : undefined;
-  return { watch, latest, range, result: evaluatePriceWatch(watch, latest, previous, range) };
-}
-
-function WatchCards({ rows }: { rows: ReturnType<typeof watchRow>[] }) {
+function WatchCards({ rows }: { rows: ReturnType<typeof evaluateSavedWatch>[] }) {
   return (
     <ul className="grid gap-2">
       {rows.map(({ watch, latest, range, result }) => {
@@ -40,10 +32,10 @@ function WatchCards({ rows }: { rows: ReturnType<typeof watchRow>[] }) {
 
 export async function PriceWatchAlerts() {
   const store = getPriceWatchStore();
-  let rows: ReturnType<typeof watchRow>[] = [];
+  let rows: ReturnType<typeof evaluateSavedWatch>[] = [];
   let error = store ? null : WATCH_STORE_UNCONFIGURED;
   try {
-    if (store) rows = (await store.list()).sort((a, b) => a.ticker.localeCompare(b.ticker)).map(watchRow);
+    if (store) rows = (await store.list()).sort((a, b) => a.ticker.localeCompare(b.ticker)).map(watch => evaluateSavedWatch(watch));
   } catch {
     error = WATCH_STORE_UNAVAILABLE;
   }

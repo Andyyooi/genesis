@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Banknote, CalendarDays } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { useHeldTickers } from "@/components/holdings-store";
+import { usePortfolio } from "@/components/holdings-store";
 import { calendarAgenda, type CalendarScope, type CalendarStock } from "@/lib/company-calendar";
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
@@ -21,7 +21,8 @@ export function CalendarAgenda({ stocks, today, checkedOn, incomplete }: {
   checkedOn: string | null;
   incomplete: boolean;
 }) {
-  const held = useHeldTickers();
+  const saved = usePortfolio();
+  const held = new Set(saved.portfolio.holdings.map(h => h.ticker));
   const [choice, setChoice] = useState<CalendarScope | null>(null);
   const scope = choice ?? (held.size ? "holdings" : stocks.some((stock) => stock.watchlist) ? "watchlist" : "all");
   const { dividends, results } = calendarAgenda(stocks, scope, held, today);
@@ -48,7 +49,7 @@ export function CalendarAgenda({ stocks, today, checkedOn, incomplete }: {
         The last refresh couldn&apos;t check every stock. Some dates may be missing or out of date.
       </p>}
       {scope === "holdings" && held.size === 0 ? (
-        <p className="market-card p-6">No holdings are saved in this browser. <Link href="/holdings" className="underline underline-offset-4">Add your holdings</Link> or choose another list above.</p>
+        <p className="market-card p-6">{saved.mode === "loading" ? "Loading your holdings…" : saved.mode === "error" ? "Could not load your holdings." : <><Link href="/holdings" className="underline underline-offset-4">Add your holdings</Link> to see their dates here, or choose another list above.</>}</p>
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-2">
           <AgendaSection key={`dividends-${scope}`} title="Upcoming dividends" icon={<Banknote className="size-5" aria-hidden="true" />}

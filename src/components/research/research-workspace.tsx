@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
+import { refreshPortfolio, savePortfolio, usePortfolio } from "@/components/holdings-store";
 import {
   ArrowDownUp,
   ArrowUpRight,
@@ -54,49 +55,6 @@ export function entrySortValue(row: WorkspaceRow): number | null {
   return -gap.percent;
 }
 
-const SAVED_KEY = "genesis:saved-companies:v1";
-let volatileSaved = "[]";
-let volatileOnly = false;
-function savedSnapshot() {
-  if (volatileOnly) return volatileSaved;
-  try {
-    return window.localStorage.getItem(SAVED_KEY) ?? "[]";
-  } catch {
-    return volatileSaved;
-  }
-}
-function persistSaved(next: string[]): boolean {
-  volatileSaved = JSON.stringify(next);
-  try {
-    window.localStorage.setItem(SAVED_KEY, volatileSaved);
-    volatileOnly = false;
-    return true;
-  } catch {
-    volatileOnly = true;
-    return false;
-  }
-}
-function subscribeSaved(callback: () => void) {
-  window.addEventListener("storage", callback);
-  window.addEventListener("genesis-saved", callback);
-  return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener("genesis-saved", callback);
-  };
-}
-function parseSaved(raw: string): string[] {
-  try {
-    const value: unknown = JSON.parse(raw);
-    return Array.isArray(value)
-      ? value
-          .filter((item): item is string => typeof item === "string")
-          .slice(0, 500)
-      : [];
-  } catch {
-    return [];
-  }
-}
-
 export function ResearchWorkspace({
   rows,
   visibleTickers,
@@ -112,15 +70,15 @@ export function ResearchWorkspace({
   watchlistDescription?: string;
   children?: React.ReactNode;
 }) {
-  const saved = parseSaved(
-    useSyncExternalStore(subscribeSaved, savedSnapshot, () => "[]"),
-  );
+  const portfolio = usePortfolio();
+  const saved = portfolio.portfolio.starred;
+  const canStar = !portfolio.busy && (portfolio.mode === "server" || portfolio.mode === "browser");
   const [query, setQuery] = useState("");
   const [onlySaved, setOnlySaved] = useState(false);
   const [sector, setSector] = useState("");
   const [sort, setSort] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
-  const [saveError, setSaveError] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [savedLookup, setSavedLookup] = useState<{ key: string; rows: WorkspaceRow[]; failed: boolean }>();
   const watchlistByTicker = new Map(rows.map((row) => [row.ticker, row]));
   const missingSaved = saved.filter((ticker) => !watchlistByTicker.has(ticker)).join(",");
@@ -195,12 +153,16 @@ export function ResearchWorkspace({
   const compared = selected
     .flatMap((ticker) => byTicker.get(ticker) ?? []);
 
-  function toggleSaved(ticker: string) {
+  async function toggleSaved(ticker: string) {
     const next = saved.includes(ticker)
       ? saved.filter((item) => item !== ticker)
       : [...saved, ticker];
-    setSaveError(!persistSaved(next));
-    window.dispatchEvent(new Event("genesis-saved"));
+    try {
+      await savePortfolio({ kind: "starred", starred: next }, portfolio.portfolio.revision);
+      setSaveError("");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Could not save your stars.");
+    }
   }
 
   return (
@@ -295,9 +257,9 @@ export function ResearchWorkspace({
           Some saved companies could not be loaded. Your stars have not changed.
         </p>
       ) : null}
-      {saveError ? (
-        <p className="px-5 py-2 text-xs text-amber-800" role="status">
-          Browser storage is blocked. Your saved list lasts only for this visit.
+      {saveError || portfolio.error ? (
+        <p className="px-5 py-2 text-xs text-muted-foreground" role="alert">
+          {saveError || portfolio.error} {portfolio.mode === "error" && <button type="button" className="underline" onClick={() => void refreshPortfolio()}>Retry</button>}
         </p>
       ) : null}
       {compared.length > 0 ? (
@@ -467,6 +429,7 @@ export function ResearchWorkspace({
                       className="save-company"
                       aria-label={`${saved.includes(row.ticker) ? "Unsave" : "Save"} ${row.ticker}`}
                       aria-pressed={saved.includes(row.ticker)}
+                      disabled={!canStar}
                       onClick={() => toggleSaved(row.ticker)}
                     >
                       <Star
@@ -606,7 +569,8 @@ export function ResearchWorkspace({
         </div>
       ) : null}
       <div className="workspace-footnote">
-        <span>Stars are saved on this browser only.</span>
+        {portfolio.mode === "server" && <span>Stars sync across signed-in devices.</span>}
+        {portfolio.mode === "browser" && <span>Sync isn’t set up. Stars stay in this browser.</span>}
         <span>
           Change = latest vs previous saved close. Charts are not live.
         </span>

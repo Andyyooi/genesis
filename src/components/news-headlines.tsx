@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Headline, StockNews } from "@/news/google-news";
-import { useHeldTickers } from "@/components/holdings-store";
+import { usePortfolio } from "@/components/holdings-store";
 
 type NewsData = { fetchedAt: string; stocks: (StockNews & { held: boolean })[]; market: Headline[] | null; skipped: number };
 
@@ -53,17 +53,15 @@ export function StockNewsSection({ ticker }: { ticker: string }) {
   </section>;
 }
 
-/** News page: held stocks (from this browser), watched stocks and the wider market. */
+/** News page: held stocks, watched stocks and the wider market. */
 export function NewsBoard() {
-  const held = useHeldTickers();
-  const [ready, setReady] = useState(false);
-  useEffect(() => { const t = window.setTimeout(() => setReady(true), 0); return () => window.clearTimeout(t); }, []);
-  const tickers = [...held].sort().join(",");
-  const { data, error } = useNews(ready ? `tickers=${encodeURIComponent(tickers)}&watchlist=1&market=1` : null);
+  const saved = usePortfolio();
+  const tickers = saved.portfolio.holdings.map(h => h.ticker).sort().join(",");
+  const { data, error } = useNews(saved.mode === "loading" ? null : `tickers=${encodeURIComponent(tickers)}&watchlist=1&market=1`);
   if (error) return <p role="alert" className="rounded-lg border border-red-400 p-4 text-red-700 dark:text-red-300">{error}</p>;
   if (!data) return <p className="text-muted-foreground">Loading headlines… this can take a few seconds.</p>;
   const groups = [
-    { title: "Stocks you hold", rows: data.stocks.filter(s => s.held), empty: <>No holdings in this browser yet. Add them on <Link className="underline" href="/holdings">My holdings</Link>.</> },
+    { title: "Stocks you hold", rows: data.stocks.filter(s => s.held), empty: saved.mode === "error" ? "Could not load your holdings." : <>Add stocks on <Link className="underline" href="/holdings">My holdings</Link> to see their news here.</> },
     { title: "Watchlist", rows: data.stocks.filter(s => !s.held), empty: "No watchlist stocks." },
   ];
   return <>
