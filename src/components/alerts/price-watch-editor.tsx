@@ -9,7 +9,9 @@ import type { PriceWatch } from "@/price-watches/watch";
 const field = "min-w-0 w-full rounded border bg-background p-2 text-base";
 const button = "rounded border px-3 py-2 text-sm font-medium disabled:opacity-50";
 
-export function PriceWatchEditor({ ticker, initialWatch }: { ticker: string; initialWatch: PriceWatch | null }) {
+export function PriceWatchEditor({ ticker, initialWatch, fairRangeText }: {
+  ticker: string; initialWatch: PriceWatch | null; fairRangeText: string | null;
+}) {
   const router = useRouter();
   const [watch, setWatch] = useState(initialWatch);
   const [kind, setKind] = useState<PriceWatch["kind"]>(initialWatch?.kind ?? "target");
@@ -66,6 +68,11 @@ export function PriceWatchEditor({ ticker, initialWatch }: { ticker: string; ini
               Target price (RM per share)
               <input className={field} type="number" min="0.001" step="0.001" required value={target} onChange={(event) => setTarget(event.target.value)} placeholder="e.g. 2.50" />
             </label>
+          )}
+          {kind === "fair-range" && (
+            <p className="text-sm text-muted-foreground">
+              {fairRangeText ? `Genesis fair range: ${fairRangeText}` : "Genesis fair range: not available yet."}
+            </p>
           )}
           <div className="flex flex-wrap gap-2">
             <button className={`${button} bg-primary text-primary-foreground`} type="submit" disabled={unchanged}>

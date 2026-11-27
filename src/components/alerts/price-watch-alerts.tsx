@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatSharePrice } from "@/lib/format-myr";
+import { formatFairRangeBounds, formatSharePrice } from "@/lib/format-myr";
 import { loadWatchCloses, loadWatchInstrument, loadWatchRange } from "@/price-watches/snapshot";
 import { getPriceWatchStore, WATCH_STORE_UNAVAILABLE, WATCH_STORE_UNCONFIGURED } from "@/price-watches/store";
 import { evaluatePriceWatch, type PriceWatch } from "@/price-watches/watch";
@@ -18,7 +18,7 @@ function WatchCards({ rows }: { rows: ReturnType<typeof watchRow>[] }) {
       {rows.map(({ watch, latest, range, result }) => {
         const target = watch.kind === "target";
         const goal = target ? `Target: ${formatSharePrice(watch.target)} or less`
-          : range ? `Genesis fair range: ${formatSharePrice(range.low)}–${formatSharePrice(range.high)}`
+          : range ? `Genesis fair range: ${formatFairRangeBounds(range)}`
             : "Genesis fair range";
         const difference = result.status === "triggered" ? (target ? "Target reached" : "Entered the fair range")
           : result.status === "no-close" ? "No saved closing price"

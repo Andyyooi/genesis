@@ -322,7 +322,7 @@ export default async function ResearchPage({
       <PriceChart ticker={instrument.ticker} points={prices} />
 
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading price watch…</p>}>
-        <StockPriceWatch ticker={instrument.ticker} />
+        <StockPriceWatch ticker={instrument.ticker} fairRange={fairRange} />
       </Suspense>
 
       <div className="stock-details-grid grid items-start gap-3 md:grid-cols-2">
