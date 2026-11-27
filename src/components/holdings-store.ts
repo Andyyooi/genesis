@@ -12,8 +12,11 @@ type Snapshot = {
 };
 
 const initial: Snapshot = { mode: "loading", portfolio: emptyPortfolio, busy: false };
+const rejectedImportKey = "genesis:portfolio-import-rejected:v1";
+const importWarning = "Your browser lists weren’t imported. They’re still saved in this browser, and you can use your synced lists.";
 let snapshot = initial;
 let loading: Promise<void> | undefined;
+let rejectedImportRevision: string | null = null;
 const listeners = new Set<() => void>();
 
 function publish(next: Snapshot) {
@@ -44,6 +47,24 @@ function readLegacy() {
   return { holdings, starred, holdingsRaw, starredRaw, error };
 }
 
+function importWasRejected(revision: number) {
+  try {
+    return rejectedImportRevision === String(revision) || localStorage.getItem(rejectedImportKey) === String(revision);
+  } catch {
+    return rejectedImportRevision === String(revision);
+  }
+}
+
+function rememberRejection(revision: number | null) {
+  rejectedImportRevision = revision === null ? null : String(revision);
+  try {
+    if (rejectedImportRevision === null) localStorage.removeItem(rejectedImportKey);
+    else localStorage.setItem(rejectedImportKey, rejectedImportRevision);
+  } catch {
+    // This tab can still avoid repeating the same rejected import.
+  }
+}
+
 class PortfolioError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
@@ -70,25 +91,39 @@ async function load() {
       publish({ mode: "browser", portfolio: { revision, holdings: legacy.holdings, starred: legacy.starred }, busy: false, error: legacy.error });
       return;
     }
+    let error = legacy.error;
     if (legacy.holdings.length || legacy.starred.length) {
+      if (importWasRejected(portfolio.revision)) {
+        publish({ mode: "server", portfolio, busy: false, error: importWarning });
+        return;
+      }
       const edit: PortfolioEdit = { kind: "migrate", holdings: legacy.holdings, starred: legacy.starred };
       try {
-        portfolio = await requestPortfolio({ revision: portfolio.revision, edit });
-      } catch (error) {
-        if (!(error instanceof PortfolioError) || error.status !== 409) throw error;
-        const latest = await requestPortfolio();
-        if (!latest) throw error;
-        portfolio = await requestPortfolio({ revision: latest.revision, edit });
-      }
-      if (!portfolio) throw new Error("Migration not saved");
-      try {
-        if (localStorage.getItem(HOLDINGS_KEY) === legacy.holdingsRaw) localStorage.removeItem(HOLDINGS_KEY);
-        if (localStorage.getItem(STARRED_KEY) === legacy.starredRaw) localStorage.removeItem(STARRED_KEY);
-      } catch {
-        // Migration does not overwrite server entries if the browser retries.
+        let imported;
+        try {
+          imported = await requestPortfolio({ revision: portfolio.revision, edit });
+        } catch (error) {
+          if (!(error instanceof PortfolioError) || error.status !== 409) throw error;
+          const latest = await requestPortfolio();
+          if (!latest) throw error;
+          portfolio = latest;
+          imported = await requestPortfolio({ revision: portfolio.revision, edit });
+        }
+        if (!imported) throw new Error("Migration not saved");
+        portfolio = imported;
+        rememberRejection(null);
+        try {
+          if (localStorage.getItem(HOLDINGS_KEY) === legacy.holdingsRaw) localStorage.removeItem(HOLDINGS_KEY);
+          if (localStorage.getItem(STARRED_KEY) === legacy.starredRaw) localStorage.removeItem(STARRED_KEY);
+        } catch {
+          // Migration does not overwrite server entries if the browser retries.
+        }
+      } catch (failure) {
+        if (failure instanceof PortfolioError && (failure.status === 400 || failure.status === 413)) rememberRejection(portfolio.revision);
+        error = importWarning;
       }
     }
-    publish({ mode: "server", portfolio, busy: false, error: legacy.error });
+    publish({ mode: "server", portfolio, busy: false, error });
   } catch {
     publish({ ...snapshot, mode: "error", busy: false, error: "Could not sync your saved stocks. Try again." });
   }
@@ -138,6 +173,7 @@ export async function savePortfolio(edit: Exclude<PortfolioEdit, { kind: "migrat
     } catch {
       throw new Error("Could not save in this browser. Your previous list is unchanged.");
     }
+    rememberRejection(null);
     const { holdings, starred, error } = readLegacy();
     publish({ ...snapshot, portfolio: { revision: revision + 1, holdings, starred }, error });
     return;
