@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { EXPORT_CACHE_CONTROL, EXPORT_PATH, exportAuthError } from "@/auth/export-token";
 import { requestOrigin } from "@/auth/origin";
 import { gateDecision, sanitizeNextPath, SESSION_COOKIE } from "@/auth/session";
 
 export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname === EXPORT_PATH && request.method === "GET") {
+    return exportAuthError(request) ?? NextResponse.next({ headers: { "Cache-Control": EXPORT_CACHE_CONTROL } });
+  }
   const decision = await gateDecision(request.nextUrl.pathname, request.method, request.cookies.get(SESSION_COOKIE)?.value, process.env);
   if (decision === "allow") {
     const response = NextResponse.next();
