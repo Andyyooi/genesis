@@ -27,10 +27,12 @@ import {
   rowMatchesList,
   sortOpportunityRows,
   type ListId,
+  type OpportunityRow,
 } from "@/opportunities/lists";
 import { scanWatchlist, toWorkspaceRow } from "@/opportunities/scan";
 import { parseTopPicksOptions } from "@/opportunities/top-picks";
 import { loadPriceCheck } from "@/refresh/price-check";
+import { loadListFairRanges } from "@/fair-value/load-list-ranges";
 
 export const dynamic = "force-dynamic";
 
@@ -75,12 +77,14 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     sort: sortId === "ticker" ? undefined : sortId,
   };
   let rows: ReturnType<typeof scanWatchlist>;
+  let fairRanges: ReturnType<typeof loadListFairRanges>;
   let reports: ReturnType<typeof loadLatestIngestReports>;
   let recentAlerts: ReturnType<typeof loadRecentAlerts>;
   let priceCheck: ReturnType<typeof loadPriceCheck>;
   try {
     loadScoringConfig();
     rows = scanWatchlist();
+    fairRanges = loadListFairRanges(rows.map((row) => row.ticker));
     reports = loadLatestIngestReports();
     recentAlerts = loadRecentAlerts(6);
     priceCheck = loadPriceCheck();
@@ -106,9 +110,10 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   const activeList =
     OPPORTUNITY_LISTS.find((item) => item.id === listId) ??
     OPPORTUNITY_LISTS[0]!;
+  const matchesList = (row: OpportunityRow, id: ListId) => rowMatchesList(row, id, fairRanges[row.ticker]);
   const listed = activeList.disabled
     ? []
-    : rows.filter((row) => rowMatchesList(row, listId));
+    : rows.filter((row) => matchesList(row, listId));
   const visible = sortOpportunityRows(
     listed.filter((row) => rowMatchesFilters(row, flagFilters)),
     sortId,
@@ -122,12 +127,12 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       item.id,
       item.disabled
         ? 0
-        : rows.filter((row) => rowMatchesList(row, item.id)).length,
+        : rows.filter((row) => matchesList(row, item.id)).length,
     ]),
   );
-  const emptyLists = OPPORTUNITY_LISTS.filter(
-    (item) => !listCounts.get(item.id) && item.id !== listId,
-  );
+  const showAsTab = (item: (typeof OPPORTUNITY_LISTS)[number]) =>
+    item.showWhenEmpty || listCounts.get(item.id) || item.id === listId;
+  const emptyLists = OPPORTUNITY_LISTS.filter((item) => !showAsTab(item));
   const lowConf = rows.filter(
     (row) =>
       row.confidence === "LOW" ||
@@ -239,9 +244,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       <div className="research-grid">
         <div className="flex min-w-0 flex-col gap-5">
           <nav className="research-list-tabs" aria-label="Research lists">
-            {OPPORTUNITY_LISTS.filter(
-              (item) => listCounts.get(item.id) || item.id === listId,
-            ).map((item) => (
+            {OPPORTUNITY_LISTS.filter(showAsTab).map((item) => (
               <Link
                 key={item.id}
                 href={listHref(item.id, filterQuery)}
