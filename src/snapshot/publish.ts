@@ -1,8 +1,6 @@
 import { createHash } from "node:crypto";
 import {
   copyFileSync,
-  createReadStream,
-  createWriteStream,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -16,12 +14,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { pipeline } from "node:stream/promises";
-import { createGzip, gunzipSync } from "node:zlib";
+import { gunzipSync } from "node:zlib";
 import Database from "better-sqlite3";
 import { migrateSqliteSchema } from "@/db/client";
 import { snapshotGzPath } from "@/db/snapshot-file";
 import { readPublishedWatchlist } from "@/opportunities/watchlist-selection";
+import { assertSnapshotFitsRuntime, compactScoreHistory, gunzipSqlite, gzipSqlite } from "@/snapshot/compact";
 
 const REQUIRED_TABLES = [
   "instruments",
@@ -166,7 +164,7 @@ export function formatSnapshotReport(report: SnapshotReport) {
   lines.push(report.warnings.length ? `Warnings: ${report.warnings.join(" ")}` : "Warnings: none");
   lines.push(report.blockers.length ? `Blockers: ${report.blockers.join(" ")}` : "Blockers: none");
   lines.push(
-    "Fingerprints cover instrument tickers, watchlist tickers, financial-period keys, price bars (instrument, date, close, source), score runs, and Fair Value rows. They catch omissions and value changes in those fields. They do not prove every text column or related table is identical. Packaging does not run schema migration on the source; read-only hosts migrate a /tmp copy when the app opens the snapshot. A read-only open can refresh the source shared-memory file without writing the database or its WAL.",
+    "Fingerprints cover instrument tickers, watchlist tickers, financial-period keys, price bars (instrument, date, close, source), score runs, and Fair Value rows. They catch omissions and value changes in those fields. Superseded score evidence is cleared only in the packaged copy. Packaging does not run schema migration on the source; read-only hosts migrate the in-memory copy. A read-only open can refresh the source shared-memory file without writing the database or its WAL.",
   );
   return lines.join("\n");
 }
@@ -266,6 +264,8 @@ export async function packSnapshot(options: PackSnapshotOptions): Promise<Snapsh
       );
     }
 
+    compactScoreHistory(imagePath);
+    assertSnapshotFitsRuntime(imagePath);
     if (options.dryRun || !options.destPath) {
       return reportFromCensus({
         stage: "source-checked",
@@ -282,9 +282,10 @@ export async function packSnapshot(options: PackSnapshotOptions): Promise<Snapsh
 
     const destPath = resolve(options.destPath);
     mkdirSync(dirname(destPath), { recursive: true });
-    await gzipFile(imagePath, partial!);
+    await gzipSqlite(imagePath, partial!);
+    assertSnapshotFitsRuntime(imagePath, partial!);
     const roundTripPath = join(work, "roundtrip.db");
-    writeFileSync(roundTripPath, gunzipSync(readFileSync(partial!)));
+    await gunzipSqlite(partial!, roundTripPath);
     const roundTrip = readCensus(roundTripPath);
     const roundTripDrift = censusDrift("compressed artifact", source, roundTrip);
     if (roundTrip.blockers.length || roundTripDrift.length) {
@@ -412,10 +413,6 @@ async function backupReadOnly(sourcePath: string, imagePath: string) {
   } finally {
     sqlite.close();
   }
-}
-
-async function gzipFile(sourcePath: string, destPath: string) {
-  await pipeline(createReadStream(sourcePath), createGzip({ level: 9 }), createWriteStream(destPath));
 }
 
 function verifyLoaderCompatibility(imagePath: string): {

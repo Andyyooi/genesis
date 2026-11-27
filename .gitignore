@@ -53,6 +53,8 @@ next-env.d.ts
 # Downloaded gzip snapshot for Vercel (not the live WAL DB)
 /data/snapshots/research.db.gz
 /data/snapshots/research.db.gz.*.partial
+/data/snapshots/research.runtime.db.gz
+/data/snapshots/research.runtime.db.gz.*.partial
 
 # Andy's dropped CSVs (keep the template and sample)
 /data/raw/*
