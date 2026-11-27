@@ -20,7 +20,7 @@ describe("published picks and market filtering", () => {
     vi.stubEnv("BURSA_SNAPSHOT_READONLY", "0");
     vi.stubEnv("VERCEL", "0");
     const row = candidate("A", 75);
-    published.scan.mockReturnValue({ summary: { asOf: row.result.asOf }, rows: [{ ticker: "A", name: "A", researchScore: 75, eligible: true }] });
+    published.scan.mockReturnValue({ summary: { asOf: row.result.asOf }, rows: [{ ticker: "A", name: "A", researchScore: 75, eligible: true, lastTrade: "2026-09-25" }] });
     published.stored.mockReturnValue([{ ticker: "BAD", evidence: "not json" }, { ticker: "A", evidence: JSON.stringify({ storedResult: row.result, scoredMetrics: [{ id: "market_cap", available: true, value: 2e9 }, { id: "last_close", available: true, value: 10 }] }) }]);
     expect(loadTopPicks({ lotBudget: 1000 }).picks[0]).toMatchObject({ marketCap: 2e9, lastClose: 10, selectionScore: 75 });
     expect(loadTopPicks({ lotBudget: 999 }).picks).toEqual([]);
@@ -33,7 +33,7 @@ describe("published picks and market filtering", () => {
     vi.stubEnv("BURSA_SNAPSHOT_READONLY", "1");
     const row = candidate("A", 75);
     row.result.categories.forEach(c => { c.score = c.id === "quality" ? 90 : null; });
-    published.scan.mockReturnValue({ summary: { asOf: row.result.asOf }, rows: [{ ticker: "A", name: "A", researchScore: 75, eligible: true }] });
+    published.scan.mockReturnValue({ summary: { asOf: row.result.asOf }, rows: [{ ticker: "A", name: "A", researchScore: 75, eligible: true, lastTrade: "2026-09-25" }] });
     published.stored.mockReturnValue([{ ticker: "A", evidence: JSON.stringify({ storedResult: row.result, scoredMetrics: [{ id: "market_cap", available: true, value: 2e9 }, { id: "last_close", available: true, value: 10 }] }) }]);
 
     expect(loadTopPicks({ lotBudget: 999 }).picks).toEqual([]);
@@ -41,6 +41,12 @@ describe("published picks and market filtering", () => {
     expect(loadTopPicks().picks[0].selectionScore).toBe(75);
     expect(published.scan).toHaveBeenCalledTimes(1);
     expect(published.stored).toHaveBeenCalledTimes(1);
+  });
+  it("only picks names with a close for the newest trading day", () => {
+    const old = candidate("OLD", 99); old.lastTrade = "2026-09-24";
+    const none = candidate("NONE", 98); none.lastTrade = null;
+    expect(selectTopPicks([old, none, candidate("FRESH", 60)]).map((row) => row.ticker)).toEqual(["FRESH"]);
+    expect(selectTopPicks([none])).toEqual([]);
   });
   it("ranks only eligible finite published scores, with deterministic ties and a limit", () => {
     expect(selectTopPicks([candidate("B", 75), candidate("A", 75), candidate("X", 99, false), candidate("N", null)], 1).map((row) => row.ticker)).toEqual(["A"]);

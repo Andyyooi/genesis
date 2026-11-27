@@ -1,147 +1,45 @@
-# Bursa research (Phase 10)
+# Genesis Research
 
-Personal Malaysian equity research tool for Andy Yooi. **Phase 10:** REIT factor profile and bank overlay, plus stored-flag filters. No in-app AI, no backtesting, no email alerts.
+[Genesis Research](https://genesisresearch.vercel.app/) is a personal research dashboard for Bursa Malaysia stocks and REITs. Use it to shortlist companies and assess entry prices. **Research only, not a buy or sell instruction.**
+
+- **Research score:** compares financial and price measures with other companies using percentile ranks. Ordinary companies, banks, REITs and other financial firms are assessed using measures that fit their business. Missing inputs are not filled in.
+- **Buy score:** ranks a company's research score against other scored stocks, with a cap when safety or data checks fail. It isn't an instruction to buy today.
+- **Fair-value range:** a separate estimate for judging whether the last saved price is below, inside or above the range. It does not change the Buy score and may be unavailable if the evidence is too thin.
+
+The site also has a market scan, alerts, a calendar and a track record for past top picks. Holdings and starred stocks are saved in your current browser, not synced across devices.
 
 ## Run locally
 
-```bash
-npm install
-npm run dev
+Use Node.js 24 and npm.
+
+```sh
+npm ci
+BURSA_SNAPSHOT_READONLY=1 npm run dev
 ```
 
-Binds **0.0.0.0:43147**. Open [http://127.0.0.1:43147](http://127.0.0.1:43147).
+Open [http://127.0.0.1:43147](http://127.0.0.1:43147/). This runs against a read-only copy of the published data. The dev command downloads the snapshot if it's missing; run `npm run snapshot:fetch` to verify or update an existing copy.
 
-### Keep the preview up (restarts if Next exits)
+Without `BURSA_SNAPSHOT_READONLY=1`, the app uses a separate, writable SQLite database at `data/sqlite/research.db`. It does not populate that database from the published snapshot. For a local password, copy [`.env.example`](.env.example) to `.env.local` and set `SITE_PASSWORD`. With no password set, local development leaves the gate off; production stays locked.
 
-```bash
-npm run dev:persist
-```
+## Data and refresh
 
-That is a small bash loop around `npm run dev`. It writes `data/.dev-persist.pid`. Confirm it is up:
+Prices are saved **end-of-day closes**, not live quotes. Yahoo Finance supplies closes and available financial figures; CSV imports are also supported. **Data as of** is the latest saved price date, not a guarantee that all stocks have prices from that date.
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:43147/
-cat data/.dev-persist.pid
-```
+After signing in, use **Refresh data** to request an on-demand run. The same [Refresh data workflow](.github/workflows/refresh-data.yml) attempts a refresh on weekdays at 6:23, 8:23 and 11:23 pm Malaysia time. Scheduled checks skip refresh if that day's after-close snapshot has already been published. GitHub can delay scheduled runs. When the bar says **Done**, reload to see the new data.
 
-Stop:
+The workflow validates and packs a read-only SQLite snapshot. Main tracks [a pointer](data/snapshot.json) to the exact data commit, not the database itself. The `data-snapshot` branch holds the latest copy and `data-snapshot-previous` holds the previous published copy. The production build downloads the pinned snapshot and checks its size and checksum; Vercel opens it in memory for read-only queries. If the download or verification fails, the build fails rather than publishing an incomplete site.
 
-```bash
-kill "$(cat data/.dev-persist.pid)"
-```
+Production uses a shared `SITE_PASSWORD`; the on-demand refresh also uses a server-only `GITHUB_REFRESH_TOKEN`. See the [password and refresh setup guide](docs/refresh-setup.md) for configuration and troubleshooting. Never commit passwords, tokens or the local database.
 
-Or `Ctrl-C` if it is in the foreground. Do not start a second persist while one is already bound to 43147.
+## Pull request checks
 
-- [Dashboard](http://127.0.0.1:43147) — watchlists, Shariah/REIT/board/cap filters
-- [Alerts](http://127.0.0.1:43147/alerts)
-- [Market scan](http://127.0.0.1:43147/market) — last `npm run market:scan` (not a buy list)
-- [MAYBANK](http://127.0.0.1:43147/stock/MAYBANK) — bank overlay (P/B, ROE)
-- [KLCC](http://127.0.0.1:43147/stock/KLCC) — REIT profile (DPU / book NAV / gearing)
+[GitHub Actions](.github/workflows/pr-checks.yml) runs the following on every pull request targeting `main`. The checks need no new secrets or Vercel settings and do not refresh or publish data.
 
-**Profiles:** ordinary companies use `default`. REITs use `reit` (not industrial FCF or EV/EBITDA). Banks use `bank`. Missing CSV lines stay unavailable — never invented. The headline **Valuation Score** is unchanged; research pages also show **Historical Context** and **Peer Context** (Positive / Neutral / Negative / Unavailable) versus own period-end history and a constructed peer set. Those labels are not blended into a new overall score. Historical series is period-end price vs that year’s earnings when filing dates are unknown — not look-ahead-safe PIT P/E.
-
-## Data (daily prices ≠ Cursor usage)
-
-Yahoo **end-of-day** prices for `config/universe.yaml` can refresh on this VM once a day. That loop is ordinary Node/bash on the machine. **It does not use Cursor usage.** Cursor usage is only when an agent/chat is running.
-
-This is **not** live/tick data. Default: run `npm run ingest:prices`, then sleep until **18:00 Malaysia time**, never sooner than **12 hours** after the last run (Bursa is closed by then; Yahoo EOD is usually on the tape). Missed symbols stay on the import report. **Prices are never invented.**
-
-```bash
-npm run ingest:prices          # one-off, same as always
-npm run ingest:prices:daily    # keep-alive loop on this VM
-```
-
-Confirm / stop the daily loop:
-
-```bash
-cat data/.prices-daily.pid
-cat data/logs/prices-daily.last.json
-kill "$(cat data/.prices-daily.pid)"
-```
-
-**Fundamentals stay CSV.** We will **not** auto-fill ~30 names’ full financials from Yahoo, scrape Bursa, or invent FY2025/FY2026 statements. Filing lag vs live prices stays labelled.
-
-Add coverage by hand:
-
-1. A `COMMON_STOCK` or `REIT` row in `config/universe.yaml` (`yahoo_ticker` like `1155.KL`).
-2. Annual (and optional interim) lines in `data/raw/fundamentals-sample.csv` or your own CSV — copy `data/raw/fundamentals-template.csv`. Empty cells stay unavailable.
-3. `npm run ingest:fundamentals -- path/to.csv` then `npm run ingest:prices` (or wait for the daily job).
-
-Announcements are the same pattern (`announcements-template.csv`). No in-app AI.
-
-### Market-wide scan
-
-```bash
-npm run market:scan
-```
-
-Refreshes COMMON_STOCK + REIT from the **Yahoo Malaysia equity screener** (not a hand-typed Bursa list), pulls EOD prices (resumable, per-ticker failures), fills Yahoo annual statements where present, keeps CSV filings, scores everyone, writes data-quality + scanner lists to SQLite. Open `/market`. Slow (rate limits). **Not Cursor usage.** Warrants/ETFs excluded. PN17 only if already stored. Watchlist dashboard still uses `universe.yaml`. Daily `ingest:prices:daily` keeps running on whatever is in the DB.
-
-Yahoo **quoteSummary** income years were incomplete (no balance sheet fields; ~244 names empty). Ingest now uses Yahoo **fundamentals-timeseries** annual series, fills nulls without overwriting history, and writes a quality snapshot.
-
-Publication dates: `available_at` is when an investor could see the filing. Yahoo timeseries has **period-end only**. Where Yahoo’s earnings `reportedDate` matches that period-end, we store it (`yahoo-earnings-reported-date`). Otherwise `available_at` stays UNKNOWN — never ingest time, never today. Historical valuation is labelled PERIOD_END_ONLY until every series point has a date.
-
-```bash
-npm run filings:dates
-```
-
-Optional tickers: `npm run ingest -- available-at MAYBANK,CIMB`.
-
-
-```bash
-npm run fundamentals:yahoo    # pull annuals (Yahoo only; not Cursor usage)
-npm run fundamentals:report   # coverage / freshness / failure codes
-```
-
-After changing scoring or Data Confidence, refresh scan rows without Yahoo:
-
-```bash
-npm run market:rescore
-```
-
-Research, dashboard, exports, and `/market` show **Data Coverage**, **Freshness**, and **Data Confidence**. Raw Research and Valuation numbers are not rewritten for GENERAL. `research_profile` (GENERAL / BANK / REIT / OTHER_FINANCIAL / UNKNOWN) is stored separately from `instrument_type`.
-
-```bash
-npm run profiles:classify
-```
-
-```bash
+```sh
+npm ci
 npm test
+npm run lint
+npm run build
 ```
 
-## Why `research.db` is not the git object
-
-The live file is ~123 MB (plus WAL). It is local machine state: regenerable from ingest, too large for a normal git push, and **not source code**. Vercel’s filesystem is **ephemeral and not writable for persistence** — committing a `.db` would not give you a database that new ingest runs can update.
-
-For a **test deploy**, the app ships a **read-only gzip snapshot** of the current research store (`data/snapshots/research.db.gz`, ~15 MB). That is real stored data, not invented numbers. On Vercel the process gunzips it to `/tmp` and opens SQLite **read-only**. Ingest, daily prices, and `market:scan` **do not write**.
-
-### Refresh the snapshot (local only)
-
-```bash
-# validate the local database without writing a snapshot
-npm run snapshot:pack -- --dry-run
-
-# write a candidate artifact. This does not update the website.
-npm run snapshot:pack -- --dest data/snapshots/candidate.db.gz
-npm run snapshot:report -- --artifact data/snapshots/candidate.db.gz --source data/sqlite/research.db
-
-# open that candidate the same way Vercel opens a snapshot (still local, still not published)
-BURSA_SNAPSHOT_READONLY=1 BURSA_SNAPSHOT_GZ_PATH=data/snapshots/candidate.db.gz npm run dev
-
-# only when that report looks right, replace the committed snapshot and deploy
-npm run snapshot:pack -- --dest data/snapshots/research.db.gz --write-production
-git add data/snapshots/research.db.gz
-```
-
-Do not commit `.env*`, `data/sqlite/research.db`, or WAL/SHM.
-
-## Vercel
-
-1. In [Vercel](https://vercel.com) create a project and import **andy-yooi/genesis** if GitHub/Origin is connected, **or** from a machine with `vercel login` run `npx vercel` in this repo (Origin is not GitHub; you may need a GitHub mirror or CLI deploy).
-2. Framework: Next.js. No env secrets required for the snapshot demo.
-3. Deploy. The site shows a banner: it is serving a published snapshot, and Refresh & Research does not fetch prices there.
-4. `better-sqlite3` is a native addon. If the build fails on the serverless image, check the Vercel build log; local `npm run build` must succeed with Node 20+.
-
-Local default stays **writable** `data/sqlite/research.db` on `npm run dev`. To simulate Vercel: `BURSA_SNAPSHOT_READONLY=1 npm run dev` (needs the gzip present).
-
-**Full local SQLite:** gunzip `data/snapshots/research.db.gz` into `data/sqlite/research.db` (the live 123 MB DB was left out of this Cursor pack).
+Run the same commands locally before opening a pull request. The build needs network access to fetch the public snapshot if a verified local copy is not already present.
