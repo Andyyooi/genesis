@@ -37,6 +37,7 @@ export function ValuationContextCard({ block }: { block: ValuationContextBlock }
       ? "This name versus its own stored annuals. Separate from Relative Value Score — not a buy signal."
       : "This name versus a constructed peer set. Separate from Relative Value Score — not a cheapness verdict.";
   const quality = block.peerQuality;
+  const dividend = block.metrics.find((metric) => metric.metricId === "dividend_yield");
 
   return (
     <Card>
@@ -93,7 +94,11 @@ export function ValuationContextCard({ block }: { block: ValuationContextBlock }
               {quality.metrics.map((row) => (
                 <TableRow key={row.metricId}>
                   <TableCell><FinancialTerm id={row.metricId} fallback={row.label} /></TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(row.metricId, row.subject)}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {fmt(row.metricId, row.subject)}
+                    {row.metricId === "dividend_yield" && dividend?.dividendBasis
+                      ? <span className="block text-xs text-muted-foreground">{dividend.dividendBasis}</span> : null}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{fmt(row.metricId, row.median)}</TableCell>
                   <TableCell className="hidden text-muted-foreground sm:table-cell">
                     {row.vsMedian.replaceAll("_", " ")}
@@ -121,7 +126,10 @@ export function ValuationContextCard({ block }: { block: ValuationContextBlock }
               {block.metrics.map((row) => (
                 <TableRow key={row.metricId}>
                   <TableCell><FinancialTerm id={row.metricId} fallback={row.label} /></TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(row.metricId, row.current)}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {fmt(row.metricId, row.current)}
+                    {row.dividendBasis ? <span className="block text-xs text-muted-foreground">{row.dividendBasis}</span> : null}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{fmt(row.metricId, row.median)}</TableCell>
                   <TableCell className="hidden text-muted-foreground sm:table-cell">
                     {formatContextHeadline(row.labelForMetric)}

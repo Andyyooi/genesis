@@ -290,7 +290,8 @@ describe("GENERAL fair value", () => {
     expect(row.medianMultiple).toBeCloseTo(0.04);
     expect(row.peerCount).toBe(5);
     expect(row.methodValue).toBeCloseTo(12.5);
-    expect(row.formula).toBe("DPS / peer median dividend yield");
+    expect(row.formula).toContain("DPS / peer median dividend yield");
+    expect(row.formula).toContain("FY2025 full year");
   });
 
   it("prices DPS at the own-history median dividend yield", () => {

@@ -4,9 +4,9 @@ import { parseLineItemsJson } from "@/ingest/merge-line-items";
 import { latestResultsComparison, SHARP_DROP, type PriceDrop } from "@/lib/price-drop-flag";
 import { isMixedIndustry, NO_COMPARABLE_PEERS } from "@/fair-value/comparable-peers";
 import { MIN_USABLE_PEERS, type PeerQuality } from "@/scoring/peer-group";
+import type { DividendBasis } from "@/lib/dividend-yield";
 
 type Period = { periodEnd: string; statementType: string; actualOrEstimate: string; source: string; lineItemsJson: string | null };
-type DividendQuote = { annualYieldPercent: number | null; checkedAt: string };
 
 const descriptions: Record<string, { text: string; source: string }> = {
   PBA: {
@@ -25,10 +25,6 @@ const compactMyr = new Intl.NumberFormat("en-MY", {
 
 function positive(value: unknown): value is number {
   return isFiniteNumber(value) && value > 0;
-}
-
-function nonnegative(value: unknown): value is number {
-  return isFiniteNumber(value) && value >= 0;
 }
 
 function consecutiveYear(newer: string, older: string): boolean {
@@ -75,7 +71,7 @@ export function buildStockBrief(args: {
   fairRange: FairRangeHeadline;
   peers?: PeerQuality | null;
   priceDrop: PriceDrop | null;
-  dividendQuote?: DividendQuote;
+  dividend?: DividendBasis | null;
   pn17: boolean;
   warningFlag: boolean;
   needsVerification: boolean;
@@ -163,14 +159,10 @@ export function buildStockBrief(args: {
     args.fairRange.available ? args.fairRange.positionText : "No reliable fair range is available to judge this price.",
   ].filter(Boolean).join(" ");
 
-  const quotedYield = args.dividendQuote?.annualYieldPercent;
   const dividendName = args.profile === "REIT" ? "Distribution" : "Dividend";
-  const reportedYield = annuals[0]?.source !== "yahoo-quote-summary" && nonnegative(latest?.dividendPerShare) && positive(args.close)
-    ? latest.dividendPerShare / args.close * 100 : null;
-  const dividend = nonnegative(quotedYield) && args.dividendQuote
-    ? `${dividendName} yield: ${quotedYield.toFixed(1)}% (provider estimate, ${args.dividendQuote.checkedAt.slice(0, 10)}). Not guaranteed.`
-    : nonnegative(reportedYield) ? `${dividendName} yield: ${reportedYield.toFixed(1)}% at the last close, using the saved annual payment. Not guaranteed.`
-      : `${dividendName} yield not confirmed in the saved data.`;
+  const dividend = args.dividend && positive(args.close)
+    ? `${dividendName} yield: ${(args.dividend.perShare / args.close * 100).toFixed(1)}% at the last close. ${args.dividend.label}. Not guaranteed.`
+    : `${dividendName} yield not confirmed in the saved data.`;
 
   const description = Object.hasOwn(descriptions, args.ticker) ? descriptions[args.ticker] : null;
   const verdict = args.pn17 ? "Financial distress warning"

@@ -97,7 +97,8 @@ export function researchInterpretationBullets(args: {
     const m = byId(id);
     if (m?.available && m.value !== null) {
       const term = financialTerm(id, m.label);
-      bullets.push(`${term.label} (${term.technical}): ${formatMetricValue(m)}${m.period ? ` (period ${m.period})` : ""}. ${term.explanation}`);
+      const period = m.period ? id === "dividend_yield" ? ` · ${m.period}` : ` (period ${m.period})` : "";
+      bullets.push(`${term.label} (${term.technical}): ${formatMetricValue(m)}${period}. ${term.explanation}`);
     }
   }
 

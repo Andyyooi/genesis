@@ -8,6 +8,8 @@
 
 The site also has a market scan, alerts, a calendar and a track record for past top picks. Holdings and starred stocks [sync across signed-in devices when server storage is configured](docs/price-watches.md#holdings-and-starred-stocks).
 
+You can [record or import analyst 12-month targets](docs/analyst-targets.md) from a stock page and compare them with the Genesis fair range.
+
 ## Run locally
 
 Use Node.js 24 and npm.
@@ -24,6 +26,8 @@ Without `BURSA_SNAPSHOT_READONLY=1`, the app uses a separate, writable SQLite da
 ## Data and refresh
 
 Prices are saved **end-of-day closes**, not live quotes. Yahoo Finance supplies closes and available financial figures; CSV imports are also supported. **Data as of** is the latest saved price date, not a guarantee that all stocks have prices from that date.
+
+Dividend yield uses Yahoo cash dividend events from the 365 days before the saved close, by **ex-dividend date**, not cash payment date. Where the event history doesn't cover the full window, Genesis uses reported full-year dividends if available. The first refresh after this update backfills the history using the same Yahoo price requests.
 
 After signing in, use **Refresh data** to request an on-demand run. The same [Refresh data workflow](.github/workflows/refresh-data.yml) attempts a refresh on weekdays at 6:23, 8:23 and 11:23 pm Malaysia time. Scheduled checks skip refresh if that day's after-close snapshot has already been published. GitHub can delay scheduled runs. When the bar says **Done**, reload to see the new data.
 

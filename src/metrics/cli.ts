@@ -1,5 +1,6 @@
 import { isCliEntrypoint } from "@/cli/entrypoint";
 import { loadInstrumentSnapshots } from "@/db/queries";
+import { loadDividendCoverage } from "@/db/dividends";
 import { snapshotsToMetrics } from "@/metrics/from-snapshots";
 
 function main() {
@@ -16,6 +17,7 @@ function main() {
     ticker: data.instrument.ticker,
     periods: data.periods,
     bars: data.bars,
+    dividendCoverage: loadDividendCoverage(data.instrument.id),
   });
 
   const payload = {

@@ -18,7 +18,9 @@ function FactorBlock({ factor }: { factor: FactorEvidence }) {
         <span>
           <span className="font-medium"><FinancialTerm id={factor.metricId} fallback={factor.label} /></span>
           <span className="mt-0.5 block text-xs text-muted-foreground">
-            Value {fmtValue(factor.value)}
+            Value {factor.metricId === "dividend_yield" && factor.value !== null
+              ? `${(factor.value * 100).toFixed(1)}%${factor.period ? ` · ${factor.period}` : ""}`
+              : fmtValue(factor.value)}
           </span>
           <span className="mt-0.5 block text-xs text-muted-foreground">
             {factorAvailabilityLabel(factor.available, factor.reason)}
@@ -35,7 +37,7 @@ function FactorBlock({ factor }: { factor: FactorEvidence }) {
           <span className="text-foreground">Evidence / rule:</span> {factor.formula}
         </p>
         <p>
-          <span className="text-foreground">Period:</span> {factor.period ?? "Unavailable"}
+          <span className="text-foreground">{factor.metricId === "dividend_yield" ? "Basis:" : "Period:"}</span> {factor.period ?? "Unavailable"}
         </p>
         {!factor.available ? (
           <p>

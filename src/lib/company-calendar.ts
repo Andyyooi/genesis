@@ -5,6 +5,7 @@ export type CalendarStock = {
   name: string;
   watchlist: boolean;
   dates: typeof companyCalendar.$inferSelect | null;
+  yield?: { percent: number; basis: string } | null;
 };
 
 export type CalendarScope = "holdings" | "watchlist" | "all";
@@ -16,17 +17,17 @@ export function calendarAgenda(stocks: CalendarStock[], scope: CalendarScope, he
     dates?.resultsFrom && dates.resultsThrough && dates.resultsThrough >= today
       ? [{ ticker, name, sortDate: dates.resultsFrom, from: dates.resultsFrom, through: dates.resultsThrough, estimated: dates.resultsEstimated }]
       : []);
-  const dividends = scoped.flatMap(({ ticker, name, dates }) => {
+  const dividends = scoped.flatMap(({ ticker, name, dates, yield: incomeYield }) => {
     if (!dates) return [];
-    const { exDate, paymentDate, dividendAmount, dividendCurrency, annualYieldPercent } = dates;
+    const { exDate, paymentDate, dividendAmount, dividendCurrency } = dates;
     const sortDate = nextDividendDate(exDate, paymentDate, today);
-    return sortDate ? [{ ticker, name, sortDate, exDate, paymentDate, dividendAmount, dividendCurrency, annualYieldPercent }] : [];
+    return sortDate ? [{ ticker, name, sortDate, exDate, paymentDate, dividendAmount, dividendCurrency, yield: incomeYield ?? null }] : [];
   });
   const byDate = (a: { sortDate: string; ticker: string }, b: { sortDate: string; ticker: string }) =>
     a.sortDate.localeCompare(b.sortDate) || a.ticker.localeCompare(b.ticker);
   return { results: results.sort(byDate), dividends: dividends.sort(byDate) };
 }
 
-function nextDividendDate(exDate: string | null, paymentDate: string | null, today: string) {
+export function nextDividendDate(exDate: string | null, paymentDate: string | null, today: string) {
   return exDate && exDate >= today ? exDate : paymentDate && paymentDate >= today ? paymentDate : null;
 }

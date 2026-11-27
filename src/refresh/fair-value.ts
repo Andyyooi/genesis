@@ -15,6 +15,9 @@ import type { FairValueResult } from "@/fair-value/types";
 import type { PriceBarSnapshot, StatementSnapshot } from "@/metrics/types";
 import type { PeerUniverseRow } from "@/scoring/peer-group";
 import { periodsToSnapshots } from "@/scoring/valuation-context";
+import { loadDividendCoverage } from "@/db/dividends";
+import { reportedDividend, selectDividend, type DividendBasis } from "@/lib/dividend-yield";
+import { annualAccounts, usableAccounts } from "@/metrics/evidence";
 import type { RefreshStatus } from "@/refresh/types";
 
 export type FairValueFailureStage = "calculation" | "quality_assessment" | "persistence";
@@ -57,6 +60,8 @@ type InstrumentRow = {
 
 type PeriodRow = {
   instrumentId: number;
+  fiscalYear: number | null;
+  actualOrEstimate: string;
   periodEnd: string;
   availableAt: string | null;
   statementType: string;
@@ -146,12 +151,12 @@ export function refreshFairValueUniverse(args: {
   const assess = args.assess ?? assessFairValueQuality;
   const persist = args.persist ?? persistFairValueRun;
   const config = loadScoringConfig();
-  const loaded = loadStoredUniverse(config);
+  const loaded = loadStoredUniverse(config, args.asOf);
   const requested = args.onlyTicker?.trim().toUpperCase();
   const listed = requested
     ? loaded.listed.filter((row) => row.ticker.toUpperCase() === requested)
     : loaded.listed;
-  const { snapshots, bars, peers } = loaded;
+  const { snapshots, bars, peers, dividends } = loaded;
   const report: FairValueRefreshReport = {
     attempted: listed.length,
     inserted: 0,
@@ -185,6 +190,7 @@ export function refreshFairValueUniverse(args: {
         sector: instrument.sector,
         periods,
         bars: bars.get(instrument.id) ?? [],
+        dividend: dividends.get(instrument.id),
         peers,
         asOf: args.asOf,
       });
@@ -306,11 +312,12 @@ function annualsFrom(periods: StatementSnapshot[]): FairValueQualityAnnual[] {
     }));
 }
 
-function loadStoredUniverse(config: ReturnType<typeof loadScoringConfig>): {
+function loadStoredUniverse(config: ReturnType<typeof loadScoringConfig>, asOf: string): {
   listed: InstrumentRow[];
   snapshots: Map<number, StatementSnapshot[]>;
   bars: Map<number, PriceBarSnapshot[]>;
   peers: PeerUniverseRow[];
+  dividends: Map<number, DividendBasis | null>;
 } {
   const sqlite = getSqlite();
   const instruments = sqlite
@@ -327,7 +334,8 @@ function loadStoredUniverse(config: ReturnType<typeof loadScoringConfig>): {
     .prepare(
       `SELECT instrument_id AS instrumentId, period_end AS periodEnd,
               available_at AS availableAt, statement_type AS statementType,
-              source, fiscal_quarter AS fiscalQuarter, line_items_json AS lineItemsJson
+              source, fiscal_year AS fiscalYear, actual_or_estimate AS actualOrEstimate,
+              fiscal_quarter AS fiscalQuarter, line_items_json AS lineItemsJson
        FROM financial_periods`,
     )
     .all() as PeriodRow[];
@@ -355,6 +363,7 @@ function loadStoredUniverse(config: ReturnType<typeof loadScoringConfig>): {
     snapshots.set(instrument.id, periodsToSnapshots(periodRows.get(instrument.id) ?? []));
   }
 
+  const dividends = new Map<number, DividendBasis | null>();
   const peers = instruments.map((instrument) => {
     const snaps = snapshots.get(instrument.id) ?? [];
     const annuals = snaps
@@ -365,6 +374,9 @@ function loadStoredUniverse(config: ReturnType<typeof loadScoringConfig>): {
       .slice()
       .sort((a, b) => b.barDate.localeCompare(a.barDate));
     const close = closes[0] ?? null;
+    const dividend = selectDividend(loadDividendCoverage(instrument.id), closes.find((bar) => bar.close != null && bar.close > 0)?.barDate,
+      annualAccounts(usableAccounts(snaps, asOf, config.reporting_lag_months).map(reportedDividend)));
+    dividends.set(instrument.id, dividend);
     return {
       ticker: instrument.ticker,
       name: instrument.name,
@@ -378,7 +390,7 @@ function loadStoredUniverse(config: ReturnType<typeof loadScoringConfig>): {
       periodEnd: latest?.periodEnd ?? null,
       availableAt: latest?.availableAt ?? null,
       eps: latest?.eps ?? null,
-      dividendPerShare: latest?.dividendPerShare ?? null,
+      dividendPerShare: dividend?.perShare ?? null,
       equity: latest?.equity ?? null,
       shares: latest?.shares ?? null,
       revenue: latest?.revenue ?? null,
@@ -391,5 +403,6 @@ function loadStoredUniverse(config: ReturnType<typeof loadScoringConfig>): {
     snapshots,
     bars,
     peers,
+    dividends,
   };
 }
