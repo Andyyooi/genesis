@@ -29,6 +29,15 @@ describe("analyst targets", () => {
     expect(() => readTargetInput(header + valid + valid.replace("4.20", "0"), true, today)).toThrow("Data row 2");
   });
 
+  it("checks the source link length after percent encoding for manual and CSV input", () => {
+    const base = "https://example.com/" + "界".repeat(225);
+    const valid = base + "123";
+    expect(readTargetInput(JSON.stringify({ ...row, source_url: valid }), false, today)[0].source_url).toHaveLength(2048);
+    const tooLong = valid + "5";
+    expect(() => readTargetInput(JSON.stringify({ ...row, source_url: tooLong }), false, today)).toThrow("after normalization");
+    expect(() => readTargetInput(`${header}\nTAANN,Broker,5,2026-08-27,${tooLong}`, true, today)).toThrow("after normalization");
+  });
+
   it.each([
     [today, "Today"], ["2026-11-26", "1 day old"], ["2026-11-20", "7 days old"],
     ["2026-10-28", "30 days old"], ["2026-10-27", "1 month old"], ["2026-08-27", "3 months old"],

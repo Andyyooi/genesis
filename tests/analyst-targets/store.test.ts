@@ -43,3 +43,11 @@ it("reports Redis failures and does not fall back to ephemeral production storag
   expect(getAnalystTargetStore({ VERCEL: "1", KV_REST_API_URL: "https://test.invalid" })).toBeNull();
   expect(getAnalystTargetStore({ NODE_ENV: "production", UPSTASH_REDIS_REST_URL: "https://test.invalid", UPSTASH_REDIS_REST_TOKEN: "test-token" })).not.toBeNull();
 });
+
+it("keeps valid reports when stored data includes an oversized source link or invalid JSON", async () => {
+  const oversized = { ...first, source_url: new URL("https://example.com/" + "界".repeat(228)).href };
+  const request = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({
+    result: [JSON.stringify(oversized), JSON.stringify(first), "not JSON", JSON.stringify(latest)],
+  }));
+  expect(await redisAnalystTargetStore("https://test.invalid", "test-token", request).list("TAANN")).toEqual([first, latest]);
+});

@@ -11,7 +11,8 @@ export const storedTarget = z.object({
   target: z.number().positive("The target must be above zero.").max(99999999.999),
   date: z.iso.date({ error: "Enter a valid report date (YYYY-MM-DD)." }),
   source_url: z.string().trim().max(2048).regex(/^https?:\/\//i, "Enter an http or https source link.")
-    .pipe(z.url({ protocol: /^https?$/, normalize: true, error: "Enter a valid source link." })),
+    .pipe(z.url({ protocol: /^https?$/, normalize: true, error: "Enter a valid source link." }))
+    .pipe(z.string().max(2048, "The source link is longer than 2,048 characters after normalization.")),
 });
 
 const analystTarget = storedTarget.extend({

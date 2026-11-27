@@ -10,9 +10,14 @@ interface AnalystTargetStore {
 
 const redisKey = (ticker: string) => `genesis:analyst-targets:v1:${ticker}`;
 
-function decode(value: unknown): AnalystTarget {
-  if (typeof value !== "string") throw new Error("Invalid analyst target");
-  return storedTarget.parse(JSON.parse(value));
+function decode(value: unknown): AnalystTarget[] {
+  if (typeof value !== "string") return [];
+  try {
+    const target = storedTarget.safeParse(JSON.parse(value));
+    return target.success ? [target.data] : [];
+  } catch {
+    return [];
+  }
 }
 
 export function redisAnalystTargetStore(url: string, token: string, request = fetch): AnalystTargetStore {
@@ -33,7 +38,7 @@ export function redisAnalystTargetStore(url: string, token: string, request = fe
     async list(ticker) {
       const { result } = await command(["HVALS", redisKey(ticker)]);
       if (!Array.isArray(result)) throw new Error("Invalid analyst target list");
-      return result.map(decode);
+      return result.flatMap(decode);
     },
     async save(targets) {
       const commands = targets.map((target) => ["HSET", redisKey(target.ticker), targetKey(target), JSON.stringify(target)]);
@@ -59,7 +64,7 @@ export function localAnalystTargetStore(path: string): AnalystTargetStore {
 
   return {
     async list(ticker) {
-      return run((db) => db.prepare("SELECT target FROM analyst_targets WHERE ticker = ?").pluck().all(ticker).map(decode));
+      return run((db) => db.prepare("SELECT target FROM analyst_targets WHERE ticker = ?").pluck().all(ticker).flatMap(decode));
     },
     async save(targets) {
       run((db) => {
