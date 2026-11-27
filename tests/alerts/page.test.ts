@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({ rows: vi.fn(), status: vi.fn() }));
 vi.mock("@/alerts/refresh", () => ({ loadRecentAlerts: mocks.rows }));
 vi.mock("@/alerts/publication", () => ({ loadAlertRefreshStatus: mocks.status }));
 vi.mock("@/lib/stored-snapshot-dates", () => ({ storedSnapshotDates: () => null }));
+vi.mock("@/components/alerts/price-watch-alerts", () => ({ PriceWatchAlerts: () => null }));
 
 beforeEach(() => { mocks.rows.mockReturnValue([]); });
 
