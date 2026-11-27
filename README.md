@@ -8,6 +8,8 @@
 
 The site also has a market scan, alerts, a calendar and a track record for past top picks. Holdings and starred stocks are saved in your current browser, not synced across devices.
 
+You can [record or import analyst 12-month targets](docs/analyst-targets.md) from a stock page and compare them with the Genesis fair range.
+
 ## Run locally
 
 Use Node.js 24 and npm.
