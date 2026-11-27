@@ -15,6 +15,9 @@ import { StatusLabel } from "./status-label";
 import { PriceSparkline } from "./price-sparkline";
 import { dataConfidenceLabel, formatScore100 } from "@/lib/research-copy";
 import { formatSharePrice } from "@/lib/format-myr";
+import { formatBuyRank } from "@/lib/buy-score";
+import { fairRangeGap, fairRangeSummary, type ListFairRange } from "@/lib/fair-range-summary";
+import { fairRangeColor } from "./fair-range-pill";
 import type { WatchlistReason } from "@/opportunities/watchlist-selection";
 import {
   formatPriceChange,
@@ -39,7 +42,17 @@ export type WorkspaceRow = {
   pn17: boolean;
   watchlistReason: WatchlistReason | null;
   prices: PricePoint[];
+  fairRange?: ListFairRange;
 };
+
+/** Sort key for "Cheapest against fair range": higher is further under the low end. */
+export function entrySortValue(row: WorkspaceRow): number | null {
+  const gap = fairRangeGap(row.fairRange);
+  if (!gap) return null;
+  if (gap.position === "below") return 1000 + gap.percent;
+  if (gap.position === "inside") return 500 - gap.percent;
+  return -gap.percent;
+}
 
 const SAVED_KEY = "genesis:saved-companies:v1";
 let volatileSaved = "[]";
@@ -154,6 +167,8 @@ export function ResearchWorkspace({
       const av =
         sort === "move"
           ? latestPriceChange(a.prices)
+          : sort === "entry"
+            ? entrySortValue(a)
           : sort === "valuation"
             ? a.valuationScore
             : sort === "research"
@@ -162,6 +177,8 @@ export function ResearchWorkspace({
       const bv =
         sort === "move"
           ? latestPriceChange(b.prices)
+          : sort === "entry"
+            ? entrySortValue(b)
           : sort === "valuation"
             ? b.valuationScore
             : sort === "research"
@@ -258,8 +275,9 @@ export function ResearchWorkspace({
             onChange={(event) => setSort(event.target.value)}
           >
             <option value="">List order</option>
-            <option value="buy">Buy score</option>
+            <option value="entry">Cheapest vs fair range</option>
             <option value="research">Research score</option>
+            <option value="buy">Buy rank</option>
             <option value="valuation">Valuation score</option>
             <option value="move">Latest price change</option>
           </select>
@@ -347,12 +365,19 @@ export function ResearchWorkspace({
                       (row: WorkspaceRow) => row.priceDate ?? "Unavailable",
                     ],
                     [
-                      "Buy score / 100",
-                      (row: WorkspaceRow) => formatScore100(row.buyScore),
+                      "Price vs fair range",
+                      (row: WorkspaceRow) => {
+                        const entry = fairRangeSummary(row.fairRange);
+                        return entry.text ? `${entry.label} (${entry.text.replace(/^Fair /, "")})` : entry.label;
+                      },
                     ],
                     [
                       "Research / 100",
                       (row: WorkspaceRow) => formatScore100(row.researchScore),
+                    ],
+                    [
+                      "Buy rank",
+                      (row: WorkspaceRow) => formatBuyRank(row.buyScore),
                     ],
                     [
                       "Valuation / 100",
@@ -423,7 +448,7 @@ export function ResearchWorkspace({
                 Change %
               </th>
               <th scope="col">30 observations</th>
-              <th scope="col">Buy score</th>
+              <th scope="col">Entry check · research</th>
               <th scope="col">Confidence</th>
               <th scope="col">
                 <span className="sr-only">Compare company</span>
@@ -500,28 +525,7 @@ export function ResearchWorkspace({
                     <PriceSparkline points={row.prices} />
                   </td>
                   <td>
-                    <div
-                      className={`score-cell ${row.needsVerification ? "score-muted" : ""}`}
-                    >
-                      <span>
-                        {row.buyScore === null
-                          ? "—"
-                          : row.buyScore.toFixed(0)}
-                        <span className="text-[10px] font-normal text-muted-foreground">
-                          {" "}
-                          /100
-                        </span>
-                      </span>
-                      {row.buyScore !== null ? (
-                        <span className="score-track">
-                          <span
-                            style={{
-                              width: `${Math.max(0, Math.min(100, row.buyScore))}%`,
-                            }}
-                          />
-                        </span>
-                      ) : null}
-                    </div>
+                    <EntryCell row={row} />
                   </td>
                   <td>
                     <StatusLabel level={row.confidence ?? "LOW"}>
@@ -608,5 +612,22 @@ export function ResearchWorkspace({
         </span>
       </div>
     </section>
+  );
+}
+
+function EntryCell({ row }: { row: WorkspaceRow }) {
+  const entry = fairRangeSummary(row.fairRange);
+  return (
+    <div className="entry-cell">
+      <span
+        className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${fairRangeColor(entry.position)}`}
+        title={entry.text ? `${entry.detail ? `${entry.detail} · ` : ""}${entry.text}` : undefined}
+      >
+        {entry.label}
+      </span>
+      <span className={`block text-[10px] text-muted-foreground tabular-nums ${row.needsVerification ? "score-muted" : ""}`}>
+        Research {row.researchScore === null ? "—" : row.researchScore.toFixed(0)}/100 · Buy rank {formatBuyRank(row.buyScore).toLowerCase()}
+      </span>
+    </div>
   );
 }

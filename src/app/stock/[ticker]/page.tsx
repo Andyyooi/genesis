@@ -35,7 +35,7 @@ import { formatDateSafe } from "@/lib/display";
 import { formatMetricValue } from "@/lib/format-metric";
 import { formatMyr, formatSharePrice } from "@/lib/format-myr";
 import { movingAverage } from "@/lib/price-history";
-import { formatScore100 } from "@/lib/research-copy";
+import { dataConfidenceLabel, formatScore100 } from "@/lib/research-copy";
 import {
   absoluteValuationBlurb,
   researchInterpretationBullets,
@@ -46,7 +46,9 @@ import { PersistedFairValue } from "@/components/research/persisted-fair-value";
 import { loadPersistedFairValueForPage } from "@/fair-value/load-persisted-page";
 import { FairRangeLine } from "@/components/research/fair-range-line";
 import { fairRangeHeadline } from "@/lib/fair-range";
-import { BUY_SCORE_BACKTEST_NOTE, buyScoreValue, buyScoreVerdict } from "@/lib/buy-score";
+import { BUY_SCORE_BACKTEST_NOTE, buyScoreValue, buyScoreVerdict, formatBuyRank } from "@/lib/buy-score";
+import { fairRangeSummary } from "@/lib/fair-range-summary";
+import { fairRangeColor } from "@/components/research/fair-range-pill";
 import { publishedBuyScore } from "@/scoring/published-research-scores";
 import { scoreTicker } from "@/scoring/run-ticker";
 import { PriceChart } from "@/components/research/price-chart";
@@ -218,6 +220,7 @@ export default async function ResearchPage({
   const profileIds = profileMetricIds(result.researchProfile, isReit);
   const fairValue = loadPersistedFairValueForPage(instrument.id);
   const fairRange = fairRangeHeadline(fairValue, close);
+  const entry = fairRangeSummary(fairRange);
   const priceDownFlag = goodCompanyPriceDown({ result, bars, periods, pn17: instrument.pn17, includeSales: !isBank });
   const latestResults = priceDownFlag ? null : latestResultsComparison(periods, { includeSales: !isBank });
   const buy = publishedBuyScore({ researchScore: result.researchScore, eligible: result.eligibility?.eligible === true, needsVerification: result.dataConfidence.needsVerification });
@@ -282,7 +285,7 @@ export default async function ResearchPage({
       <StockBrief brief={brief} ticker={instrument.ticker} />
 
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3" aria-label="Price and key numbers">
-        <section className="market-card min-w-0 p-4" aria-label="Price and Buy score">
+        <section className="market-card min-w-0 p-4" aria-label="Price and entry check">
           <div className="mb-2 grid grid-cols-2 gap-3">
             <div>
               <h2 className="text-xs font-medium text-muted-foreground">Last close</h2>
@@ -290,26 +293,40 @@ export default async function ResearchPage({
               <p className="text-xs text-muted-foreground">{formatDateSafe(priceDate)}</p>
             </div>
             <div>
-              <h2 className="text-xs font-medium text-muted-foreground">Buy score</h2>
-              <p className="text-xl font-semibold tabular-nums">{formatScore100(buyScoreValue(buy))}</p>
+              <h2 className="text-xs font-medium text-muted-foreground">Entry check</h2>
+              <p className={`mt-0.5 inline-block rounded-md px-2 py-1 text-sm font-semibold ${fairRangeColor(entry.position)}`}>{entry.label}</p>
+              {entry.text ? <p className="mt-1 text-xs text-muted-foreground tabular-nums">{entry.detail ? `${entry.detail} · ` : ""}{entry.text}</p> : null}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">Today&apos;s price against the Genesis fair range is the main guide to whether this is a good entry. Research, not a buy or sell instruction.</p>
+          <details className="mt-1.5 text-xs">
+            <summary className="cursor-pointer text-muted-foreground">About this fair range</summary>
+            <div className="mt-1"><FairRangeLine range={fairRange} compact /></div>
+          </details>
+        </section>
+        <section className="market-card min-w-0 p-4" aria-label="Research score and Buy rank">
+          <div className="mb-2 grid grid-cols-2 gap-3">
+            <div>
+              <h2 className="text-xs font-medium text-muted-foreground">Research score</h2>
+              <p className="text-xl font-semibold tabular-nums">{formatScore100(result.researchScore)}</p>
+            </div>
+            <div>
+              <h2 className="text-xs font-medium text-muted-foreground">Buy rank</h2>
+              <p className="text-xl font-semibold tabular-nums">{formatBuyRank(buyScoreValue(buy))}</p>
+              <p className="text-xs text-muted-foreground">of all stocks</p>
             </div>
           </div>
           <StatusLabel level={verdict.tone}>{verdict.label}</StatusLabel>
           <p className="mt-1.5 text-xs text-muted-foreground">{verdict.why}</p>
           <details className="mt-1.5 text-xs text-muted-foreground">
-            <summary className="cursor-pointer">How good is a high Buy score?</summary>
-            <p className="mt-1">The Buy score ranks this stock&apos;s research score ({formatScore100(result.researchScore)}) against every other stock, then holds it below 70 if a safety check fails. {BUY_SCORE_BACKTEST_NOTE}</p>
+            <summary className="cursor-pointer">What the Buy rank means</summary>
+            <p className="mt-1">The Buy rank compares this stock&apos;s research score ({formatScore100(result.researchScore)}) with every other stock{buyScoreValue(buy) !== null ? ` (it beats about ${buyScoreValue(buy)} in 100)` : ""}, and is held out of the top 30% if a safety check fails. It says how the company compares, not that today&apos;s price is a good one. {BUY_SCORE_BACKTEST_NOTE}</p>
           </details>
-        </section>
-        <section className="market-card min-w-0 p-4">
-          <h2 className="font-semibold">Fair price range</h2>
-          <p className="mb-2 text-xs text-muted-foreground">Entry price guide, not part of the Buy score.</p>
-          <FairRangeLine range={fairRange} compact />
         </section>
         <section className="market-card min-w-0 p-4 md:col-span-2 lg:col-span-1">
           <h2 className="mb-2 font-semibold">Key numbers</h2>
           <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-            <div><dt className="text-xs text-muted-foreground">Research score</dt><dd className="font-medium">{formatScore100(result.researchScore)}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Data confidence</dt><dd className="font-medium">{dataConfidenceLabel(result.dataConfidence.level)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Valuation score</dt><dd className="font-medium">{formatScore100(result.valuationScore)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Company size</dt><dd className="font-medium">{size?.available && size.value !== null && Number.isFinite(size.value) ? `RM ${size.value.toLocaleString("en-MY", { notation: "compact", maximumFractionDigits: 1 })}` : "Unavailable"}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Risk flags</dt><dd><StatusLabel level={instrument.pn17 ? "PN17" : riskFlag !== "No stored flags" ? "LOW" : "UNKNOWN"}>{riskFlag}</StatusLabel></dd></div>

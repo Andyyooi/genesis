@@ -3,7 +3,7 @@ import { buyScore, type BuyScore } from "@/lib/buy-score";
 
 let cache: { version: number; scores: number[] } | null = null;
 
-/** Latest published research score of every stock, the pool a Buy score is ranked against. */
+/** Latest published research score of every stock, the pool a Buy rank is ranked against. */
 export function loadPublishedResearchScores(): number[] {
   const sqlite = getSqlite();
   const version = (sqlite.prepare("SELECT COALESCE(MAX(id), 0) AS version FROM score_runs").get() as { version: number }).version;

@@ -180,6 +180,7 @@ summary:focus-visible, a:focus-visible, button:focus-visible { outline: 2px soli
 .save-company[aria-pressed="true"] { color: #b87016; }
 .price-sparkline { display: block; width: 100px; height: 30px; }
 .score-cell { display: flex; flex-direction: column; gap: .3rem; width: 65px; color: #245b55; font-weight: 650; font-variant-numeric: tabular-nums; }
+.entry-cell { display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; }
 .score-track { display: block; height: 3px; border-radius: 3px; background: #e9efed; }
 .score-track > span { display: block; height: 100%; background: #49a28d; border-radius: 3px; }
 .score-muted { color: #74818b; }

@@ -39,8 +39,8 @@ export const OPPORTUNITY_LISTS: OpportunityList[] = [
   },
   {
     id: "buy-score",
-    label: "Buy score 90+",
-    description: "Buy score above 90 out of 100.",
+    label: "Buy rank above 90",
+    description: "Research score ranks ahead of more than 90% of all stocks and passes the safety checks. A rank, not a buy signal: check the price against the fair range.",
     disabled: false,
     showWhenEmpty: true,
   },

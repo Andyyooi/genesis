@@ -2,9 +2,13 @@ import Link from "next/link";
 import { ArrowUpRight, Telescope } from "lucide-react";
 import { loadTopPicks, pickReasons, type TopPicksOptions } from "@/opportunities/top-picks";
 import { formatScore100 } from "@/lib/research-copy";
+import { loadListFairRanges } from "@/fair-value/load-list-ranges";
+import { FairRangePill } from "./fair-range-pill";
 
 export function TopPicks({ options = {}, preservedParams = {} }: { options?: TopPicksOptions; preservedParams?: Record<string, string> }) {
   const { summary, picks, excluded, exclusions, settings, priceDate, stalePrices } = loadTopPicks(options);
+  const shown = picks.slice(0, 3);
+  const fairRanges = loadListFairRanges(shown.map((pick) => pick.ticker));
   const money = (value: number) => `RM${value.toLocaleString("en-MY", { notation: "compact", maximumFractionDigits: 1 })}`;
   return (
     <section className="market-card overflow-hidden">
@@ -18,7 +22,7 @@ export function TopPicks({ options = {}, preservedParams = {} }: { options?: Top
         </div>
       </div>
       <p className="px-5 pb-3 text-xs text-muted-foreground">
-        {options.qualityTilt ? "Quality-tilted scores for general companies; published scores for other profiles." : "Highest eligible published research scores."} A starting point, not a buy list.
+        {options.qualityTilt ? "Quality-tilted scores for general companies; published scores for other profiles." : "Highest eligible published research scores."} A starting point, not a buy list: the price against the fair range is the guide to a good entry.
       </p>
       <form action="/" method="get" className="flex flex-col gap-3 px-5 pb-4 text-xs">
         {Object.entries(preservedParams).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
@@ -28,7 +32,7 @@ export function TopPicks({ options = {}, preservedParams = {} }: { options?: Top
       </form>
       {picks.length ? (
         <ol className="radar-list">
-          {picks.slice(0, 3).map((pick, index) => {
+          {shown.map((pick, index) => {
             const reasons = pickReasons(pick.result);
             const unavailable = pick.result.categories
               .flatMap((category) => category.factors)
@@ -53,11 +57,11 @@ export function TopPicks({ options = {}, preservedParams = {} }: { options?: Top
                     >
                       {pick.name}
                     </p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">{pick.qualityTilted ? "Quality-tilted score" : "Published score"}</p>
+                    <FairRangePill range={fairRanges[pick.ticker]} />
                   </div>
                   <span className="radar-score">
                     {pick.selectionScore?.toFixed(0) ?? "—"}
-                    <small>/100</small>
+                    <small>{pick.qualityTilted ? "quality-tilted" : "research"} /100</small>
                   </span>
                 </div>
                 <details className="mt-3 text-xs">
