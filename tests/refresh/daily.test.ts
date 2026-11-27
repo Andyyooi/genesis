@@ -472,6 +472,21 @@ describe("Phase 18B daily refresh", () => {
     expect(getDb().select().from(fairValueRuns).all()).toHaveLength(0);
   });
 
+  it("prints the price coverage report after the datasets", () => {
+    const text = formatDailyRefreshSummary({
+      kind: "daily-refresh", runId: "refresh-test", startedAt: "a", completedAt: "b", marketDate: "2026-11-27",
+      timezone: "Asia/Kuala_Lumpur", universeCount: 3, overallStatus: "PARTIAL", notes: [],
+      datasets: [{
+        dataset: "price_check", source: "saved-prices", status: "PARTIAL", startedAt: "a", completedAt: "b", marketDate: "2026-11-27",
+        attemptedCount: 3, updatedCount: 0, unchangedCount: 2, failedCount: 0, unavailableCount: 1, lastSuccessfulAt: null, errorSummary: null,
+        metadata: { kind: "price-check", checkedAt: "a", marketDate: "2026-11-27", newestDate: "2026-11-26", newestDaysOld: 1, listed: 3, noPrice: [], stale: [{ ticker: "MKH", name: "MKH", lastDate: "2026-10-27" }], jumps: [], failedThisRun: ["AIZOPA"], previousDate: "2026-11-25", freshCount: 2, retried: ["AIZOPA"], recoveredOnRetry: [] },
+      }],
+    });
+    expect(text).toContain("PRICE COVERAGE\n  2 of 3 listed stocks (66.7%) have closes for both 2026-11-26 and 2026-11-25.");
+    expect(text).toContain("Retried 1 after a failed download; 0 recovered.");
+    expect(text).toContain("MKH (2026-10-27)");
+  });
+
   it("prints fundamentals fetched and skipped_fresh beside attempted", () => {
     const text = formatDailyRefreshSummary({
       kind: "daily-refresh",

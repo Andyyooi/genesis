@@ -37,3 +37,14 @@ export function usableYahooDailyBar(bar: YahooBar, now = new Date()): boolean {
   const ceiling = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
   return utc <= ceiling;
 }
+
+/** Bursa's session ends at 5:00 PM; Yahoo's final close is trusted only after this Malaysia time. */
+export const BURSA_CLOSE_SETTLED_MINUTES = 17 * 60 + 30;
+const MALAYSIA_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+/** Today's Malaysia date while Bursa's session has not settled, otherwise null. A bar for this date is not a close yet. */
+export function inProgressSessionDate(now = new Date()): string | null {
+  const malaysia = new Date(now.getTime() + MALAYSIA_OFFSET_MS);
+  const minutes = malaysia.getUTCHours() * 60 + malaysia.getUTCMinutes();
+  return minutes < BURSA_CLOSE_SETTLED_MINUTES ? malaysia.toISOString().slice(0, 10) : null;
+}

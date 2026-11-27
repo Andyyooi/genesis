@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findPriceIssues, priceCheckIssueCount, priceCheckSummary, priceNewestTooOld, type PriceCheckInput } from "@/refresh/price-check";
+import { findPriceIssues, priceCheckIssueCount, priceCoverageLines, priceCheckSummary, priceNewestTooOld, type PriceCheckInput } from "@/refresh/price-check";
 
 const days = ["2026-11-13", "2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"];
 const stock = (ticker: string, closes: (number | null)[], dates = days): PriceCheckInput => ({
@@ -54,5 +54,26 @@ describe("findPriceIssues", () => {
     expect(report.newestDaysOld).toBe(7);
     expect(priceNewestTooOld(report)).toBe(true);
     expect(priceCheckSummary(report)).toMatch(/newest price is 7 days old/);
+  });
+  it("counts stocks with closes for both of the last two trading days and reports retries", () => {
+    const report = findPriceIssues(
+      [
+        stock("MAYBANK", [10, 10, 10, 10, 10, 10]),
+        stock("GAP", [10, 10, 10, 10, 10], ["2026-11-13", "2026-11-16", "2026-11-17", "2026-11-18", "2026-11-20"]),
+        stock("MKH", [2, 2], ["2026-10-26", "2026-10-27"]),
+        { ticker: "NONE", name: "None Bhd", latestDate: null, bars: [] },
+      ],
+      { checkedAt: "2026-11-21T10:00:00Z", marketDate: "2026-11-21", failedThisRun: ["AIZOPA", "NONE"], retried: ["NONE", "TENAGA"], recoveredOnRetry: ["TENAGA"] },
+    );
+    expect(report).toMatchObject({ newestDate: "2026-11-20", previousDate: "2026-11-19", freshCount: 1, failedThisRun: ["NONE"], retried: ["NONE"], recoveredOnRetry: [] });
+    const listedOnly = findPriceIssues([stock("MAYBANK", [10, 10, 10, 10, 10, 10]), stock("TENAGA", [10, 10])], { checkedAt: "x", retried: ["TENAGA", "GONE"], recoveredOnRetry: ["TENAGA"] });
+    expect(listedOnly).toMatchObject({ retried: ["TENAGA"], recoveredOnRetry: ["TENAGA"] });
+    const lines = priceCoverageLines(report);
+    expect(lines[0]).toBe("1 of 4 listed stocks (25%) have closes for both 2026-11-20 and 2026-11-19.");
+    expect(lines.join("\n")).toMatch(/Still not downloaded: NONE\./);
+    expect(lines.join("\n")).toMatch(/older than 2026-11-20: MKH \(2026-10-27\)/);
+    expect(lines.join("\n")).toMatch(/No saved price: NONE\./);
+    expect(priceCoverageLines(listedOnly).join("\n")).toMatch(/Retried 1 after a failed download; 1 recovered\./);
+    expect(priceCoverageLines(findPriceIssues([], { checkedAt: "x" }))[0]).toMatch(/not enough saved closing days/);
   });
 });

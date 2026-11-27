@@ -47,6 +47,12 @@ export function PriceCheckCard({ report, fromRefresh }: { report: PriceCheckRepo
           ? `All ${report.listed.toLocaleString("en-MY")} stocks have a price for ${report.newestDate ?? "the latest day"} with no odd jumps.`
           : `${issues.toLocaleString("en-MY")} of ${report.listed.toLocaleString("en-MY")} stocks have a missing, old or odd price. Check these names before relying on their picks.`}
       </p>
+      {report.previousDate ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {(report.freshCount ?? 0).toLocaleString("en-MY")} of {report.listed.toLocaleString("en-MY")} have closing prices for both {report.newestDate} and {report.previousDate}.
+          {report.retried?.length ? ` ${report.retried.length} failed downloads were retried; ${report.recoveredOnRetry?.length ?? 0} recovered.` : ""}
+        </p>
+      ) : null}
       {tooOld ? (
         <p className="mt-2 text-sm font-medium text-amber-900">
           The newest price is from {report.newestDate}, {report.newestDaysOld} days before the refresh. Yahoo may not have sent new prices.
@@ -74,7 +80,7 @@ export function PriceCheckCard({ report, fromRefresh }: { report: PriceCheckRepo
         <summary className="cursor-pointer">How this check works</summary>
         <p className="mt-2">
           {when} It flags stocks with no saved price, a last price older than the newest day, or a day-to-day move of {PRICE_JUMP_PERCENT}% or more
-          (and at least {rm(PRICE_JUMP_MIN_RM)}). It also warns when the newest price is more than {OLD_NEWEST_PRICE_DAYS} days older than the refresh. Prices are never changed by this check.
+          (and at least {rm(PRICE_JUMP_MIN_RM)}). Prices from a trading day that has not closed yet (before 5:30 PM Malaysia time) are never saved, so only finished closes count. Failed downloads are retried before being reported. It also warns when the newest price is more than {OLD_NEWEST_PRICE_DAYS} days older than the refresh. Prices are never changed by this check.
         </p>
       </details>
     </section>
