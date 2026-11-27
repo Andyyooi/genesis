@@ -98,13 +98,15 @@ export async function importYahooPrices(
   const delay = options.rateLimitMs ?? 200;
 
   const now = options.now ?? (() => new Date());
-  const openSession = inProgressSessionDate(now());
+  let inProgressSession: string | null = null;
   let partialBarsRemoved = 0;
 
   const importOne = async (instrument: (typeof targets)[number]): Promise<PriceImportFailure | null> => {
     const yahooTicker =
       instrument.yahooTicker ??
       (instrument.bursaCode ? `${instrument.bursaCode}.KL` : `${instrument.ticker}.KL`);
+    const openSession = inProgressSessionDate(now());
+    if (openSession) inProgressSession = openSession;
     try {
       const latest = range === "auto" ? db.select({ date: max(priceBars.barDate) }).from(priceBars)
         .where(and(eq(priceBars.instrumentId, instrument.id), gt(priceBars.close, 0), lte(priceBars.barDate, retrievedAt.slice(0, 10)))).get()?.date ?? null : null;
@@ -189,7 +191,7 @@ export async function importYahooPrices(
     retried: retryPassDelay > 0 ? retried : [],
     recoveredOnRetry,
     partialBarsRemoved,
-    inProgressSession: openSession,
+    inProgressSession,
   };
 
   db.insert(ingestReports)
@@ -240,7 +242,7 @@ function storedYahooBars(instrumentId: number): StoredYahooBar[] {
 
 /**
  * New sessions are inserted even when they are older than the latest bar.
- * Matching closes accept volume/adjustment revisions without losing stored fields.
+ * Matching closes accept volume/adjustment revisions without losing stored fields; the latest session also takes the day's final open/high/low.
  * An older session with a different close is kept and reported.
  * The latest stored session may still be revised when its close changes.
  */
@@ -280,7 +282,13 @@ function planYahooPriceWrites(ticker: string, accepted: YahooBar[], stored: Stor
       reimported += 1;
       const volume = bar.volume ?? existing!.volume;
       const adjClose = bar.adjClose != null && bar.adjClose > 0 ? bar.adjClose : existing!.adjClose;
-      if (volume !== existing!.volume || adjClose !== existing!.adjClose) write.push({ ...existing!, volume, adjClose });
+      const latestSession = latestUtc == null || utc >= latestUtc;
+      const open = latestSession ? bar.open ?? existing!.open : existing!.open;
+      const high = latestSession ? bar.high ?? existing!.high : existing!.high;
+      const low = latestSession ? bar.low ?? existing!.low : existing!.low;
+      if (volume !== existing!.volume || adjClose !== existing!.adjClose || open !== existing!.open || high !== existing!.high || low !== existing!.low) {
+        write.push({ ...existing!, open, high, low, volume, adjClose });
+      }
       continue;
     }
     if (latestUtc != null && utc < latestUtc) {

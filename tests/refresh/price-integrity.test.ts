@@ -519,4 +519,28 @@ describe("refresh price integrity", () => {
     expect(missed).toMatchObject({ retried: ["MAYBANK"], recoveredOnRetry: [] });
     expect(missed.failed.map((f) => f.ticker)).toEqual(["MAYBANK"]);
   });
+
+  it("takes the final high and low for the latest day when its close matches an earlier part-day save", async () => {
+    const options = { onlyTicker: "MAYBANK", listedOnly: true, skipAlerts: true, range: "5d", rateLimitMs: 0, skipUniverseSeed: true, now: () => new Date("2026-10-12T10:00:00Z") };
+    vi.mocked(fetchYahooDailyBars).mockResolvedValue([yahooBar("2026-10-09", 10.5), yahooBar("2026-10-12", 11)]);
+    await importYahooPrices(options);
+    vi.mocked(fetchYahooDailyBars).mockResolvedValue([yahooBar("2026-10-09", 10.5, { high: 13, low: 9 }), yahooBar("2026-10-12", 11, { open: 10.8, high: 11.4, low: 10.6 })]);
+    await importYahooPrices(options);
+    const instrument = getDb().select().from(instruments).where(eq(instruments.ticker, "MAYBANK")).get()!;
+    const rows = getDb().select({ barDate: priceBars.barDate, open: priceBars.open, high: priceBars.high, low: priceBars.low }).from(priceBars)
+      .where(eq(priceBars.instrumentId, instrument.id)).orderBy(priceBars.barDate).all();
+    expect(rows.find((r) => r.barDate === "2026-10-09")).toMatchObject({ high: 10.5, low: 10.5 });
+    expect(rows.find((r) => r.barDate === "2026-10-12")).toEqual({ barDate: "2026-10-12", open: 10.8, high: 11.4, low: 10.6 });
+  });
+
+  it("checks the market clock per download, so a retry after 5:30 PM saves the final close", async () => {
+    const times = [new Date("2026-10-12T09:29:00Z"), new Date("2026-10-12T09:31:00Z")];
+    const options = { onlyTicker: "MAYBANK", listedOnly: true, skipAlerts: true, range: "5d", rateLimitMs: 0, skipUniverseSeed: true, retryPassDelayMs: 1, now: () => times.shift() ?? new Date("2026-10-12T09:31:00Z") };
+    vi.mocked(fetchYahooDailyBars).mockReset();
+    vi.mocked(fetchYahooDailyBars).mockRejectedValueOnce(new Error("Yahoo HTTP 429")).mockResolvedValue([yahooBar("2026-10-09", 10.5), yahooBar("2026-10-12", 11)]);
+    const report = await importYahooPrices(options);
+    expect(report.recoveredOnRetry).toEqual(["MAYBANK"]);
+    expect(report.partialBarsRemoved).toBe(0);
+    expect(storedBars("MAYBANK").at(-1)).toEqual({ barDate: "2026-10-12", close: 11 });
+  });
 });
