@@ -30,11 +30,11 @@ function instrument(id: number, status = "listed") {
   `).run(id, `STOCK${id}`, `Stock ${id}`, status);
 }
 
-function close(instrumentId: number, date: string, price: number | null = 1, source = "yahoo") {
+function close(instrumentId: number, date: string, price: number | null = 1, source = "yahoo", retrievedAt = `${date}T09:00:00Z`) {
   sqlite.prepare(`
     INSERT INTO price_bars (instrument_id, bar_date, close, source, retrieved_at)
     VALUES (?, ?, ?, ?, ?)
-  `).run(instrumentId, date, price, source, date);
+  `).run(instrumentId, date, price, source, retrievedAt);
 }
 
 describe("published price coverage", () => {
@@ -78,6 +78,22 @@ describe("published price coverage", () => {
     close(1, "2026-11-27");
     expect(readPriceHealth(sqlite, "2026-11-27")).toMatchObject({ previousPriceDate: null, freshPriceCount: 0, lowCoverage: true });
   });
+
+  it("ignores an intraday download even after the session ends", () => {
+    instrument(1);
+    close(1, "2026-11-25");
+    close(1, "2026-11-26");
+    close(1, "2026-11-27", 1, "yahoo", "2026-11-27T08:59:59Z");
+    expect(readPriceHealth(sqlite, "2026-11-28")).toMatchObject({
+      asOfDate: "2026-11-26", previousPriceDate: "2026-11-25", freshPriceCount: 1,
+    });
+
+    sqlite.prepare("DELETE FROM price_bars WHERE bar_date = '2026-11-27'").run();
+    close(1, "2026-11-27", 1, "yahoo", "2026-11-27T09:00:00Z");
+    expect(readPriceHealth(sqlite, "2026-11-28")).toMatchObject({
+      asOfDate: "2026-11-27", previousPriceDate: "2026-11-26", freshPriceCount: 1,
+    });
+  });
 });
 
 describe("health endpoint", () => {
@@ -94,9 +110,9 @@ describe("health endpoint", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-11-26T16:01:00Z"));
     instrument(1);
-    close(1, "2026-11-27");
     close(1, "2026-11-26");
-    expect(await GET().json()).toMatchObject({ status: "ok", asOfDate: "2026-11-27" });
+    close(1, "2026-11-25");
+    expect(await GET().json()).toMatchObject({ status: "ok", asOfDate: "2026-11-26", ageDays: 1 });
     vi.mocked(getSqlite).mockImplementation(() => { throw new Error("private path"); });
     const response = GET();
     expect(response.status).toBe(503);

@@ -7,6 +7,7 @@ import { OLD_NEWEST_PRICE_DAYS } from "@/refresh/price-check";
 import { malaysiaMarketDate } from "@/refresh/types";
 
 const MIN_COVERAGE_PERCENT = 90;
+const BURSA_CLOSE_UTC = "+9 hours"; // 17:00 Malaysia time.
 
 export function readPriceHealth(sqlite: Database.Database, today: string) {
   const instruments = sqlite.prepare("SELECT id FROM instruments WHERE listing_status = 'listed'").all() as { id: number }[];
@@ -14,10 +15,11 @@ export function readPriceHealth(sqlite: Database.Database, today: string) {
     SELECT bar_date AS date FROM price_bars
     WHERE instrument_id = ? AND bar_date <= ? AND source = 'yahoo'
       AND close > 0 AND close <= 1.7976931348623157e308 AND date(bar_date, '+0 days') = bar_date
+      AND datetime(retrieved_at) >= datetime(bar_date, ?)
     ORDER BY bar_date DESC LIMIT 2
   `);
   const datesByInstrument = instruments.map(({ id }) =>
-    (recent.all(id, today) as { date: string }[]).map(({ date }) => date));
+    (recent.all(id, today, BURSA_CLOSE_UTC) as { date: string }[]).map(({ date }) => date));
   const [asOfDate = null, previousPriceDate = null] = [...new Set(datesByInstrument.flat())].sort().reverse();
   const freshPriceCount = asOfDate && previousPriceDate
     ? datesByInstrument.filter(([latest, previous]) => latest === asOfDate && previous === previousPriceDate).length
