@@ -30,7 +30,11 @@ describe("Yahoo daily bar validation", () => {
       meta: { symbol: "5012.KL", currency: "MYR" },
       timestamp,
       indicators: { quote: [{ close: [5, 5, 5] }] },
-      events: { dividends: { abc: { date: timestamp[1], amount: 0.15 }, def: { date: timestamp[1], amount: 0.15 } } },
+      events: { dividends: {
+        abc: { date: timestamp[1], amount: 0.15 },
+        duplicate: { date: timestamp[1], amount: 0.15 },
+        def: { date: timestamp[1] + 60, amount: 0.15 },
+      } },
     };
     const request = chart({ chart: { result: [result] } });
     vi.stubGlobal("fetch", request);

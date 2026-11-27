@@ -58,11 +58,15 @@ function cashDividendCoverage(
   const raw = result.events?.dividends;
   if (raw !== undefined && (raw === null || typeof raw !== "object" || Array.isArray(raw))) return;
   const events: YahooDividendCoverage["events"] = [];
+  const seen = new Set<string>();
   for (const [sourceId, row] of Object.entries(raw ?? {})) {
     if (typeof row?.date !== "number" || !Number.isFinite(new Date(row.date * 1000).getTime())) return;
     const exDate = utcDate(row.date);
     if (exDate < from || exDate > through) continue;
     if (typeof row.amount !== "number" || !Number.isFinite(row.amount) || row.amount <= 0) return;
+    const key = `${row.date}:${row.amount}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     events.push({ sourceId, exDate, amount: row.amount });
   }
   return { symbol, currency, from, through, events };
