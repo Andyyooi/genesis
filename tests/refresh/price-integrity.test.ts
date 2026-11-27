@@ -493,4 +493,30 @@ describe("refresh price integrity", () => {
     release();
     await first;
   });
+  it("never saves a bar for a Bursa session that has not closed and removes one saved earlier", async () => {
+    const options = { onlyTicker: "MAYBANK", listedOnly: true, skipAlerts: true, range: "5d", rateLimitMs: 0, skipUniverseSeed: true };
+    vi.mocked(fetchYahooDailyBars).mockResolvedValue([yahooBar("2026-10-09", 10.5), yahooBar("2026-10-12", 11, { volume: 5 })]);
+    await importYahooPrices({ ...options, now: () => new Date("2026-10-12T10:00:00Z") });
+    expect(storedBars("MAYBANK").at(-1)).toEqual({ barDate: "2026-10-12", close: 11 });
+
+    const midSession = await importYahooPrices({ ...options, now: () => new Date("2026-10-12T02:00:00Z") });
+    expect(midSession.inProgressSession).toBe("2026-10-12");
+    expect(midSession.partialBarsRemoved).toBe(1);
+    expect(storedBars("MAYBANK").at(-1)).toEqual({ barDate: "2026-10-09", close: 10.5 });
+  });
+
+  it("tries failed downloads once more after a pause and reports who recovered", async () => {
+    const options = { onlyTicker: "MAYBANK", listedOnly: true, skipAlerts: true, range: "5d", rateLimitMs: 0, skipUniverseSeed: true };
+    vi.mocked(fetchYahooDailyBars).mockReset();
+    vi.mocked(fetchYahooDailyBars).mockRejectedValueOnce(new Error("Yahoo HTTP 429")).mockResolvedValue([yahooBar("2026-10-12", 11)]);
+    const recovered = await importYahooPrices({ ...options, retryPassDelayMs: 1 });
+    expect(recovered).toMatchObject({ failed: [], succeeded: ["MAYBANK"], retried: ["MAYBANK"], recoveredOnRetry: ["MAYBANK"] });
+    expect(storedBars("MAYBANK").at(-1)).toEqual({ barDate: "2026-10-12", close: 11 });
+
+    vi.mocked(fetchYahooDailyBars).mockRejectedValue(new Error("No data found, symbol may be delisted"));
+    const missed = await importYahooPrices({ ...options, retryPassDelayMs: 1 });
+    expect(fetchYahooDailyBars).toHaveBeenCalledTimes(4);
+    expect(missed).toMatchObject({ retried: ["MAYBANK"], recoveredOnRetry: [] });
+    expect(missed.failed.map((f) => f.ticker)).toEqual(["MAYBANK"]);
+  });
 });

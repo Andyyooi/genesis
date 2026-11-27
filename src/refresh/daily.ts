@@ -2,7 +2,7 @@ import { getDb } from "@/db/client";
 import { instruments } from "@/db/schema";
 import { UnavailableLiveBursaEventProvider } from "@/events/fixture-provider";
 import type { EventSourceProvider } from "@/events/types";
-import { importYahooPrices, type PriceIngestOptions } from "@/ingest/import-prices";
+import { importYahooPrices, PRICE_RETRY_PASS_DELAY_MS, type PriceIngestOptions } from "@/ingest/import-prices";
 import { importCompanyCalendar } from "@/ingest/import-calendar";
 import type { PricesImportReport } from "@/ingest/types";
 import { refuseSnapshotWrites } from "@/lib/data-mode";
@@ -21,7 +21,7 @@ import {
   type FairValueRefreshReport,
 } from "@/refresh/fair-value";
 import { persistDatasetRefresh } from "@/refresh/persist";
-import { runPriceCheck } from "@/refresh/price-check";
+import { priceCoverageLines, runPriceCheck, type PriceCheckReport } from "@/refresh/price-check";
 import {
   combineOverallStatus,
   malaysiaMarketDate,
@@ -43,6 +43,8 @@ export type DailyRefreshDeps = {
   rescore?: () => unknown;
   /** Set by `npm run refresh:daily -- --skip-rescore`. Does not call rescoreListedMarket. */
   skipRescore?: boolean;
+  /** Pause before the second pass over failed price downloads (test seam). */
+  priceRetryPassDelayMs?: number;
   /** Test seam. Production uses stored snapshots and persistFairValueRun. */
   persistFairValues?: (asOf: string) => FairValueRefreshReport;
   now?: () => Date;
@@ -117,6 +119,7 @@ async function refreshPrices(
       range: "auto",
       rateLimitMs: 100,
       refreshTrackRecordHistory: true,
+      retryPassDelayMs: deps.priceRetryPassDelayMs ?? PRICE_RETRY_PASS_DELAY_MS,
     });
     const completedAt = (deps.now?.() ?? new Date()).toISOString();
     const status = pricesStatus(report);
@@ -142,6 +145,10 @@ async function refreshPrices(
         barsUpserted: report.barsUpserted,
         failedSample: report.failed.slice(0, 10),
         failedTickers: report.failed.map((item) => item.ticker),
+        retriedTickers: report.retried ?? [],
+        recoveredOnRetry: report.recoveredOnRetry ?? [],
+        partialBarsRemoved: report.partialBarsRemoved ?? 0,
+        inProgressSession: report.inProgressSession ?? null,
       },
     });
   } catch (error) {
@@ -523,11 +530,18 @@ export async function runDailyRefresh(
   ];
 
   const prices = await refreshPrices(runId, marketDate, deps);
-  const failedTickers = prices.metadata?.failedTickers;
+  const tickers = (value: unknown) =>
+    Array.isArray(value) ? value.filter((t): t is string => typeof t === "string") : [];
   const priceCheck = runPriceCheck(runId, marketDate, {
     now: nowFn,
-    failedThisRun: Array.isArray(failedTickers) ? failedTickers.filter((t): t is string => typeof t === "string") : [],
+    failedThisRun: tickers(prices.metadata?.failedTickers),
+    retried: tickers(prices.metadata?.retriedTickers),
+    recoveredOnRetry: tickers(prices.metadata?.recoveredOnRetry),
   });
+  const inProgressSession = prices.metadata?.inProgressSession;
+  if (typeof inProgressSession === "string") {
+    notes.push(`Bursa was still trading on ${inProgressSession}, so that day's prices were not saved; the next refresh after 5:30 PM saves them.`);
+  }
   if (priceCheck.errorSummary) notes.push(priceCheck.errorSummary);
   const fundamentals = await refreshFundamentals(runId, marketDate, deps);
   const events = await refreshEvents(runId, marketDate, deps);
@@ -589,6 +603,12 @@ export function formatDailyRefreshSummary(summary: DailyRefreshSummary): string 
     lines.push(`  ${formatDatasetCounts(d)}`);
     lines.push(`  last_successful_at: ${d.lastSuccessfulAt ?? "never"}`);
     if (d.errorSummary) lines.push(`  note: ${d.errorSummary}`);
+    lines.push("");
+  }
+  const priceCheck = summary.datasets.find((d) => d.dataset === "price_check")?.metadata as PriceCheckReport | undefined;
+  if (priceCheck?.kind === "price-check") {
+    lines.push("PRICE COVERAGE");
+    for (const line of priceCoverageLines(priceCheck)) lines.push(`  ${line}`);
     lines.push("");
   }
   for (const note of summary.notes) lines.push(`- ${note}`);

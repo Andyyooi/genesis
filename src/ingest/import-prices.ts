@@ -5,7 +5,7 @@ import { refreshAlertsForTicker } from "@/alerts/refresh";
 import { getDb, getSqlite } from "@/db/client";
 import { ingestReports, instruments, priceBars } from "@/db/schema";
 import { seedUniverseFromYaml } from "@/db/seed";
-import { usableYahooDailyBar, yahooBarDateUtc } from "@/ingest/price-bar";
+import { inProgressSessionDate, usableYahooDailyBar, yahooBarDateUtc } from "@/ingest/price-bar";
 import { fetchYahooDailyBars, type YahooBar } from "@/ingest/providers/yahoo-prices";
 import type { PriceBarConflict, PriceImportFailure, PricesImportReport } from "@/ingest/types";
 import { PRICE_DROP_WINDOW_BARS } from "@/lib/price-drop-flag";
@@ -25,7 +25,12 @@ export type PriceIngestOptions = {
   /** On-demand refresh sets this so one ticker does not rewrite every YAML instrument. */
   skipUniverseSeed?: boolean;
   refreshTrackRecordHistory?: boolean;
+  /** Pause before one extra pass over stocks that failed. 0 (the default) skips the pass; the daily refresh uses PRICE_RETRY_PASS_DELAY_MS. */
+  retryPassDelayMs?: number;
+  now?: () => Date;
 };
+
+export const PRICE_RETRY_PASS_DELAY_MS = 30_000;
 
 type Checkpoint = { done: string[] };
 
@@ -92,20 +97,20 @@ export async function importYahooPrices(
   const range = options.range ?? "5y";
   const delay = options.rateLimitMs ?? 200;
 
-  for (const [index, instrument] of targets.entries()) {
+  const now = options.now ?? (() => new Date());
+  const openSession = inProgressSessionDate(now());
+  let partialBarsRemoved = 0;
+
+  const importOne = async (instrument: (typeof targets)[number]): Promise<PriceImportFailure | null> => {
     const yahooTicker =
       instrument.yahooTicker ??
       (instrument.bursaCode ? `${instrument.bursaCode}.KL` : `${instrument.ticker}.KL`);
-    if (done.has(instrument.ticker)) {
-      succeeded.push(instrument.ticker);
-      continue;
-    }
     try {
       const latest = range === "auto" ? db.select({ date: max(priceBars.barDate) }).from(priceBars)
         .where(and(eq(priceBars.instrumentId, instrument.id), gt(priceBars.close, 0), lte(priceBars.barDate, retrievedAt.slice(0, 10)))).get()?.date ?? null : null;
       const startDate = savedDates.get(instrument.ticker);
       const fetched = await fetchYahooDailyBars(yahooTicker, startDate ? { startDate } : range === "auto" ? priceRangeSince(latest) : range);
-      let accepted = fetched.filter((bar) => usableYahooDailyBar(bar));
+      let accepted = fetched.filter((bar) => usableYahooDailyBar(bar) && bar.barDate !== openSession);
       const recentWindowStart = accepted.some((bar) => bar.split)
         ? recentYahooWindowStart(instrument.id)
         : undefined;
@@ -113,12 +118,13 @@ export async function importYahooPrices(
         ? recentWindowStart
         : undefined;
       if (splitWindowStart && !accepted.some((bar) => bar.barDate <= splitWindowStart)) {
-        accepted = (await fetchYahooDailyBars(yahooTicker, { startDate: splitWindowStart })).filter((bar) => usableYahooDailyBar(bar));
+        accepted = (await fetchYahooDailyBars(yahooTicker, { startDate: splitWindowStart })).filter((bar) => usableYahooDailyBar(bar) && bar.barDate !== openSession);
       }
       if (accepted.length === 0) {
         throw new Error(`Yahoo missed ${yahooTicker}: no usable daily bars`);
       }
       const applied = getSqlite().transaction(() => {
+        if (openSession) partialBarsRemoved += removeInProgressBar(instrument.id, openSession);
         const plan = planYahooPriceWrites(instrument.ticker, accepted, storedYahooBars(instrument.id), startDate !== undefined, splitWindowStart);
         for (const bar of plan.write) writePriceBar(instrument.id, bar, retrievedAt);
         return plan;
@@ -131,16 +137,43 @@ export async function importYahooPrices(
       done.add(instrument.ticker);
       saveCheckpoint(options.checkpointPath, done);
       if (applied.write.length > 0 && !options.skipAlerts) refreshAlertsForTicker(instrument.ticker);
+      return null;
     } catch (error) {
-      const reason = error instanceof Error ? error.message : "Yahoo request failed";
-      if (savedDates.has(instrument.ticker)) console.error(`Track record price history refresh failed for ${instrument.ticker}: ${reason}`);
-      failed.push({ ticker: instrument.ticker, yahooTicker, reason });
-      recordIngestFailure("prices", instrument.ticker, yahooTicker, reason);
+      return { ticker: instrument.ticker, yahooTicker, reason: error instanceof Error ? error.message : "Yahoo request failed" };
     }
+  };
 
+  let missed: { instrument: (typeof targets)[number]; failure: PriceImportFailure }[] = [];
+  for (const [index, instrument] of targets.entries()) {
+    if (done.has(instrument.ticker)) {
+      succeeded.push(instrument.ticker);
+      continue;
+    }
+    const failure = await importOne(instrument);
+    if (failure) missed.push({ instrument, failure });
     if (index < targets.length - 1) {
       await sleep(delay);
     }
+  }
+
+  const retryPassDelay = options.retryPassDelayMs ?? 0;
+  const retried = missed.map(({ instrument }) => instrument.ticker);
+  const recoveredOnRetry: string[] = [];
+  if (missed.length > 0 && retryPassDelay > 0) {
+    await sleep(retryPassDelay);
+    const stillMissed: typeof missed = [];
+    for (const [index, item] of missed.entries()) {
+      const failure = await importOne(item.instrument);
+      if (failure) stillMissed.push({ instrument: item.instrument, failure });
+      else recoveredOnRetry.push(item.instrument.ticker);
+      if (index < missed.length - 1) await sleep(delay);
+    }
+    missed = stillMissed;
+  }
+  for (const { failure } of missed) {
+    if (savedDates.has(failure.ticker)) console.error(`Track record price history refresh failed for ${failure.ticker}: ${failure.reason}`);
+    failed.push(failure);
+    recordIngestFailure("prices", failure.ticker, failure.yahooTicker, failure.reason);
   }
 
   const report: PricesImportReport = {
@@ -153,6 +186,10 @@ export async function importYahooPrices(
     barsInserted,
     barsReimported,
     conflicts,
+    retried: retryPassDelay > 0 ? retried : [],
+    recoveredOnRetry,
+    partialBarsRemoved,
+    inProgressSession: openSession,
   };
 
   db.insert(ingestReports)
@@ -263,6 +300,13 @@ function planYahooPriceWrites(ticker: string, accepted: YahooBar[], stored: Stor
   }
   conflicts.sort((a, b) => a.barDate.localeCompare(b.barDate));
   return { write, inserted, reimported, conflicts };
+}
+
+/** A bar saved for a session that has not closed is an intraday price, not a close. */
+function removeInProgressBar(instrumentId: number, sessionDate: string): number {
+  return getSqlite()
+    .prepare("DELETE FROM price_bars WHERE instrument_id = ? AND source = 'yahoo' AND bar_date = ?")
+    .run(instrumentId, sessionDate).changes;
 }
 
 function writePriceBar(instrumentId: number, bar: YahooBar, retrievedAt: string) {

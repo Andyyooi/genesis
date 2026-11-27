@@ -151,6 +151,10 @@ Overall status derives primarily from **prices + fundamentals**.
 Statuses: `SUCCESS | PARTIAL | NO_SOURCE | SOURCE_FAILED | NO_DATA | UNCHANGED`.
 
 - Failed Yahoo ticker → prior `price_bars` / `financial_periods` **unchanged**.
+- Each Yahoo request is retried twice (after 1 s and 3 s) on a network error, HTTP 408/429 or 5xx. The daily refresh then waits 30 s and tries every still-failed ticker once more (`retryPassDelayMs`); `prices` metadata records `retriedTickers` and `recoveredOnRetry`.
+- A bar for today's Malaysia date is never saved before 17:30 MYT (Bursa closes at 17:00), because Yahoo's bar for an open session is a part-day price, not a close. Any such bar saved earlier is deleted on the next run (`partialBarsRemoved`, `inProgressSession`).
+- After every refresh, `price_check` metadata and the printed summary (`PRICE COVERAGE`, also written to the GitHub Actions step summary) give how many listed stocks have closes for both of the two newest trading days, who was retried, who still failed, and who has an older or no price.
+- Top Picks only include names whose latest saved close is the newest trading day among the candidates.
 - `NO_SOURCE` events/news → prior `events` **unchanged**.
 - `last_successful_at` advances only on SUCCESS / PARTIAL / UNCHANGED / NO_DATA.
 - Freshness/confidence continue to age via existing rules — **no artificial score penalty**.

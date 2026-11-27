@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs";
 import { isCliEntrypoint } from "@/cli/entrypoint";
 import { importCompanyCalendar } from "@/ingest/import-calendar";
 import { refuseSnapshotWrites } from "@/lib/data-mode";
@@ -14,7 +15,9 @@ async function main() {
     return;
   }
   const summary = await runDailyRefresh({ ...dailyRefreshOptionsFromArgv(process.argv), importCalendar: importCompanyCalendar });
-  console.log(formatDailyRefreshSummary(summary));
+  const text = formatDailyRefreshSummary(summary);
+  console.log(text);
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\`\`\`text\n${text}\n\`\`\`\n`);
   console.log(JSON.stringify(summary, null, 2));
   if (summary.overallStatus === "SOURCE_FAILED") process.exitCode = 1;
 }

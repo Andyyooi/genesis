@@ -213,6 +213,7 @@ describe("daily price range and throttle", () => {
         importPrices: (options) => importYahooPrices({ ...options, skipUniverseSeed: true, rateLimitMs: 0 }),
         importFundamentals: async () => ({ kind: "fundamentals-yahoo", startedAt: "a", finishedAt: "b", attempted: 1, upserted: 0, inserted: 0, filled: 0, unchanged: 1, skippedHadFilings: 0, skippedOtherSource: 0, instrumentsUpdated: 0, instrumentsUnchanged: 1, instrumentsSkippedFresh: 1, instrumentsFetched: 0, failed: [] }),
         rescore,
+        priceRetryPassDelayMs: 0,
       });
       expect(result.datasets.find((dataset) => dataset.dataset === "prices")?.failedCount).toBe(1);
       expect(rescore).toHaveBeenCalledOnce();

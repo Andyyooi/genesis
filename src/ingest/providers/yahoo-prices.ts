@@ -1,4 +1,4 @@
-import { usableYahooDailyBar } from "@/ingest/price-bar";
+import { inProgressSessionDate, usableYahooDailyBar } from "@/ingest/price-bar";
 
 export type YahooBar = {
   barDate: string;
@@ -42,7 +42,36 @@ function utcDate(epochSec: number): string {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 }
 
-export async function fetchYahooDailyBars(yahooTicker: string, range: string | { startDate: string } = "5y"): Promise<YahooBar[]> {
+/** Waits before the 2nd and 3rd attempt when Yahoo times out, rate-limits or has a server error. */
+export const YAHOO_RETRY_DELAYS_MS = [1000, 3000];
+
+export type YahooFetchOptions = { retryDelaysMs?: number[]; now?: () => Date };
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryableStatus(status: number) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+async function fetchWithRetries(url: URL, init: RequestInit, delays: number[]): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const response = await fetch(url, init);
+      if (!retryableStatus(response.status) || attempt >= delays.length) return response;
+    } catch (error) {
+      if (attempt >= delays.length) throw error;
+    }
+    await sleep(delays[attempt]!);
+  }
+}
+
+export async function fetchYahooDailyBars(
+  yahooTicker: string,
+  range: string | { startDate: string } = "5y",
+  options: YahooFetchOptions = {},
+): Promise<YahooBar[]> {
   const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}`);
   url.searchParams.set("interval", "1d");
   if (typeof range === "string") {
@@ -53,13 +82,13 @@ export async function fetchYahooDailyBars(yahooTicker: string, range: string | {
   }
   url.searchParams.set("events", "div,splits");
 
-  const response = await fetch(url, {
+  const response = await fetchWithRetries(url, {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
       Accept: "application/json",
     },
-  });
+  }, options.retryDelaysMs ?? YAHOO_RETRY_DELAYS_MS);
 
   if (!response.ok) {
     let detail = `Yahoo HTTP ${response.status} for ${yahooTicker}`;
@@ -95,7 +124,8 @@ export async function fetchYahooDailyBars(yahooTicker: string, range: string | {
     .flatMap(({ date }) => typeof date === "number" && Number.isFinite(date) ? [utcDate(date)] : [])
     .sort();
   let nextSplit = 0;
-  const now = new Date();
+  const now = options.now?.() ?? new Date();
+  const openSession = inProgressSessionDate(now);
   for (let i = 0; i < timestamps.length; i++) {
     const epoch = timestamps[i];
     const close = quote.close?.[i];
@@ -109,7 +139,7 @@ export async function fetchYahooDailyBars(yahooTicker: string, range: string | {
       volume: quote.volume?.[i] ?? null,
       adjClose: adjSeries?.[i] ?? null,
     };
-    if (!usableYahooDailyBar(bar, now)) continue;
+    if (!usableYahooDailyBar(bar, now) || bar.barDate === openSession) continue;
     while (nextSplit < splits.length && splits[nextSplit] <= bar.barDate) {
       bar.split = true;
       nextSplit++;

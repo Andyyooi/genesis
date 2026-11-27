@@ -4,7 +4,7 @@ import { loadTopPicks, pickReasons, type TopPicksOptions } from "@/opportunities
 import { formatScore100 } from "@/lib/research-copy";
 
 export function TopPicks({ options = {}, preservedParams = {} }: { options?: TopPicksOptions; preservedParams?: Record<string, string> }) {
-  const { summary, picks, excluded, exclusions, settings } = loadTopPicks(options);
+  const { summary, picks, excluded, exclusions, settings, priceDate, stalePrices } = loadTopPicks(options);
   const money = (value: number) => `RM${value.toLocaleString("en-MY", { notation: "compact", maximumFractionDigits: 1 })}`;
   return (
     <section className="market-card overflow-hidden">
@@ -100,7 +100,7 @@ export function TopPicks({ options = {}, preservedParams = {} }: { options?: Top
           How these are selected
         </summary>
         <p className="mt-2">
-          Larger companies only: worth at least {money(settings.min_market_cap)}, with at least {money(settings.min_median_traded_value)} traded a day (the median over 60 sessions). They must also pass the published eligibility checks. Lean towards quality gives more weight to quality and a smoother price history, and less to valuation, for general companies only; other profiles keep their published score. A lot budget limits the last closing price × 100, before fees. Leave it blank for no limit. These options only change this list, not the published scores. Factor reasons describe relative blended profile/sector percentiles, not promises of returns or safety. Publication: {summary?.asOf ?? "unavailable"}.
+          Larger companies only: worth at least {money(settings.min_market_cap)}, with at least {money(settings.min_median_traded_value)} traded a day (the median over 60 sessions). They must also pass the published eligibility checks and have a closing price for the newest trading day ({priceDate ?? "unavailable"}){stalePrices.length ? `; ${stalePrices.length} otherwise eligible ${stalePrices.length === 1 ? "name is" : "names are"} left out because ${stalePrices.length === 1 ? "its" : "their"} latest price is older (${stalePrices.slice(0, 10).join(", ")}${stalePrices.length > 10 ? ", …" : ""})` : ""}. Lean towards quality gives more weight to quality and a smoother price history, and less to valuation, for general companies only; other profiles keep their published score. A lot budget limits the last closing price × 100, before fees. Leave it blank for no limit. These options only change this list, not the published scores. Factor reasons describe relative blended profile/sector percentiles, not promises of returns or safety. Publication: {summary?.asOf ?? "unavailable"}.
         </p>
         <Link
           className="mt-2 inline-block text-primary underline"
