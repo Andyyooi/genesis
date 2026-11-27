@@ -49,9 +49,14 @@ function fixture() {
   const expectOrphan = (commit: string) => {
     const headers = remoteGit("cat-file", "-p", commit).split("\n\n")[0];
     expect(headers).not.toMatch(/^parent /m);
-    expect(remoteGit("ls-tree", "--name-only", commit)).toBe("research.db.gz");
   };
-  return { work, git, remoteGit, initial, publishPointer, publishData, expectOrphan };
+  const expectPublished = (commit: string, contents: string) => {
+    expectOrphan(commit);
+    expect(remoteGit("ls-tree", "--name-only", commit)).toBe("research.db.gz\nvercel.json");
+    expect(remoteGit("show", `${commit}:research.db.gz`)).toBe(contents);
+    expect(JSON.parse(remoteGit("show", `${commit}:vercel.json`))).toEqual({ git: { deploymentEnabled: false } });
+  };
+  return { work, git, remoteGit, initial, publishPointer, publishData, expectOrphan, expectPublished };
 }
 
 afterEach(() => {
@@ -60,22 +65,22 @@ afterEach(() => {
 
 describe("data branch publication", () => {
   it("retains only the current and previous single-commit snapshots across refreshes", () => {
-    const { remoteGit, initial, publishPointer, publishData, expectOrphan } = fixture();
+    const { remoteGit, initial, publishPointer, publishData, expectPublished } = fixture();
     const first = publishData("first refresh");
     expect(remoteGit("rev-parse", "data-snapshot-previous")).toBe(initial);
-    expectOrphan(first);
+    expectPublished(first, "first refresh");
     publishPointer(first);
     const second = publishData("second refresh");
     expect(remoteGit("rev-parse", "data-snapshot")).toBe(second);
     expect(remoteGit("rev-parse", "data-snapshot-previous")).toBe(first);
-    expectOrphan(second);
-    expectOrphan(first);
+    expectPublished(second, "second refresh");
+    expectPublished(first, "first refresh");
     expect(remoteGit("rev-parse", "--is-shallow-repository")).toBe("false");
     expect(remoteGit("rev-list", "--count", "data-snapshot", "data-snapshot-previous")).toBe("2");
   });
 
   it("preserves main's exact SHA when a pointer was not published, including on retry", () => {
-    const { work, remoteGit, initial, publishData, expectOrphan } = fixture();
+    const { work, remoteGit, initial, publishData, expectOrphan, expectPublished } = fixture();
     const firstAttempt = publishData("first attempt");
     const retry = publishData("retry without a successful pointer push");
     expect(retry).not.toBe(firstAttempt);
@@ -83,8 +88,9 @@ describe("data branch publication", () => {
     expect(JSON.parse(remoteGit("show", "main:data/snapshot.json")).commit).toBe(initial);
     expect(remoteGit("rev-parse", "data-snapshot-previous")).toBe(initial);
     expect(remoteGit("rev-parse", "data-snapshot")).toBe(retry);
-    expectOrphan(retry);
+    expectPublished(retry, "retry without a successful pointer push");
     expectOrphan(initial);
+    expect(remoteGit("ls-tree", "--name-only", initial)).toBe("research.db.gz");
   });
 
   it("refuses to change data refs if main moved during the refresh", () => {
