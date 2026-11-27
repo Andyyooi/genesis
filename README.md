@@ -35,6 +35,10 @@ The workflow validates and packs a read-only SQLite snapshot. Main tracks [a poi
 
 Production uses a shared `SITE_PASSWORD`; the on-demand refresh also uses a server-only `GITHUB_REFRESH_TOKEN`. See the [password and refresh setup guide](docs/refresh-setup.md) for configuration and troubleshooting. Never commit passwords, tokens or the local database.
 
+## Read-only JSON export
+
+For a daily brief without scraping the site, set a separate server-only `EXPORT_API_TOKEN` and call `GET /api/export` with a Bearer token. See [setup, a curl example and the response fields](docs/research-export.md).
+
 ## Pull request checks
 
 [GitHub Actions](.github/workflows/pr-checks.yml) runs the following on every pull request targeting `main`. The checks need no new secrets or Vercel settings and do not refresh or publish data.
