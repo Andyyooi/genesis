@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { parse } from "yaml";
 import { POST } from "@/app/api/refresh/route";
 import { GET } from "@/app/api/refresh/status/route";
 import { mapRefreshStatus, resetGithubRefreshStateForTests, type WorkflowRun } from "@/refresh/github";
@@ -78,12 +80,37 @@ describe("GitHub refresh API", () => {
     vi.advanceTimersByTime(10001); await GET(); expect(fetch).toHaveBeenCalledTimes(4);
   });
   it("waits for the deployed publication, even on an unchanged price date", async () => {
-    const fetch = vi.fn(async () => json({ workflow_runs: [{ ...run, status: "completed", conclusion: "success" }] }));
+    const fetch = vi.fn(async (url: string) => url.includes("/jobs?")
+      ? json({ jobs: [{ name: "check", status: "completed", conclusion: "skipped" }, { name: "refresh", status: "completed", conclusion: "success" }] })
+      : json({ workflow_runs: [{ ...run, status: "completed", conclusion: "success" }] }));
     vi.stubGlobal("fetch", fetch);
     expect(await (await GET()).json()).toMatchObject({ phase: "deploying", latestPriceDate: "2026-09-25" });
     snapshot.publishedAt = "2026-10-01T10:12:00Z";
     expect(await (await GET()).json()).toMatchObject({ phase: "done", latestPriceDate: "2026-09-25" });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it.each([true, false])("ignores completed retries that skipped refresh (prior refresh: %s)", async (hasRefresh) => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-01T15:24:00Z"));
+    snapshot.publishedAt = "2026-10-01T10:12:00Z";
+    const completed = { ...run, status: "completed", conclusion: "success" };
+    const retries = [15, 12].map((hour, i) => ({
+      ...completed, id: 44 - i, created_at: `2026-10-01T${hour}:23:00Z`,
+      run_started_at: `2026-10-01T${hour}:23:00Z`, updated_at: `2026-10-01T${hour}:24:00Z`,
+      html_url: `https://github.com/Andyyooi/genesis/actions/runs/${44 - i}`,
+    }));
+    const fetch = vi.fn(async (url: string) => {
+      if (url.includes("/jobs?")) {
+        return json({ jobs: [{ name: "refresh", status: "completed", conclusion: url.includes(`/runs/${run.id}/`) ? "success" : "skipped" }] });
+      }
+      return json({ workflow_runs: hasRefresh ? [...retries, completed] : retries });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const expected = hasRefresh ? { phase: "done", html_url: run.html_url } : { phase: "idle", html_url: null };
+    expect(await (await GET()).json()).toMatchObject(expected);
+    expect(fetch).toHaveBeenCalledTimes(hasRefresh ? 4 : 3);
+    vi.advanceTimersByTime(10001);
+    expect(await (await GET()).json()).toMatchObject(expected);
+    expect(fetch).toHaveBeenCalledTimes(hasRefresh ? 5 : 4);
   });
   it("handles an empty run history and GitHub failures without exposing credentials", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ workflow_runs: [] })));
@@ -102,11 +129,16 @@ describe("GitHub refresh API", () => {
     expect(mapRefreshStatus({ ...run, status: status!, conclusion }, step, snapshot).phase).toBe(phase);
   });
 
-  it("schedules weekday 6pm MYT (10:00 UTC) automatic refreshes alongside workflow_dispatch", async () => {
-    const { readFileSync } = await import("node:fs");
+  it("schedules three weekday evening attempts in Malaysia time alongside workflow_dispatch", () => {
     const workflow = readFileSync(".github/workflows/refresh-data.yml", "utf8");
-    expect(workflow).toContain("workflow_dispatch:");
-    expect(workflow).toContain("schedule:");
-    expect(workflow).toContain("0 10 * * 1-5");
+    expect(parse(workflow).on).toEqual({
+      workflow_dispatch: null,
+      schedule: [{ cron: "23 10 * * 1-5" }, { cron: "23 12 * * 1-5" }, { cron: "23 15 * * 1-5" }],
+    });
+  });
+  it("uses the snapshot check to decide whether to run the refresh", () => {
+    const workflow = parse(readFileSync(".github/workflows/refresh-data.yml", "utf8"));
+    expect(workflow.jobs.check.outputs.run).toBe("${{ steps.snapshot.outputs.run }}");
+    expect(workflow.jobs.refresh).toMatchObject({ needs: "check", if: "needs.check.outputs.run == 'true'" });
   });
 });

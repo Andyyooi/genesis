@@ -3,7 +3,8 @@ export type WorkflowRun = {
   id: number; status: string; conclusion: string | null; created_at: string;
   run_started_at: string | null; updated_at: string; html_url: string;
 };
-type Job = { status: string; steps?: { name: string; status: string }[] };
+type Job = { name: string; status: string; conclusion: string | null; steps?: { name: string; status: string }[] };
+type CompletedCheck = { updatedAt: string; skipped: boolean };
 export type RefreshStatus = {
   configured: boolean; missing: string[]; phase: RefreshPhase; status: string | null;
   conclusion: string | null; startedAt: string | null; updatedAt: string | null;
@@ -13,7 +14,7 @@ export type RefreshStatus = {
 export type SnapshotState = { latestPriceDate: string | null; publishedAt: string | null };
 const workflow = "refresh-data.yml";
 const active = new Set(["queued", "in_progress", "waiting", "pending", "requested"]);
-let cache: { key: string; until: number; run: WorkflowRun | null; step: string | null } | null = null;
+let cache: { key: string; until: number; run: WorkflowRun | null; step: string | null; completedChecks: Map<number, CompletedCheck> } | null = null;
 let dispatchLock: { key: string; until: number } | null = null;
 
 export function refreshConfiguration() {
@@ -57,6 +58,11 @@ export function mapRefreshStatus(run: WorkflowRun | null, step: string | null, s
   };
 }
 
+async function workflowJobs(run: WorkflowRun): Promise<Job[]> {
+  const data: { jobs: Job[] } = await github(`/actions/runs/${run.id}/jobs?per_page=100`);
+  return data.jobs;
+}
+
 export async function getRefreshStatus(snapshot: SnapshotState): Promise<RefreshStatus> {
   const config = refreshConfiguration();
   if (config.missing.length) return { ...mapRefreshStatus(null, null, snapshot), configured: false, missing: config.missing };
@@ -64,13 +70,30 @@ export async function getRefreshStatus(snapshot: SnapshotState): Promise<Refresh
   if (!cache || cache.key !== key || Date.now() >= cache.until) {
     const data = await github(`/actions/workflows/${workflow}/runs?per_page=100`);
     const runs: WorkflowRun[] = data.workflow_runs;
-    const run = runs.find((r) => active.has(r.status)) ?? runs[0] ?? null;
+    const previousChecks = cache?.key === key ? cache.completedChecks : undefined;
+    const completedChecks = new Map<number, CompletedCheck>();
+    let run = runs.find((r) => active.has(r.status)) ?? null;
+    if (!run) {
+      for (const candidate of runs) {
+        if (candidate.status === "completed") {
+          const previous = previousChecks?.get(candidate.id);
+          const check = previous && previous.updatedAt === candidate.updated_at ? previous : {
+            updatedAt: candidate.updated_at,
+            skipped: (await workflowJobs(candidate)).some((job) => job.name === "refresh" && job.conclusion === "skipped"),
+          };
+          completedChecks.set(candidate.id, check);
+          if (check.skipped) continue;
+        }
+        run = candidate;
+        break;
+      }
+    }
     let step: string | null = null;
     if (run?.status === "in_progress") {
-      const jobs: { jobs: Job[] } = await github(`/actions/runs/${run.id}/jobs?per_page=100`);
-      step = jobs.jobs.flatMap((job) => job.steps ?? []).find((s) => s.status === "in_progress")?.name ?? null;
+      const jobs = await workflowJobs(run);
+      step = jobs.flatMap((job) => job.steps ?? []).find((s) => s.status === "in_progress")?.name ?? null;
     }
-    cache = { key, until: Date.now() + 10000, run, step };
+    cache = { key, until: Date.now() + 10000, run, step, completedChecks };
   }
   return mapRefreshStatus(cache.run, cache.step, snapshot);
 }
