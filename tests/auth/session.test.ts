@@ -74,7 +74,7 @@ describe("gate decisions", () => {
     expect(await gateDecision(path, "POST", "bad", env)).toBe("redirect");
     expect(await gateDecision(path, "GET", undefined, { NODE_ENV: "production" })).toBe("unconfigured");
   });
-  it.each(["/api", "/api/refresh", "/api/refresh/status"]) ("rejects API %s", async (path) => {
+  it.each(["/api", "/api/refresh", "/api/refresh/status", "/api/analyst-targets"]) ("rejects API %s", async (path) => {
     expect(await gateDecision(path, "POST", undefined, env)).toBe("unauthorized");
     expect(await gateDecision(path, "GET", "invalid", env)).toBe("unauthorized");
   });

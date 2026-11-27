@@ -59,6 +59,7 @@ import { GoodCompanyPriceDownCard, LatestResultsLine } from "@/components/resear
 import { goodCompanyPriceDown, latestResultsComparison, recentPriceDrop } from "@/lib/price-drop-flag";
 import { buildStockBrief } from "@/lib/stock-brief";
 import { StockBrief } from "@/components/research/stock-brief";
+import { StockAnalystTargets } from "@/components/research/stock-analyst-targets";
 
 export const dynamic = "force-dynamic";
 
@@ -305,6 +306,7 @@ export default async function ResearchPage({
             <summary className="cursor-pointer text-muted-foreground">About this fair range</summary>
             <div className="mt-1"><FairRangeLine range={fairRange} compact /></div>
           </details>
+          <StockAnalystTargets ticker={instrument.ticker} />
         </section>
         <section className="market-card min-w-0 p-4" aria-label="Research score and Buy rank">
           <div className="mb-2 grid grid-cols-2 gap-3">
