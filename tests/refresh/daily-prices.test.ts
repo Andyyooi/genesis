@@ -182,6 +182,18 @@ describe("daily price range and throttle", () => {
     expect(vi.mocked(fetchYahooDailyBars).mock.calls).toEqual([["MAYBANK.KL", "2y"]]);
   });
 
+  it.each([
+    ["2026-10-28", "2025-10-13"],
+    ["2025-10-28", "2024-10-13"],
+  ])("backfills 380 days before the stored close on %s without a saved pick", async (closeDate, startDate) => {
+    seedBar(closeDate, 10);
+    await importYahooPrices({
+      now: () => new Date("2026-11-27T10:00:00Z"),
+      range: "auto", skipUniverseSeed: true, skipAlerts: true, rateLimitMs: 0,
+    });
+    expect(vi.mocked(fetchYahooDailyBars).mock.calls).toEqual([["MAYBANK.KL", { startDate }]]);
+  });
+
   it("backfills and extends dividend coverage within the regular price refresh calls", async () => {
     const now = () => new Date("2026-11-27T10:00:00Z");
     seedBar("2026-11-26", 10);
@@ -197,7 +209,7 @@ describe("daily price range and throttle", () => {
     await importYahooPrices(options);
     await importYahooPrices(options);
     expect(vi.mocked(fetchYahooDailyBars).mock.calls).toEqual([
-      ["MAYBANK.KL", { startDate: "2025-11-12" }],
+      ["MAYBANK.KL", { startDate: "2025-11-11" }],
       ["MAYBANK.KL", "5d"],
     ]);
     const id = getDb().select().from(instruments).get()!.id;

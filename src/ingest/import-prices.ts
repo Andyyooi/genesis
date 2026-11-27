@@ -107,18 +107,21 @@ export async function importYahooPrices(
     const yahooTicker =
       instrument.yahooTicker ??
       (instrument.bursaCode ? `${instrument.bursaCode}.KL` : `${instrument.ticker}.KL`);
-    const openSession = inProgressSessionDate(now());
+    const refreshTime = now();
+    const openSession = inProgressSessionDate(refreshTime);
     if (openSession) inProgressSession = openSession;
     try {
       const latest = range === "auto" ? db.select({ date: max(priceBars.barDate) }).from(priceBars)
         .where(and(eq(priceBars.instrumentId, instrument.id), gt(priceBars.close, 0), lte(priceBars.barDate, retrievedAt.slice(0, 10)))).get()?.date ?? null : null;
       const startDate = savedDates.get(instrument.ticker);
-      const dividendStart = offsetDays(now().toISOString().slice(0, 10), -380);
-      const incremental = priceRangeSince(latest, now());
+      const today = refreshTime.toISOString().slice(0, 10);
+      const latestClose = latest && latest <= today && yahooBarDateUtc(latest) !== null ? latest : null;
+      const dividendStart = offsetDays(latestClose ?? today, -380);
+      const incremental = priceRangeSince(latest, refreshTime);
       const coverage = range === "auto" ? loadDividendDates(instrument.id) : undefined;
-      const needsBackfill = range === "auto" && (incremental !== "2y" || startDate !== undefined) &&
+      const needsBackfill = range === "auto" && (latestClose !== null || startDate !== undefined) &&
         (!coverage || coverage.symbol !== yahooTicker.toUpperCase() || coverage.from > offsetDays(dividendStart, 10) ||
-          coverage.through < offsetDays(now().toISOString().slice(0, 10), -3));
+          coverage.through < offsetDays(today, -3));
       const requestStart = needsBackfill && (!startDate || startDate > dividendStart) ? dividendStart : startDate;
       const fetched = await fetchYahooDailyBars(yahooTicker, requestStart ? { startDate: requestStart } : range === "auto" ? incremental : range);
       let accepted = fetched.filter((bar) => usableYahooDailyBar(bar) && bar.barDate !== openSession);
