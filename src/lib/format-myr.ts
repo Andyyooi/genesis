@@ -19,8 +19,12 @@ export function formatSharePrice(value: number | null | undefined): string {
 }
 
 /** Fair-value estimates use half-sen precision to avoid overstating accuracy. */
+export function roundFairEstimate(value: number): number {
+  return Math.max(0.005, Math.round(value * 200) / 200);
+}
+
 export function formatFairEstimate(value: number): string {
-  return formatSharePrice(Math.max(0.005, Math.round(value * 200) / 200));
+  return formatSharePrice(roundFairEstimate(value));
 }
 
 export function formatFairRangeBounds({ low, high }: { low: number; high: number }): string {

@@ -34,6 +34,16 @@ describe("price watch rules", () => {
     expect(evaluatePriceWatch(fair, latest(3), undefined, range)).toEqual({ status: "inside" });
   });
 
+  it("uses the displayed half-sen bounds for both closes and the distance", () => {
+    const range = { low: 0.992, high: 1.503 }; // Displayed: 0.99 to 1.505.
+    expect(evaluatePriceWatch(fair, latest(0.99), previous(0.98), range)).toEqual({ status: "triggered" });
+    expect(evaluatePriceWatch(fair, latest(1.50500001), previous(1.55), range)).toEqual({ status: "triggered" });
+    expect(evaluatePriceWatch(fair, latest(1.5), previous(1.50500001), range)).toEqual({ status: "inside" });
+    const result = evaluatePriceWatch(fair, latest(1.51), previous(1.5), range);
+    expect(result).toMatchObject({ status: "waiting", direction: "above" });
+    if (result.status === "waiting") expect(result.percent).toBeCloseTo((1.51 - 1.505) / 1.505 * 100);
+  });
+
   it("keeps missing inputs unavailable instead of triggering", () => {
     expect(evaluatePriceWatch(target)).toEqual({ status: "no-close" });
     expect(evaluatePriceWatch(fair, latest(null), previous(1), range)).toEqual({ status: "no-close" });

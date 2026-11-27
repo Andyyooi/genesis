@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { roundFairEstimate } from "@/lib/format-myr";
 import { validClose, type PricePoint } from "@/lib/price-history";
 
 export const watchTicker = z.string().regex(/^[A-Z0-9._-]{1,32}$/);
@@ -18,19 +19,21 @@ type Range = { low: number; high: number };
 export function evaluatePriceWatch(watch: PriceWatch, latest?: PricePoint, previous?: PricePoint, range?: Range) {
   const close = latest?.close;
   if (!latest || !validClose(close)) return { status: "no-close" } as const;
+  const quotedClose = pricePrecision(close);
   if (watch.kind === "target") {
-    const quotedClose = pricePrecision(close);
     if (quotedClose <= watch.target) return { status: "triggered" } as const;
     return { status: "waiting", direction: "above", percent: (quotedClose - watch.target) / watch.target * 100 } as const;
   }
 
   if (!range) return { status: "no-range" } as const;
-  if (close < range.low) return { status: "waiting", direction: "below", percent: (range.low - close) / range.low * 100 } as const;
-  if (close > range.high) return { status: "waiting", direction: "above", percent: (close - range.high) / range.high * 100 } as const;
+  const low = roundFairEstimate(range.low);
+  const high = roundFairEstimate(range.high);
+  if (quotedClose < low) return { status: "waiting", direction: "below", percent: (low - quotedClose) / low * 100 } as const;
+  if (quotedClose > high) return { status: "waiting", direction: "above", percent: (quotedClose - high) / high * 100 } as const;
 
-  const prior = previous?.close;
+  const prior = validClose(previous?.close) ? pricePrecision(previous.close) : null;
   const afterStart = watch.startCloseDate === null || latest.date > watch.startCloseDate;
-  if (afterStart && validClose(prior) && (prior < range.low || prior > range.high)) {
+  if (afterStart && prior !== null && (prior < low || prior > high)) {
     return { status: "triggered" } as const;
   }
   return { status: "inside" } as const;

@@ -3,7 +3,7 @@
 On a stock page, save a price watch for either a target in RM per share or entry into the Genesis fair range. Open **Alerts → Price watches** to see what has triggered and how far the other stocks are from their targets or ranges. This is for research, not a buy or sell instruction.
 
 - A target shows as triggered while the latest saved close is at or below it.
-- A fair-range watch triggers when a new saved close is inside the current range (including its endpoints) and the preceding saved close was outside that range. A price already inside when you set the watch does not trigger it. The saved closing date is shown on each card; a stock without an eligible close or range stays on the list.
+- A fair-range watch triggers when a new saved close is inside the current displayed range (including its endpoints) and the preceding saved close was outside that range. A price already inside when you set the watch does not trigger it. The saved closing date is shown on each card; a stock without an eligible close or range stays on the list.
 - Alerts are checked when you open the page from the latest published data. The watches stay saved until removed. These are on-page alerts, not live quotes, push notifications, or a history of past triggers.
 
 ## Vercel setup (project owner)
